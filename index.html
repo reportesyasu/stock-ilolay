@@ -158,7 +158,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb2';
+window.__VERSION = 'sb4';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -181,7 +181,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb2</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb4</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -823,9 +823,11 @@ function lineasVista() {
 }
 function filtrar(lines) {
   const q = S.ui.q.trim().toUpperCase();
+  const hayStock = !!S.cierre || tieneSistema();
   return lines.filter(l => {
     if (S.ui.sector !== 'TODOS' && l.s !== S.ui.sector) return false;
     const f = S.ui.filtro;
+    if ((f === 'dif' || f === 'sinmot') && !hayStock) return false;
     if (f === 'dif' && !(l.contado && l.dif)) return false;
     if (f === 'sin' && l.contado) return false;
     if (f === 'rec' && !l.rec) return false;
@@ -931,7 +933,7 @@ function vHoy() {
   if (!cerrado && S.dia < hoy && S.diaDoc) avisos.push(`<div class="banner warn"><span class="grow">Estás trabajando sobre el ${dm(S.dia)}, que todavía no se cerró. Cerralo con los archivos de ese día o pasá a hoy.</span><button class="btn sm" data-act="nuevodia">Pasar a hoy (${dm(hoy)})</button></div>`);
   if (!cerrado && !sis) avisos.push(`<div class="banner warn"><span class="grow">Cargá el stock de SAP y el de Yasukawa para ver el stock del sistema y las diferencias. Los conteos de depósito ya se ven abajo.</span></div>`);
   if (hu.length) avisos.push(`<div class="banner warn"><span class="grow">${hu.length} artículo${hu.length > 1 ? 's' : ''} con stock en los archivos no ${hu.length > 1 ? 'están' : 'está'} en la lista de artículos: ${hu.slice(0, 4).map(h => esc(h.c)).join(', ')}${hu.length > 4 ? '…' : ''}</span><button class="btn sm" data-act="tab" data-v="maestro">Revisar</button></div>`);
-  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', r.dif], ['sin', 'Sin contar', r.total - r.contados], ['sinmot', 'Sin motivo', r.sinMot], ['rec', 'Recontar', r.rec]];
+  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ['rec', 'Recontar', r.rec]];
   return `<div class="stack">
     ${cerrado ? '' : vFiles()}
     ${avisos.join('')}
@@ -965,7 +967,9 @@ function vConfirmCierre(r) {
     <div class="row"><button class="btn pri" data-act="cerrarOk">Confirmar cierre</button><button class="btn" data-act="cancel">Cancelar</button></div></div>`;
 }
 function tablaHoy(lines, sis, cerrado) {
-  if (!lines.length) return `<div class="panel empty">No hay artículos con este filtro.</div>`;
+  if (!lines.length) return !sis && (S.ui.filtro === 'dif' || S.ui.filtro === 'sinmot')
+    ? `<div class="panel empty">Todavía no hay stock del sistema para hoy, así que no se pueden calcular diferencias.<br>Cargá los archivos del día (stock SAP Ilolay y artículos Yasukawa) arriba, con <b>Elegir carpeta</b> o <b>Elegir archivos sueltos</b>. Después de cargarlos, el sistema y las diferencias se ven en todas las PC y celulares.</div>`
+    : `<div class="panel empty">No hay artículos con este filtro.</div>`;
   let sec = null, rows = '';
   for (const l of lines) {
     if (l.s !== sec) { sec = l.s; rows += `<tr class="sec"><td colspan="10">${sec === 'FRIO' ? 'FRÍO' : esc(sec || 'SIN SECTOR')}</td></tr>`; }
@@ -976,7 +980,7 @@ function tablaHoy(lines, sis, cerrado) {
     rows += `<tr class="${cls}">
       <td><span class="code">${esc(l.c)}</span></td>
       <td class="desc"><button class="link" data-act="det" data-c="${esc(l.c)}">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}</td>
-      <td class="n hide-sm">${sis ? `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>` : '—'}</td>
+      <td class="n hide-sm">${sis ? `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>` : '<span class="muted small" title="Faltan los archivos del día">sin archivos</span>'}</td>
       <td class="n"><span class="cnt">${inCj}<span>cj</span>${inUn}<span>u</span></span></td>
       <td class="n dif">${sis && l.contado ? (l.dif ? fmtS(l.dif) : '<span class="muted">0</span>') : ''}</td>
       <td class="n hide-sm">${sis && l.contado && l.dif ? money(l.importe) : ''}</td>
@@ -1062,7 +1066,7 @@ function vContar() {
       <div class="row small"><span><b class="mono">${hechos}</b> de <b class="mono">${sec.length}</b> contados</span><div class="prog" style="flex:1;min-width:120px"><i style="width:${pct}%"></i></div></div>
     </div>
     <div id="scanMsg"></div>
-    ${S.scanLog.length ? `<details class="panel small" open><summary>Registro de la cámara (para diagnóstico)</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
+    ${S.scanLog.length ? `<details class="panel small" id="scanLogDet" ${S.ui.logAbierto ? 'open' : ''}><summary class="muted">Registro de la cámara (solo si hay un problema)</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
     <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : 'No hay artículos con este filtro.'}</div>`}</div>
   </div>`;
 }
@@ -1178,6 +1182,7 @@ async function leerFoto(file) {
 /* ---------- Escáner en vivo (cámara) ---------- */
 let scanStream = null, scanLoop = null, zxReader = null, scanTrack = null;
 S.scanLog = [];
+document.addEventListener('toggle', e => { if (e.target && e.target.id === 'scanLogDet') S.ui.logAbierto = e.target.open; }, true);
 function scanLog(m) {
   S.scanLog.push(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + m);
   if (S.scanLog.length > 30) S.scanLog.shift();
