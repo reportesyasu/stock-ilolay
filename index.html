@@ -167,7 +167,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb7';
+window.__VERSION = 'sb8';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -190,7 +190,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb7</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb8</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -864,6 +864,7 @@ function filtrar(lines) {
     if ((f === 'dif' || f === 'sinmot') && !hayStock) return false;
     if (f === 'dif' && !(l.contado && l.dif)) return false;
     if (f === 'sin' && l.contado) return false;
+    if (f === 'cont' && !l.contado) return false;
     if (f === 'rec' && !l.rec) return false;
     if (f === 'sinmot' && !(l.contado && l.dif && !l.motivo)) return false;
     if (q && !(l.c.includes(q) || (l.d || '').toUpperCase().includes(q))) return false;
@@ -975,7 +976,7 @@ function vHoy() {
   if (!cerrado && S.dia < hoy && S.diaDoc) avisos.push(`<div class="banner warn"><span class="grow">Estás trabajando sobre el ${dm(S.dia)}, que todavía no se cerró. Cerralo con los archivos de ese día o pasá a hoy.</span><button class="btn sm" data-act="nuevodia">Pasar a hoy (${dm(hoy)})</button></div>`);
   if (!cerrado && !sis) avisos.push(`<div class="banner warn"><span class="grow">Cargá el stock de SAP y el de Yasukawa para ver el stock del sistema y las diferencias. Los conteos de depósito ya se ven abajo.</span></div>`);
   if (hu.length) avisos.push(`<div class="banner warn"><span class="grow">${hu.length} artículo${hu.length > 1 ? 's' : ''} con stock en los archivos no ${hu.length > 1 ? 'están' : 'está'} en la lista de artículos: ${hu.slice(0, 4).map(h => esc(h.c)).join(', ')}${hu.length > 4 ? '…' : ''}</span><button class="btn sm" data-act="tab" data-v="maestro">Revisar</button></div>`);
-  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ['rec', 'Recontar', r.rec]];
+  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['cont', 'Contados', r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ['rec', 'Recontar', r.rec]];
   return `<div class="stack">
     ${cerrado ? '' : vFiles()}
     ${avisos.join('')}
@@ -1084,6 +1085,7 @@ function vContar() {
     if (S.ui.foco === i.c) return true;
     if (S.ui.solo === 'pend' && contado(i.c) && !k(i.c)?.rec) return false;
     if (S.ui.solo === 'rec' && !k(i.c)?.rec) return false;
+    if (S.ui.solo === 'cont' && !contado(i.c)) return false;
     if (q && !(i.c.includes(q) || (i.d || '').toUpperCase().includes(q) || (i.e || []).includes(q))) return false;
     return true;
   });
@@ -1105,12 +1107,12 @@ function vContar() {
       <div class="bar"><input type="search" id="scan" data-act="scan" placeholder="Escaneá el código de barras o escribí código / nombre" autocomplete="off" enterkeyhint="search" value="${esc(S.ui.q)}"><button class="btn pri" data-act="escanear" title="Escanear con la cámara en vivo">Escanear</button><label class="btn cam" title="Si la cámara en vivo no funciona: sacar una foto del código">Foto<input type="file" id="pickPhoto" accept="image/*" capture="environment"></label></div>
       <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${S.ui.ultimaFoto ? '<span class="muted">Último código leído: <b class="mono">' + esc(S.ui.ultimaFoto) + '</b></span>' : ''}</div>
       <div class="row" style="justify-content:space-between">${chipsSector(items)}
-        <div class="chips">${[['pend', 'Pendientes'], ['rec', 'Recontar' + (rec ? ' ' + rec : '')], ['todos', 'Todos']].map(([v, n]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}</button>`).join('')}</div></div>
+        <div class="chips">${[['pend', 'Pendientes', sec.length - hechos + sec.filter(i => contado(i.c) && k(i.c)?.rec).length], ['cont', 'Contados', hechos], ['rec', 'Recontar', rec], ['todos', 'Todos', sec.length]].map(([v, n, c]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}<span class="c">${c}</span></button>`).join('')}</div></div>
       <div class="row small"><span><b class="mono">${hechos}</b> de <b class="mono">${sec.length}</b> contados</span><div class="prog" style="flex:1;min-width:120px"><i style="width:${pct}%"></i></div></div>
     </div>
     <div id="scanMsg">${scanMsgHtml()}</div>
     ${S.scanLog.length ? `<details class="panel small" id="scanLogDet" ${S.ui.logAbierto ? 'open' : ''}><summary class="muted">Registro de la cámara (solo si hay un problema)</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
-    <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : 'No hay artículos con este filtro.'}</div>`}</div>
+    <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : S.ui.solo === 'cont' ? 'Todavía no se contó ningún artículo en este sector.' : 'No hay artículos con este filtro.'}</div>`}</div>
   </div>`;
 }
 function buscarCodigo(raw) {
