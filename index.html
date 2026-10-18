@@ -167,7 +167,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb6';
+window.__VERSION = 'sb7';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -190,7 +190,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb6</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb7</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -258,7 +258,10 @@ const Core = (() => {
       const tdRe = /<t([dh])([^>]*)>([\s\S]*?)(?=<t[dh][\s>]|<\/tr|$)/gi;
       let c;
       while ((c = tdRe.exec(m[1]))) {
-        const val = decodeEnt(c[3].replace(/<\/t[dh]>[\s\S]*$/i, '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+        let val = decodeEnt(c[3].replace(/<\/t[dh]>[\s\S]*$/i, '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+        // Excel al guardar como página web pone el valor real en x:num="..." (el texto puede venir formateado o en notación científica)
+        const xn = /x:num\s*=\s*["']?([-\d.Ee+]+)/i.exec(c[2]);
+        if (xn && isFinite(Number(xn[1]))) val = xn[1];
         cells.push(val);
         const cs = /colspan\s*=\s*["']?(\d+)/i.exec(c[2]);
         if (cs) for (let k = 1; k < Math.min(+cs[1], 60); k++) cells.push('');
@@ -702,17 +705,34 @@ async function fileRows(file) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
     return { rows, info: Core.detect(rows) };
   }
-  const rows = Core.rowsFromText(decodeText(buf));
+  const txt = decodeText(buf);
+  const fr = /<frame[^>]+src\s*=\s*["']?([^"'>]+?_(?:archivos|files|arquivos))\/sheet\d+\.html?/i.exec(txt);
+  if (fr && /<frameset/i.test(txt)) return { rows: [], info: { kind: 'desconocido' }, marco: decodeURIComponent(fr[1]) };
+  const rows = Core.rowsFromText(txt);
   return { rows, info: Core.detect(rows) };
 }
+/* Excel, al abrir el .xls de Yasukawa y guardarlo, lo convierte en "página web": el .xls queda vacío
+   y los datos pasan a la carpeta <nombre>_archivos/sheet001.htm. Se toma esa hoja con el nombre del archivo original. */
+const RE_CARPETA_EXCEL = /_(archivos|files|arquivos)$/i;
+function hojaDeExcelWeb(file, carpeta) {
+  const base = carpeta.replace(RE_CARPETA_EXCEL, '');
+  return new File([file], base + '.xls (guardado por Excel)', { lastModified: file.lastModified, type: 'text/html' });
+}
 async function leerArchivos(list) {
-  const files = [...list].filter(f => !/^~\$|^\./.test(f.name) && /\.(xls|xlsx|xlsm|csv|txt|htm|html|tsv)$/i.test(f.name));
+  const todos = [...list].map(f => {
+    const partes = (f.webkitRelativePath || '').split('/');
+    const carpeta = partes.length >= 3 ? partes[partes.length - 2] : '';
+    if (carpeta && RE_CARPETA_EXCEL.test(carpeta)) return /^sheet\d+\.html?$/i.test(f.name) ? hojaDeExcelWeb(f, carpeta) : null;
+    return f;
+  }).filter(Boolean);
+  const files = todos.filter(f => !/^~\$|^\./.test(f.name) && /\.(xls|xlsx|xlsm|csv|txt|htm|html|tsv)(\s\(guardado por Excel\))?$/i.test(f.name));
   if (!files.length) { toast('No encontré archivos de Excel, CSV o texto en la carpeta.'); return; }
   files.sort((a, b) => b.lastModified - a.lastModified);
-  const found = { sap: null, yasu: null, mov: null }; const err = [];
+  const found = { sap: null, yasu: null, mov: null }; const err = []; const marcos = [];
   for (const f of files) {
     try {
-      const { rows, info } = await fileRows(f);
+      const { rows, info, marco } = await fileRows(f);
+      if (marco) { marcos.push({ name: f.name, carpeta: marco }); continue; }
       if (info.kind === 'desconocido' || found[info.kind]) { if (info.kind === 'desconocido') err.push(f.name); continue; }
       const meta = { name: f.name, mod: f.lastModified, path: f.webkitRelativePath || f.name };
       if (info.kind === 'sap') found.sap = { ...meta, data: Core.buildSap(rows, info, opt('excluir')) };
@@ -726,6 +746,8 @@ async function leerArchivos(list) {
   }
   for (const k of ['sap', 'yasu', 'mov']) if (found[k]) S.files[k] = found[k];
   S.fileErr = err;
+  // Archivos guardados por Excel como página web cuya hoja no se pudo leer (por ejemplo, elegidos sueltos sin su carpeta)
+  S.marcoErr = marcos.filter(m => !Object.values(found).some(x => x && x.name.startsWith(m.name.replace(/\.[^.]+$/, '') + '.'))).map(m => m);
   recalc(); render();
   publicarSistema();
   const n = ['sap', 'yasu', 'mov'].filter(k => found[k]).length;
@@ -741,6 +763,9 @@ async function leerHandle(h) {
   const out = [];
   for await (const e of h.values()) {
     if (e.kind === 'file') out.push(await e.getFile());
+    else if (e.kind === 'directory' && RE_CARPETA_EXCEL.test(e.name)) {
+      for await (const x of e.values()) if (x.kind === 'file' && /^sheet\d+\.html?$/i.test(x.name)) out.push(hojaDeExcelWeb(await x.getFile(), e.name));
+    }
   }
   return out;
 }
@@ -931,6 +956,7 @@ function vFiles() {
     ${!(f.sap && f.yasu) && fuentes().origen === 'remoto' ? `<div class="banner info"><span class="grow">Usando el cruce cargado en otra PC a las ${hora(S.remoto.ts)} (${esc(S.remoto.archivos?.sap || '')} + ${esc(S.remoto.archivos?.yasu || '')}). Si cargás los archivos acá, se reemplaza.</span></div>` : ''}
     ${!(f.sap && f.yasu) && S.remoto && S.remoto.fecha !== S.dia ? `<div class="banner warn"><span class="grow">El último cruce compartido es del ${dm(S.remoto.fecha)}, no de hoy. Cargá los archivos del día.</span></div>` : ''}
     <div class="files">${card('sap', 'Stock SAP Ilolay', 'Reporte "Stocks WM" del almacén YA1')}${card('yasu', 'Artículos Yasukawa', 'Tabla "articulo" exportada (STK, CAP, precio)')}${card('mov', 'Facturación / movimientos', 'Opcional: para rastrear dónde buscar una diferencia')}</div>
+    ${(S.marcoErr || []).length ? `<div class="banner warn"><span class="grow">${S.marcoErr.map(m => `<b>${esc(m.name)}</b>`).join(', ')}: Excel lo guardó como página web y el archivo quedó sin datos; la tabla está en la carpeta <b>${esc(S.marcoErr[0].carpeta)}</b>. Usá <b>Elegir carpeta</b> / <b>Actualizar desde la carpeta</b> (la app la lee sola), o exportá de nuevo la tabla de Yasukawa sin abrirla y guardarla en Excel.</span></div>` : ''}
     ${S.fileErr.length ? `<div class="small muted">No reconocidos: ${S.fileErr.slice(0, 5).map(esc).join(', ')}${S.fileErr.length > 5 ? ' y ' + (S.fileErr.length - 5) + ' más' : ''}</div>` : ''}
     <div class="drop small" id="dropzone">También podés arrastrar los archivos acá.</div>
   </section>`;
@@ -1536,7 +1562,7 @@ document.addEventListener('click', async e => {
     case 'carpeta': elegirCarpeta(); break;
     case 'archivos': $('#pickFiles').click(); break;
     case 'quitar': S.files[t.dataset.k] = null; S.fileErr = []; recalc(); render(); toast('Archivo quitado. Cargá el correcto.'); break;
-    case 'quitarTodo': S.files = { sap: null, yasu: null, mov: null }; S.fileErr = []; recalc(); render(); toast('Archivos quitados.'); break;
+    case 'quitarTodo': S.files = { sap: null, yasu: null, mov: null }; S.fileErr = []; S.marcoErr = []; recalc(); render(); toast('Archivos quitados.'); break;
     case 'det': S.ui.det = c; renderSheet(); break;
     case 'cerrarDet': S.ui.det = null; $('#sheet').innerHTML = ''; break;
     case 'cerrar': S.ui.confirm = 'cerrar'; render(); break;
@@ -1688,7 +1714,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
-$('#pickFolder').addEventListener('change', e => { const fs = [...e.target.files]; if (fs.length) { S.carpeta = (fs[0].webkitRelativePath || '').split('/')[0] || 'carpeta'; leerArchivos(fs.filter(f => (f.webkitRelativePath || '').split('/').length <= 2)); } e.target.value = ''; });
+$('#pickFolder').addEventListener('change', e => { const fs = [...e.target.files]; if (fs.length) { S.carpeta = (fs[0].webkitRelativePath || '').split('/')[0] || 'carpeta'; leerArchivos(fs.filter(f => { const p = (f.webkitRelativePath || '').split('/'); return p.length <= 2 || (p.length === 3 && RE_CARPETA_EXCEL.test(p[1])); })); } e.target.value = ''; });
 $('#pickFiles').addEventListener('change', e => { if (e.target.files.length) leerArchivos(e.target.files); e.target.value = ''; });
 document.addEventListener('change', e => { if (e.target.id === 'pickPhoto' || e.target.id === 'pickPhoto2') { const f = e.target.files[0]; if (e.target.id === 'pickPhoto2') cerrarEscaner('usar foto'); if (f) leerFoto(f); e.target.value = ''; } });
 document.addEventListener('dragover', e => { if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.add('over'); });
