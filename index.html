@@ -171,7 +171,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb12';
+window.__VERSION = 'sb13';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -194,7 +194,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb12</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb13</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1035,7 +1035,7 @@ function tablaHoy(lines, sis, cerrado) {
       <td>${l.contado && l.dif ? motivoSel('a-m-' + l.c, l.motivo, false).replace('data-act="motivo"', `data-act="motivo" data-c="${esc(l.c)}"`) : ''}</td>
       <td class="hide-sm">${l.contado && l.dif ? `<input type="text" class="obs" id="a-o-${esc(l.c)}" data-act="obs" data-c="${esc(l.c)}" value="${esc(l.obs)}" placeholder="Observación">` : ''}</td>
       <td class="n hide-sm">${ayer}</td>
-      <td>${cerrado ? '' : `<div class="row" style="flex-wrap:nowrap;gap:4px">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button></div>`}</td>
+      <td>${cerrado ? '' : `<div class="row" style="flex-wrap:nowrap;gap:4px">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button>${(l.contado && l.dif) || l.rec ? `<button class="btn sm" data-act="hart" data-c="${esc(l.c)}" title="Últimos cierres y ajustes de este artículo">Historial</button>` : ''}</div>`}</td>
     </tr>`;
   }
   return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n hide-sm">Sistema</th><th class="n">Contado</th><th class="n">Dif. u</th><th class="n hide-sm">Valorizado</th><th>Motivo</th><th class="hide-sm">Obs.</th><th class="n hide-sm">Ayer</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -1043,6 +1043,27 @@ function tablaHoy(lines, sis, cerrado) {
 
 /* bloque 3 */
 /* ---------- Detalle de un artículo ---------- */
+/* ---------- Historial de un artículo: últimos cierres y ajustes ---------- */
+const HART = {};
+async function cargarHistArt(c) {
+  HART[c] = { cargando: true };
+  try { HART[c] = await API.call('historialArticulo', c, 10); } catch (e) { HART[c] = { error: e.message }; }
+  if (S.ui.det === c) { const el = document.getElementById('histArt'); if (el) el.innerHTML = histArtHtml(c); }
+}
+function histArtHtml(c) {
+  const h = HART[c];
+  if (!h || h.cargando) return '<span class="lbl">Historial</span><div class="small muted">Buscando los últimos cierres y ajustes…</div>';
+  if (h.error) return `<span class="lbl">Historial</span><div class="small" style="color:var(--bad)">No se pudo leer: ${esc(h.error)}</div>`;
+  const ci = h.cierres || [], aj = h.ajustes || [];
+  const m = S.maestro[c] || {}, u = m.u || 1;
+  const cjun = x => { if (x === null || x === undefined) return '<span class="muted">no contado</span>'; const sp = Core.split(x, u); return `${fmt(x)} u <span class="muted small">(${fmt(sp.cj)} cj ${fmt(sp.un)} u)</span>`; };
+  const conDif = ci.filter(x => x.dif).length, neto = ci.reduce((s, x) => s + (x.dif || 0), 0);
+  return `<span class="lbl">Historial · últimos ${ci.length} cierres</span>
+    ${ci.length ? `<div class="small" style="margin:2px 0 6px">${conDif ? `Con diferencia en <b>${conDif}</b> de ${ci.length} cierres · neto <b style="color:${neto < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(neto)} u</b>` : 'Sin diferencias en estos cierres.'}</div>
+    <div class="tablebox"><table><thead><tr><th>Día</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th>Motivo / obs.</th></tr></thead><tbody>${ci.map(x => `<tr class="${x.dif < 0 ? 'difneg' : x.dif > 0 ? 'difpos' : ''}"><td>${diaSem(x.fecha).slice(0, 3)} ${dm(x.fecha)}</td><td class="n">${fmt(x.sis)}</td><td class="n">${cjun(x.cont)}</td><td class="n dif">${x.dif ? fmtS(x.dif) : '<span class="muted">0</span>'}</td><td class="small">${esc(x.m || '')}${x.obs ? ' · ' + esc(x.obs) : ''}${x.nota ? ` <span style="color:var(--warn)">“${esc(x.nota)}”</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Este artículo todavía no tiene cierres guardados.</div>'}
+    <span class="lbl" style="margin-top:10px;display:block">Ajustes del artículo</span>
+    ${aj.length ? `<div class="tablebox"><table><thead><tr><th>Desde</th><th>Motivo</th><th>Detalle</th><th class="n">Unidades</th><th>Estado</th></tr></thead><tbody>${aj.map(a => `<tr><td class="small">${a.f ? dm(a.f) : ''}</td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small">${a.estado === 'pasado' ? `<span class="muted">pasado ${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) : ''}</span>` : '<b>pendiente</b>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Sin ajustes pendientes ni pasados en los últimos 30 días.</div>'}`;
+}
 function renderSheet() {
   const c = S.ui.det;
   if (!c) { $('#sheet').innerHTML = ''; return; }
@@ -1068,6 +1089,7 @@ function renderSheet() {
     <div class="calc">${calc}</div>
     ${sap || fuera.length ? `<div><span class="lbl">SAP Ilolay</span><div class="tablebox"><table><thead><tr><th>Almacén</th><th>Tipo</th><th class="n">Stock</th><th>UMB</th></tr></thead><tbody>${(sap?.filas || []).map(f => `<tr><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>${esc(f.umb)}</td></tr>`).join('')}${fuera.map(f => `<tr class="muted"><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>excluido</td></tr>`).join('')}</tbody></table></div></div>` : ''}
     ${y ? `<dl class="kv"><dt>Yasukawa STK</dt><dd>${fmt(y.stk)}</dd><dt>Unid. por caja</dt><dd>${fmt(y.cap) || '—'}</dd><dt>Precio compra</dt><dd>${money2(y.precio)}</dd><dt>Código de barras</dt><dd>${esc(y.ean) || '—'}</dd></dl>` : ''}
+    <div id="histArt">${histArtHtml(c)}</div>
     <div><span class="lbl">Ajustes que suman al sistema</span>${aj.length ? `<div class="tablebox"><table><tbody>${aj.map(a => `<tr><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="n">${fmtS(a.u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Ninguno.</div>'}</div>
     <div><span class="lbl">Conteo</span><div class="small">${k && (k.cj !== null || k.un !== null) ? `Contó ${esc(nom(k.by))} a las ${hora(k.ts)}` : 'Sin contar.'}${l.nota ? `<br>Nota de depósito: “${esc(l.nota)}”` : ''}${l.prevDif ? ` · El cierre anterior tuvo ${fmtS(l.prevDif)} u (${esc(l.prevMotivo || 'sin motivo')}).` : ''}</div></div>
     ${!S.cierre && S.admin && l.ok ? `<div class="row"><button class="btn" data-act="reabrirOk" data-c="${esc(c)}">Volver a comparar con el sistema actual</button></div>` : ''}
@@ -1652,7 +1674,8 @@ document.addEventListener('click', async e => {
     case 'archivos': $('#pickFiles').click(); break;
     case 'quitar': S.files[t.dataset.k] = null; S.fileErr = []; recalc(); render(); toast('Archivo quitado. Cargá el correcto.'); break;
     case 'quitarTodo': S.files = { sap: null, yasu: null, mov: null }; S.fileErr = []; S.marcoErr = []; recalc(); render(); toast('Archivos quitados.'); break;
-    case 'det': S.ui.det = c; renderSheet(); break;
+    case 'det': S.ui.det = c; if (!HART[c] || HART[c].error) cargarHistArt(c); renderSheet(); break;
+    case 'hart': S.ui.det = c; cargarHistArt(c); renderSheet(); setTimeout(() => document.getElementById('histArt')?.scrollIntoView({ block: 'start' }), 50); break;
     case 'cerrarDet': S.ui.det = null; $('#sheet').innerHTML = ''; break;
     case 'cerrar': S.ui.confirm = 'cerrar'; render(); break;
     case 'reabrir': S.ui.confirm = 'reabrir'; render(); break;
