@@ -59,6 +59,8 @@ h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0}
 .btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.pri:hover{filter:brightness(1.08)}
 .btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.ok{color:var(--ok);border-color:var(--ok)}
+.btn.modo{font-weight:600}
 .btn.sm{padding:4px 10px;min-height:30px;font-size:13px}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -169,7 +171,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb10';
+window.__VERSION = 'sb12';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -192,7 +194,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb10</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb12</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -498,10 +500,11 @@ const needXLSX = () => (window.XLSX ? Promise.resolve() : (xlsxP ||= loadScript(
 
 const TIPOS_AJ = {
   egr: { n: 'Falta facturar / egresar', sign: -1, diario: false },
-  ing: { n: 'Ingreso del día', sign: 1, diario: true },
-  vta: { n: 'Venta del día', sign: -1, diario: true },
+  dec: { n: 'Decomiso', sign: -1, diario: false },
   pend: { n: 'Pendiente / corte', sign: 0, diario: false },
-  otro: { n: 'Otro', sign: 0, diario: false }
+  otro: { n: 'Otro', sign: 0, diario: false },
+  ing: { n: 'Ingreso del día', sign: 1, diario: true },
+  vta: { n: 'Venta del día', sign: -1, diario: true }
 };
 const MOTIVOS_DEF = ['CRUCE', 'SOBRA', 'FALTA', 'SOBRÓ AYER', 'FALTÓ AYER', 'ROTO', 'CRÉDITO', 'FACTURADO SIN STOCK', 'MAL EGRESADO', 'RECHAZO', 'OTRO'];
 
@@ -1097,7 +1100,7 @@ function vContar() {
       <div class="t"><b>${esc(i.d)}</b><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
       <div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>
       ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" inputmode="numeric" id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" inputmode="numeric" id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
-      ${done ? `<div class="in sumar" style="grid-column:1/-1"><span class="small muted" style="align-self:center;min-width:76px">Sumar o restar</span><label>± Cajas<input type="number" inputmode="numeric" id="d-acj-${esc(i.c)}" data-act="dsum" data-c="${esc(i.c)}" data-k="acj" value="${esc(DD[i.c + 'acj'] ?? '')}" placeholder="+0"></label><label>± Unidades<input type="number" inputmode="numeric" id="d-aun-${esc(i.c)}" data-act="dsum" data-c="${esc(i.c)}" data-k="aun" value="${esc(DD[i.c + 'aun'] ?? '')}" placeholder="+0"></label><button class="btn" data-act="dsumar" data-c="${esc(i.c)}" style="align-self:end">Sumar</button></div><div class="small muted" id="ds-${esc(i.c)}" style="grid-column:1/-1">${textoSuma(i.c)}</div>` : ''}
+      ${done ? sumarHtml(i) : ''}
       ${detalleHtml(i)}
       ${x?.rec || x?.nota ? `<label class="small muted" style="grid-column:1/-1;display:grid;gap:3px">Nota para administración (este artículo)<input type="text" id="d-n-${esc(i.c)}" data-act="dnota" data-c="${esc(i.c)}" value="${esc(DD[i.c + 'nota'] ?? x?.nota ?? '')}" placeholder="Ej.: 2 cajas rotas, estaban en otro pasillo…" style="width:100%"></label>` : ''}`}
     </div>`;
@@ -1177,26 +1180,36 @@ function armado(c) {
   return { upb, bpb, bpp, uBase, uPallet, niveles };
 }
 /* ---------- Sumar o restar a un artículo ya contado ---------- */
+/* Depósito carga siempre en positivo; el botón Sumar / Restar decide el signo */
+const modoSuma = c => (S.ui.modoSuma?.[c] === 'restar' ? 'restar' : 'sumar');
+function sumarHtml(i) {
+  const c = i.c, resta = modoSuma(c) === 'restar';
+  const campo = (k, n) => `<label>${n}<input type="number" inputmode="numeric" min="0" id="d-${k}-${esc(c)}" data-act="dsum" data-c="${esc(c)}" data-k="${k}" value="${esc(DD[c + k] ?? '')}" placeholder="0"></label>`;
+  return `<div class="in sumar" style="grid-column:1/-1"><button class="btn ${resta ? 'danger' : 'ok'} modo" data-act="dmodo" data-c="${esc(c)}" title="Tocá para cambiar entre sumar y restar" style="align-self:end;min-width:96px">${resta ? '− Restar' : '+ Sumar'}</button>${campo('acj', 'Cajas')}${campo('aun', 'Unidades')}<button class="btn" data-act="dsumar" data-c="${esc(c)}" style="align-self:end">${resta ? 'Guardar resta' : 'Guardar suma'}</button></div>
+    <div class="small muted" id="ds-${esc(c)}" style="grid-column:1/-1">${textoSuma(c) || (resta ? 'Cargá en positivo lo que hay que descontar de lo ya contado.' : 'Cargá en positivo lo que encontraste de más. Tocá el botón para cambiar a Restar.')}</div>`;
+}
 function sumaDe(c) {
   const kx = S.conteos[c] || {}, u = uxcDe(c);
-  const dcj = Number(DD[c + 'acj']) || 0, dun = Number(DD[c + 'aun']) || 0;
+  const signo = modoSuma(c) === 'restar' ? -1 : 1;
+  const dcj = Math.abs(Number(DD[c + 'acj']) || 0), dun = Math.abs(Number(DD[c + 'aun']) || 0);
   const antes = (Number(kx.cj) || 0) * u + (Number(kx.un) || 0);
-  return { antes, delta: dcj * u + dun, total: antes + dcj * u + dun, u, hay: !!(dcj || dun) };
+  const delta = signo * (dcj * u + dun);
+  return { antes, delta, total: antes + delta, u, hay: !!(dcj || dun), signo };
 }
 function textoSuma(c) {
   const s = sumaDe(c); if (!s.hay) return '';
   const sp = Core.split(s.total, s.u);
-  return `Quedaría: ${fmt(s.antes)} u ${s.delta >= 0 ? '+' : '−'} ${fmt(Math.abs(s.delta))} u = <b>${fmt(sp.cj)} cj ${fmt(sp.un)} u</b>${s.total < 0 ? ' <b style="color:var(--bad)">(negativo, revisá)</b>' : ''}`;
+  return `Quedaría: ${fmt(s.antes)} u ${s.signo > 0 ? '+' : '−'} ${fmt(Math.abs(s.delta))} u = <b>${fmt(sp.cj)} cj ${fmt(sp.un)} u</b>${s.total < 0 ? ' <b style="color:var(--bad)">(negativo, revisá)</b>' : ''}`;
 }
 async function sumarDeposito(c) {
   const s = sumaDe(c);
-  if (!s.hay) { toast('Cargá las cajas o unidades a sumar (o con signo menos para restar).'); return; }
+  if (!s.hay) { toast(s.signo > 0 ? 'Cargá las cajas o unidades a sumar.' : 'Cargá las cajas o unidades a restar.'); return; }
   if (s.total < 0) { toast('El total quedaría negativo. Revisá lo que querés restar.'); return; }
   const sp = Core.split(s.total, s.u);
   const ok = await guardarConteo(c, { cj: sp.cj, un: sp.un, by: S.me.id, rec: false });
   if (ok) {
     delete DD[c + 'acj']; delete DD[c + 'aun']; delete DD[c + 'cj']; delete DD[c + 'un'];
-    S.ui.yaContado = null; S.ui.foco = null;
+    S.ui.yaContado = null; S.ui.foco = null; if (S.ui.modoSuma) delete S.ui.modoSuma[c];
     S.ui.okMsg = `✓ Actualizado <b>${esc(S.maestro[c]?.d || c)}</b>: ${s.delta >= 0 ? 'se sumaron' : 'se restaron'} ${fmt(Math.abs(s.delta))} u → total <b>${fmt(sp.cj)} cj ${fmt(sp.un)} u</b>.`;
     render();
   }
@@ -1233,11 +1246,12 @@ function aplicarDetalle(c) {
   const a = document.getElementById('d-cj-' + c), b = document.getElementById('d-un-' + c);
   if (a) { a.value = sp.cj; a.dataset.dirty = '1'; } if (b) { b.value = sp.un; b.dataset.dirty = '1'; }
 }
+document.addEventListener('toggle', e => { if (e.target && e.target.id === 'ajPasDet') S.ui.ajPasAb = e.target.open; }, true);
 document.addEventListener('toggle', e => { const t = e.target; if (t && t.id && t.id.startsWith('det-')) { S.ui.detAb ||= {}; S.ui.detAb[t.id.slice(4)] = t.open; } }, true);
 function scanMsgHtml() {
   let h = '';
   const yc = S.ui.yaContado, kx = yc && S.conteos[yc];
-  if (kx) h += `<div class="banner warn"><span class="grow"><b>Este artículo ya fue contado:</b> ${esc(S.maestro[yc]?.d || yc)} tiene <b>${fmt(kx.cj ?? 0)} cj ${fmt(kx.un ?? 0)} u</b> (${esc(nom(kx.by))} ${hora(kx.ts)}). Si encontraste más o hay que descontar, usá <b>Sumar o restar</b>; si querés corregir el total, cambiá Cajas y Unidades.</span></div>`;
+  if (kx) h += `<div class="banner warn"><span class="grow"><b>Este artículo ya fue contado:</b> ${esc(S.maestro[yc]?.d || yc)} tiene <b>${fmt(kx.cj ?? 0)} cj ${fmt(kx.un ?? 0)} u</b> (${esc(nom(kx.by))} ${hora(kx.ts)}). Si encontraste más, cargalo abajo con <b>+ Sumar</b>; si hay que descontar, tocá el botón para pasarlo a <b>− Restar</b>. Si querés corregir el total, cambiá Cajas y Unidades.</span></div>`;
   if (S.ui.okMsg) h += `<div class="banner ok"><span class="grow">${S.ui.okMsg}</span></div>`;
   if (S.ui.asignar) h += `<div class="banner warn"><span class="grow">El código <b class="mono">${esc(S.ui.asignar)}</b> no está asociado a ningún artículo. Buscá el artículo y tocá su nombre para que la próxima vez lo reconozca.</span></div>
     <div class="panel stack" style="margin-top:8px"><b>Asignar ${esc(S.ui.asignar)} a:</b><input type="search" id="asigQ" data-act="asigQ" placeholder="Tocá acá para buscar por nombre o código" value="${esc(S.ui.asigQ || '')}" autocomplete="off"><div id="asigList" class="stack" style="max-height:240px;overflow:auto">${listaAsignar(S.ui.asigQ || '')}</div><button class="btn sm" data-act="asigCancel">Cancelar</button></div>`;
@@ -1467,22 +1481,47 @@ async function guardarMaestro() {
 
 /* ---------- Ajustes ---------- */
 function vAjustes() {
-  const list = [...S.ajustes].sort((a, b) => (a.c || '').localeCompare(b.c || ''));
+  const list = [...S.ajustes];
   const tot = {}; for (const a of list) tot[a.c] = (tot[a.c] || 0) + Core.num(a.u);
+  const sel = S.ui.ajSel ||= new Set();
+  for (const id of [...sel]) if (!list.some(a => a.id === id)) sel.delete(id);
+  // Agrupados por motivo (tipo de ajuste)
+  const orden = Object.keys(TIPOS_AJ);
+  const grupos = {};
+  for (const a of list) (grupos[a.t] ||= []).push(a);
+  const claves = Object.keys(grupos).sort((x, y) => (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99));
+  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
+  const bloques = claves.map(k => {
+    const g = grupos[k].sort((a, b) => (a.c || '').localeCompare(b.c || ''));
+    const todos = g.every(a => sel.has(a.id));
+    const suma = g.reduce((s, a) => s + Core.num(a.u), 0);
+    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="7">${esc(TIPOS_AJ[k]?.n || k)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
+  }).join('');
+  const P = S.ui.ajPasados;
   return `<div class="stack">
-    <div class="row" style="justify-content:space-between"><div><h2>Ajustes pendientes</h2><div class="small muted">Lo que todavía no impactó en SAP o en Yasukawa y hay que sumar o restar al stock del sistema (lo que en la planilla estaba en "Modificar stock"). Los de tipo "del día" se borran solos al cerrar.</div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
+    <div class="row" style="justify-content:space-between"><div><h2>Ajustes pendientes</h2><div class="small muted">Movimientos que todavía no están cargados en SAP o en Yasukawa: se suman o restan al stock del sistema hasta que los marques como <b>pasados al sistema</b>. Ahí dejan de contar y quedan como registro abajo.</div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
     ${S.ui.ajPre && LINES.find(x => x.c === S.ui.ajPre) ? (() => { const l = LINES.find(x => x.c === S.ui.ajPre); return `<div class="banner info"><span class="grow"><b class="mono">${esc(l.c)}</b> ${esc(l.d)}: sistema ${fmt(l.sis)} u, contado ${l.contado ? fmt(l.cont) + ' u' : 'sin contar'}${l.contado ? ', diferencia <b>' + fmtS(l.dif) + ' u</b>' : ''}. Al volver a Administración, la existencia se recalcula con el ajuste que cargues.</span></div>`; })() : ''}
     ${opt('quesoSap') === 'manual' ? `<div class="banner info"><span class="grow">Modo manual de quesos: cargá acá las hormas facturadas por Ilolay en el día como <b>Venta del día</b> (se restan) y los ingresos de camión como <b>Ingreso del día</b>. Se borran al cerrar.</span></div>` : ''}
     <form class="panel row" id="fAj">
       <input type="text" id="ajC" placeholder="Código" required style="width:110px" class="mono" value="${esc(S.ui.ajPre || '')}">
       <input type="number" id="ajU" placeholder="Unidades" required style="width:110px">
-      <select id="ajT">${Object.entries(TIPOS_AJ).map(([k, t]) => `<option value="${k}">${t.n}${t.sign ? (t.sign < 0 ? ' (resta)' : ' (suma)') : ' (±)'}</option>`).join('')}</select>
-      <input type="text" id="ajM" placeholder="Motivo / detalle" style="flex:1;min-width:160px">
+      <select id="ajT" aria-label="Motivo del ajuste">${Object.entries(TIPOS_AJ).map(([k, t]) => `<option value="${k}">${t.n}${t.sign ? (t.sign < 0 ? ' (resta)' : ' (suma)') : ' (±)'}</option>`).join('')}</select>
+      <input type="text" id="ajM" placeholder="Detalle (opcional)" style="flex:1;min-width:160px">
       <button class="btn pri" type="submit">Agregar</button>
     </form>
-    <div class="tablebox"><table><thead><tr><th>Código</th><th>Artículo</th><th>Tipo</th><th>Detalle</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
-    ${list.length ? list.map(a => `<tr><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}">Borrar</button></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No hay ajustes pendientes.</td></tr>'}
-    </tbody></table></div></div>`;
+    <div class="row" style="justify-content:space-between"><span class="small muted">${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
+      <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
+    <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>Detalle</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
+    ${bloques || '<tr><td colspan="8" class="empty">No hay ajustes pendientes.</td></tr>'}
+    </tbody></table></div>
+    <details class="panel" id="ajPasDet" ${S.ui.ajPasAb ? 'open' : ''}><summary><b>Ajustes ya pasados al sistema</b> <span class="small muted">(últimos 90 días; ya no cuentan en el stock)</span></summary>
+      ${!P ? '<div class="small muted" style="margin-top:8px">Cargando…</div>' : !P.length ? '<div class="small muted" style="margin-top:8px">Todavía no hay ajustes marcados como pasados.</div>' : `<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Pasado</th><th>Motivo</th><th>Código</th><th>Artículo</th><th>Detalle</th><th class="n">Unidades</th><th>Desde</th><th></th></tr></thead><tbody>${P.map(a => `<tr><td class="small">${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) + ' ' + hora(a.pts) : ''}<div class="small muted">${esc(a.ppor || '')}</div></td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajVolver" data-id="${esc(a.id)}" title="Volver a pendiente: vuelve a contar en el sistema">Volver a pendiente</button></td></tr>`).join('')}</tbody></table></div>`}
+    </details>
+  </div>`;
+}
+async function cargarAjPasados() {
+  try { S.ui.ajPasados = await API.call('listarAjustesPasados', 90); } catch (e) { S.ui.ajPasados = []; toast('No se pudo leer el registro de ajustes: ' + e.message); }
+  if (S.ui.tab === 'ajustes') render();
 }
 
 /* bloque 5 */
@@ -1599,7 +1638,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'cerrarDet' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="cerrarDet"]')) return;
   const a = t.dataset.act, c = t.dataset.c, v = t.dataset.v;
   switch (a) {
-    case 'tab': S.ui.tab = v; S.ui.q = ''; if (v !== 'ajustes') S.ui.ajPre = null; S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); render(); window.scrollTo(0, 0); break;
+    case 'tab': S.ui.tab = v; S.ui.q = ''; if (v !== 'ajustes') S.ui.ajPre = null; S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); render(); window.scrollTo(0, 0); break;
     case 'vista': if (v === 'auto') delete document.documentElement.dataset.vista; else document.documentElement.dataset.vista = v; try { localStorage.setItem('vista', v); } catch { } render(); break;
     case 'copiarLog': try { await navigator.clipboard.writeText(S.scanLog.join('\n')); toast('Registro copiado.'); } catch { toast('No se pudo copiar; sacá una captura.'); } break;
     case 'probarConexion': probarConexion(); break;
@@ -1644,11 +1683,12 @@ document.addEventListener('click', async e => {
       }
       break;
     }
-    case 'aAjuste': S.ui.tab = 'ajustes'; S.ui.ajPre = c; render(); window.scrollTo(0, 0); setTimeout(() => { const i = $('#ajC'); if (i) { i.value = c; $('#ajU')?.focus(); } }, 0); break;
+    case 'aAjuste': S.ui.tab = 'ajustes'; S.ui.ajPre = c; cargarAjPasados(); render(); window.scrollTo(0, 0); setTimeout(() => { const i = $('#ajC'); if (i) { i.value = c; $('#ajU')?.focus(); } }, 0); break;
     case 'recTodas': { t.disabled = true; const lote = LINES.filter(l => l.contado && l.dif && !l.rec).map(l => ({ c: l.c, patch: { rec: true } })); await guardarLote(lote); toast(lote.length + ' artículos marcados para recontar.'); break; }
     case 'ajustarSis': { const l = LINES.find(x => x.c === c); if (!l?.dif) break; try { await API.call('agregarAjuste', { c, u: l.dif, t: 'otro', m: 'Ajuste a lo contado ' + dm(S.dia) + (l.motivo ? ' · ' + l.motivo : ''), f: S.dia }); toast('Ajuste creado.'); programarRefresco(200); } catch (er) { toast('No se pudo crear el ajuste: ' + er.message); } break; }
     case 'dsave': await guardarDeposito(c); break;
     case 'dsumar': await sumarDeposito(c); break;
+    case 'dmodo': { S.ui.modoSuma ||= {}; S.ui.modoSuma[c] = modoSuma(c) === 'restar' ? 'sumar' : 'restar'; S.ui.foco = c; render(); document.getElementById('d-acj-' + c)?.focus(); break; }
 
     case 'asigOk': { const code = S.ui.asignar; try { S.codigos[code] = c; await API.call('asignarCodigo', code, c); toast('Código asociado a ' + c + '.'); } catch (er) { toast('No se pudo asociar el código: ' + er.message); } S.ui.asignar = null; S.ui.asigQ = ''; onScan(code); break; }
     case 'escanear': abrirEscaner(); break;
@@ -1674,6 +1714,26 @@ document.addEventListener('click', async e => {
       for (const [code, it] of Object.entries(draft)) { const y = Y[code]; if (!y) continue; if (y.desc && y.desc !== it.d) { it.d = y.desc; n++; } if (y.cap > 0 && y.cap !== it.u) { it.u = y.cap; n++; } if (y.ean && !(it.e || []).includes(y.ean)) { it.e = [...(it.e || []), y.ean]; n++; } }
       toast(n ? n + ' datos actualizados. Revisá y guardá.' : 'No había nada para actualizar.'); render(); break;
     }
+    case 'ajPasar': {
+      const ids = [...(S.ui.ajSel || [])]; if (!ids.length) break;
+      try {
+        S.ajustes = S.ajustes.filter(a => !ids.includes(a.id)); S.ui.ajSel.clear(); recalc(); render();
+        await API.call('marcarAjustes', ids, true);
+        toast(ids.length + (ids.length > 1 ? ' ajustes marcados' : ' ajuste marcado') + ' como pasados al sistema. Ya no cuentan en el stock.');
+        S.ui.ajPasados = null; programarRefresco(200); cargarAjPasados();
+      } catch (er) { toast('No se pudo marcar: ' + er.message); programarRefresco(200); }
+      break;
+    }
+    case 'ajDelSel': S.ui.ajConfDel = true; render(); break;
+    case 'ajDelSelNo': S.ui.ajConfDel = false; render(); break;
+    case 'ajDelSelOk': {
+      const ids = [...(S.ui.ajSel || [])]; S.ui.ajConfDel = false; if (!ids.length) { render(); break; }
+      S.ajustes = S.ajustes.filter(a => !ids.includes(a.id)); S.ui.ajSel.clear(); recalc(); render();
+      let mal = 0; for (const id of ids) { try { await API.call('borrarAjuste', id); } catch { mal++; } }
+      toast(mal ? 'No se pudieron eliminar ' + mal + ' ajustes.' : (ids.length > 1 ? ids.length + ' ajustes eliminados.' : 'Ajuste eliminado.'));
+      programarRefresco(200); break;
+    }
+    case 'ajVolver': try { await API.call('marcarAjustes', [t.dataset.id], false); toast('El ajuste volvió a pendiente y cuenta otra vez en el sistema.'); S.ui.ajPasados = (S.ui.ajPasados || []).filter(a => a.id !== t.dataset.id); programarRefresco(200); render(); } catch (er) { toast('No se pudo: ' + er.message); } break;
     case 'ajDel': try { S.ajustes = S.ajustes.filter(a => a.id !== t.dataset.id); recalc(); render(); await API.call('borrarAjuste', t.dataset.id); programarRefresco(200); } catch (er) { toast('No se pudo borrar: ' + er.message); } break;
     case 'hAbrir': S.ui.hist.abierto = S.ui.hist.abierto === v ? null : v; render(); break;
     case 'hCerrar': S.ui.hist.abierto = null; render(); break;
@@ -1709,12 +1769,15 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'asigQ') { S.ui.asigQ = t.value; const l = $('#asigList'); if (l) l.innerHTML = listaAsignar(t.value); }
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'dnota') DD[t.dataset.c + 'nota'] = t.value;
-  if (t.dataset.act === 'dsum') { DD[t.dataset.c + t.dataset.k] = t.value; const el = document.getElementById('ds-' + t.dataset.c); if (el) el.innerHTML = textoSuma(t.dataset.c); }
+  if (t.dataset.act === 'dsum') { if (/^-/.test(t.value)) t.value = t.value.replace(/^-+/, ''); DD[t.dataset.c + t.dataset.k] = t.value; const el = document.getElementById('ds-' + t.dataset.c); if (el) el.innerHTML = textoSuma(t.dataset.c); }
   if (t.dataset.act === 'ddet') { DD[t.dataset.c + '_' + t.dataset.k] = t.value; aplicarDetalle(t.dataset.c); }
   if (t.dataset.act === 'scan' && !/^\d+$/.test(t.value.trim())) { S.ui.q = t.value; S.ui.foco = null; render(); }
 });
 document.addEventListener('change', async e => {
   const t = e.target, a = t.dataset?.act, c = t.dataset?.c;
+  if (a === 'ajSel' || a === 'ajSelGrupo') S.ui.ajConfDel = false;
+  if (a === 'ajSel') { const sel = S.ui.ajSel ||= new Set(); if (t.checked) sel.add(t.dataset.id); else sel.delete(t.dataset.id); render(); return; }
+  if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => x.t === t.dataset.v)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
   if (a === 'cnt') {
     delete t.dataset.dirty;
     const other = $(`#a-${t.dataset.k === 'cj' ? 'un' : 'cj'}-${CSS.escape(c)}`);
