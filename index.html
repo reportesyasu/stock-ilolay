@@ -158,7 +158,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb1';
+window.__VERSION = 'sb2';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -181,7 +181,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb1</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb2</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -879,8 +879,8 @@ function renderTop() {
   const tabs = S.admin
     ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Opciones']]
     : [['contar', 'Depósito']];
-  $('#tabs').hidden = tabs.length < 2;
-  $('#tabs').innerHTML = tabs.map(([k, n]) => `<button data-act="tab" data-v="${k}" ${S.ui.tab === k ? 'aria-current="page"' : ''}>${n}</button>`).join('') + '<button data-act="salir" title="Cambiar de PIN o de servidor">Salir</button>';
+  $('#tabs').hidden = false;
+  $('#tabs').innerHTML = (tabs.length < 2 ? [] : tabs).map(([k, n]) => `<button data-act="tab" data-v="${k}" ${S.ui.tab === k ? 'aria-current="page"' : ''}>${n}</button>`).join('') + '<button data-act="salir" title="Cambiar de PIN o de servidor">Salir</button>';
   const st = S.cierre ? '<span class="pill closed">Cerrado</span>' : '<span class="pill open">Abierto</span>';
   const fecha = `<span class="lbl">Día</span> <b>${diaSem(S.dia)} ${dmy(S.dia)}</b>`;
   $('#dia').innerHTML = fecha + ' ' + st + (S.errorServidor ? ' <span class="pill bad" title="' + esc(S.errorServidor) + '">Sin conexión con la planilla</span>' : '');
