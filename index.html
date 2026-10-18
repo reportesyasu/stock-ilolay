@@ -158,7 +158,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'web3';
+window.__VERSION = 'sb1';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -181,7 +181,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">web3</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb1</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -195,8 +195,10 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <script>
 "use strict";
-/* Si querés que todos usen el mismo servidor sin tipearlo, pegá acá la dirección /exec entre las comillas. */
-const APP_URL_FIJA = '';
+/* Datos del proyecto de Supabase (Settings → API Keys). Si quedan vacíos, la pantalla de Acceso los pide. */
+const SB_URL = 'https://trznygnvycexiynwcojz.supabase.co';
+const SB_KEY = 'sb_publishable_n2MEG_upNoZC_qpkd5MHmw_KP9gt_6s';
+const APP_URL_FIJA = SB_URL && SB_KEY ? SB_URL : '';
 /* ===== Núcleo: lectura de archivos y cálculo de stock (sin dependencias) ===== */
 const Core = (() => {
   const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -504,58 +506,44 @@ const opt = k => S.opciones[k] ?? ({ prefijo: '21/', excluir: ['SFED'], motivos:
 /* ================= Servidor (Google Apps Script) ================= */
 /* Conexión con el servidor (Apps Script publicado para "cualquier usuario"); cada pedido lleva el PIN */
 const CFG = {
-  get url() { return APP_URL_FIJA || (() => { try { return localStorage.getItem('appUrl') || ''; } catch { return ''; } })(); },
-  set url(v) { try { localStorage.setItem('appUrl', v); } catch { } },
+  get url() { return SB_URL || (() => { try { return localStorage.getItem('sbUrl') || ''; } catch { return ''; } })(); },
+  set url(v) { try { localStorage.setItem('sbUrl', v); } catch { } },
+  get key() { return SB_KEY || (() => { try { return localStorage.getItem('sbKey') || ''; } catch { return ''; } })(); },
+  set key(v) { try { localStorage.setItem('sbKey', v); } catch { } },
   get pin() { try { return sessionStorage.getItem('pin') || localStorage.getItem('pin') || ''; } catch { return ''; } },
   setPin(v, recordar) { try { sessionStorage.setItem('pin', v); if (recordar) localStorage.setItem('pin', v); else localStorage.removeItem('pin'); } catch { } },
   olvidar() { try { sessionStorage.removeItem('pin'); localStorage.removeItem('pin'); } catch { } }
 };
+function sbHeaders(key) {
+  const h = { 'Content-Type': 'application/json', apikey: key };
+  if (/^eyJ/.test(key)) h.Authorization = 'Bearer ' + key;
+  return h;
+}
+async function sbRpc(url, key, fn, args, pin) {
+  let r, j;
+  try { r = await fetch(url + '/rest/v1/rpc/api', { method: 'POST', headers: sbHeaders(key), body: JSON.stringify({ p_fn: fn, p_args: args || [], p_pin: pin || '' }) }); }
+  catch (e) { throw new Error('No se pudo conectar con el servidor (' + (e.message || e) + '). Revisá la conexión a internet.'); }
+  try { j = await r.json(); } catch { throw new Error('El servidor respondió algo inesperado (HTTP ' + r.status + ').'); }
+  if (!r.ok) {
+    const m = (j && (j.message || j.msg || j.error_description || j.error)) || '';
+    if (r.status === 401 || /api key/i.test(m)) throw new Error('La clave del proyecto (publishable/anon key) no es válida. ' + m);
+    if (r.status === 404 || /could not find the function/i.test(m)) throw new Error('No está creada la función api en la base: falta ejecutar 1_estructura.sql. ' + m);
+    throw new Error('Error del servidor (HTTP ' + r.status + '): ' + m);
+  }
+  return j;
+}
 const API = {
   async call(fn, ...args) {
-    const url = CFG.url;
-    if (!url) throw new Error('Falta la dirección del servidor.');
-    let j = null, fallo = null;
-    if (API.modo !== 'jsonp') {
-      try {
-        const r = await fetch(url, { method: 'POST', body: JSON.stringify({ fn, args, pin: CFG.pin }), redirect: 'follow' });
-        try { j = await r.json(); } catch { fallo = new Error('El servidor respondió algo que no es la app (¿la dirección es la de la implementación /exec y está publicada para "Cualquier usuario"?).'); }
-      } catch (e) { fallo = new Error('No se pudo conectar con el servidor (' + (e.message || e) + ').'); }
-    }
-    if (!j) {
-      // Camino alternativo: pedido GET por <script> (no depende de CORS)
-      const a = JSON.stringify(args);
-      if (a.length > 6000) {
-        // Demasiado grande para el camino alternativo: se envía sin leer la respuesta y se confirma al refrescar
-        if (API.modo !== 'jsonp') throw fallo;
-        try { await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ fn, args, pin: CFG.pin }) }); }
-        catch (e3) { throw new Error('No se pudo enviar al servidor (' + (e3.message || e3) + ').'); }
-        programarRefresco(2500);
-        return null;
-      }
-      try { j = await jsonp(url, { fn, args: a, pin: CFG.pin }); API.modo = 'jsonp'; }
-      catch (e2) { throw fallo || e2; }
-    }
-    if (j.error) { const err = new Error(j.error); err.codigo = j.codigo; if (j.codigo === 'pin') { CFG.olvidar(); S.pinInvalido = true; pedirAcceso(); } throw err; }
-    return j.result;
+    if (!CFG.url || !CFG.key) throw new Error('Faltan los datos del servidor.');
+    const j = await sbRpc(CFG.url, CFG.key, fn, args, CFG.pin);
+    if (j && j.error) { const err = new Error(j.error); err.codigo = j.codigo; if (j.codigo === 'pin') { CFG.olvidar(); S.pinInvalido = true; pedirAcceso(); } throw err; }
+    return j ? j.result : null;
   }
 };
-function jsonp(url, params, ms) {
-  return new Promise((res, rej) => {
-    const cb = '__cb' + Date.now() + Math.floor(Math.random() * 1e6);
-    const s = document.createElement('script');
-    let listo = false;
-    const fin = () => { listo = true; clearTimeout(t); try { delete window[cb]; } catch { window[cb] = undefined; } s.remove(); };
-    const t = setTimeout(() => { if (!listo) { fin(); rej(new Error('El servidor no respondió a tiempo.')); } }, ms || 45000);
-    window[cb] = d => { fin(); res(d); };
-    s.onerror = () => { if (!listo) { fin(); rej(new Error('No se pudo conectar con el servidor (bloqueado o dirección incorrecta).')); } };
-    s.onload = () => setTimeout(() => { if (!listo) { fin(); rej(new Error('El servidor contestó pero sin datos de la app: falta pegar el Code.gs nuevo y publicar una nueva versión, o la implementación pide iniciar sesión.')); } }, 300);
-    s.src = url + '?' + new URLSearchParams(Object.assign({}, params, { callback: cb })).toString();
-    document.head.appendChild(s);
-  });
-}
 function normalizarUrl(u) {
-  u = String(u || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
-  return u;
+  u = String(u || '').trim().replace(/[?#].*$/, '');
+  const m = u.match(/^(https?:\/\/[^\/]+)/);
+  return m ? m[1] : u;
 }
 /* Pantalla de acceso: dirección (una sola vez) y PIN */
 function pedirAcceso() {
@@ -564,11 +552,12 @@ function pedirAcceso() {
   const url = CFG.url;
   main.innerHTML = `<form class="panel stack" id="fAcceso" style="max-width:420px;margin:24px auto">
     <h2>Acceso</h2>
-    ${APP_URL_FIJA ? '' : `<label class="stack" style="gap:4px"><span class="lbl">Dirección del servidor (termina en /exec)</span><input type="text" id="accUrl" value="${esc(url)}" placeholder="https://script.google.com/macros/s/…/exec" required class="mono" style="font-size:13px"></label>`}
+    ${APP_URL_FIJA ? '' : `<label class="stack" style="gap:4px"><span class="lbl">Project URL de Supabase</span><input type="text" id="accUrl" value="${esc(url)}" placeholder="https://xxxxxxxx.supabase.co" required class="mono" style="font-size:13px"></label>
+    <label class="stack" style="gap:4px"><span class="lbl">Publishable key (o anon key)</span><input type="text" id="accKey" value="${esc(CFG.key)}" placeholder="sb_publishable_…" required class="mono" style="font-size:13px" autocomplete="off"></label>`}
     <label class="stack" style="gap:4px"><span class="lbl">PIN</span><input type="password" id="accPin" inputmode="numeric" autocomplete="current-password" required style="font-size:22px;letter-spacing:.2em;max-width:200px"></label>
     <label class="row" style="gap:8px"><input type="checkbox" id="accRec" checked> Recordar en este dispositivo</label>
     ${S.pinInvalido ? '<div class="banner bad">PIN incorrecto.</div>' : ''}
-    ${S.errorAcceso ? '<div class="banner bad">' + esc(S.errorAcceso) + '<br><span class="small">Revisá la dirección (tiene que ser la de la implementación actual, la que abre sin pedir inicio de sesión en una ventana de incógnito) y volvé a entrar.</span></div>' : ''}
+    ${S.errorAcceso ? '<div class="banner bad">' + esc(S.errorAcceso) + '<br><span class="small">Tocá "Probar conexión" para ver el detalle.</span></div>' : ''}
     <div class="row"><button class="btn pri" type="submit">Entrar</button><button class="btn" type="button" data-act="probarConexion">Probar conexión</button></div>
     <pre id="diagBox" class="mono small" style="white-space:pre-wrap;margin:0;display:none;background:var(--sunk);padding:10px;border-radius:6px"></pre>
   </form>`;
@@ -577,33 +566,28 @@ function pedirAcceso() {
 async function probarConexion() {
   const box = $('#diagBox'); box.style.display = 'block'; box.textContent = 'Probando…\n';
   const u = normalizarUrl($('#accUrl')?.value || CFG.url || '');
+  const k = ($('#accKey')?.value || CFG.key || '').trim();
+  const pin = ($('#accPin')?.value || '').trim();
   const log = t => { box.textContent += t + '\n'; };
-  log('Página: ' + location.origin + ' · conectado: ' + navigator.onLine + ' · ' + navigator.userAgent.slice(0, 70));
-  log('Servidor: ' + u);
-  if (!/^https?:\/\/.+\/exec$/.test(u)) { log('✗ La dirección no termina en /exec.'); return; }
+  log('Página: ' + location.origin + ' · conectado: ' + navigator.onLine);
+  log('Servidor: ' + u + ' · clave: ' + (k ? k.slice(0, 18) + '…' : '(falta)'));
+  if (!/^https?:\/\/[^\/]+$/.test(u)) { log('✗ La dirección no tiene la forma https://xxxx.supabase.co'); return; }
+  if (!k) { log('✗ Falta la clave.'); return; }
   const t0 = Date.now();
-  // 1) GET simple (sin leer respuesta) para ver si el servidor es alcanzable
-  try { await fetch(u + '?fn=ping', { mode: 'no-cors', cache: 'no-store' }); log('1) Alcanzable por GET: sí (' + (Date.now() - t0) + ' ms)'); }
-  catch (e) { log('1) Alcanzable por GET: NO → ' + (e.message || e) + '  (red, antivirus o extensión bloqueando script.google.com)'); }
-  // 2) GET con lectura de respuesta (CORS)
-  try { const r = await fetch(u + '?fn=ping', { cache: 'no-store' }); const t = await r.text(); log('2) GET con respuesta: HTTP ' + r.status + ' · ' + t.slice(0, 90).replace(/\s+/g, ' ')); }
-  catch (e) { log('2) GET con respuesta: falló → ' + (e.message || e)); }
-  // 3) POST (el que usa la app)
-  try { const r = await fetch(u, { method: 'POST', body: JSON.stringify({ fn: 'ping', args: [], pin: '' }), redirect: 'follow' }); const t = await r.text(); log('3) POST: HTTP ' + r.status + ' · ' + t.slice(0, 90).replace(/\s+/g, ' ')); }
-  catch (e) { log('3) POST: falló → ' + (e.message || e)); }
-  // 4) POST sin leer respuesta
-  try { await fetch(u, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ fn: 'ping', args: [], pin: '' }) }); log('4) POST sin lectura: enviado'); }
-  catch (e) { log('4) POST sin lectura: falló → ' + (e.message || e)); }
-  // 5) Pedido alternativo (el que usa la app si falla el POST)
-  try { const j = await jsonp(u, { fn: 'ping', args: '[]', pin: '' }, 20000); log('5) Alternativo: ' + JSON.stringify(j).slice(0, 90)); }
-  catch (e) { log('5) Alternativo: falló → ' + (e.message || e)); }
-  log('Fin. Copiá este texto y pasalo.');
+  try { const j = await sbRpc(u, k, 'ping', [], pin); log('1) Servidor: ' + (j.ok ? 'responde (' + (Date.now() - t0) + ' ms) · artículos ' + j.result.filas.ARTICULOS + ' · días cerrados ' + j.result.filas.CIERRES_RESUMEN : 'error ' + JSON.stringify(j))); }
+  catch (e) { log('1) Servidor: falló → ' + (e.message || e)); return; }
+  if (pin) {
+    try { const j = await sbRpc(u, k, 'login', [], pin); log('2) PIN: ' + (j.ok ? 'correcto (' + j.result.nombre + ')' : j.error)); }
+    catch (e) { log('2) PIN: falló → ' + (e.message || e)); }
+  } else log('2) PIN: escribilo arriba para probarlo también.');
+  log('Fin.');
 }
 async function entrar(e) {
   e.preventDefault();
-  const u = $('#accUrl') ? normalizarUrl($('#accUrl').value) : undefined; if (u !== undefined) { if (!/^https?:\/\/.+\/exec$/.test(u)) { toast('La dirección tiene que ser la de la implementación de Apps Script: termina en /exec.'); return; } CFG.url = u; }
+  const u = $('#accUrl') ? normalizarUrl($('#accUrl').value) : undefined; if (u !== undefined) { if (!/^https?:\/\/[^\/]+$/.test(u)) { toast('La dirección tiene que tener la forma https://xxxx.supabase.co'); return; } CFG.url = u; }
+  if ($('#accKey')) CFG.key = $('#accKey').value.trim();
   CFG.setPin($('#accPin').value.trim(), $('#accRec').checked);
-  S.pinInvalido = false; S.errorAcceso = null; API.modo = null;
+  S.pinInvalido = false; S.errorAcceso = null;
   try { const me = await API.call('login'); S.acceso = false; toast('Hola, ' + me.nombre + '.'); S.maestroV = false; render(); await refrescar(); }
   catch (err) { if (err.codigo !== 'pin') { S.errorAcceso = err.message; pedirAcceso(); toast(err.message); } }
 }
@@ -624,7 +608,7 @@ function vigilarCarga() {
   }, 1000);
 }
 async function refrescar(silencioso) {
-  if (!CFG.url || !CFG.pin) { pedirAcceso(); return; }
+  if (!CFG.url || !CFG.key || !CFG.pin) { pedirAcceso(); return; }
   if (refrescando) { clearTimeout(refT); refT = setTimeout(() => refrescar(true), 800); return; }
   refrescando = true;
   if (!S.maestroV) vigilarCarga();
