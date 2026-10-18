@@ -139,6 +139,8 @@ html,body{overflow-x:hidden}
 /* panel lateral */
 .sheet{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,var(--ink) 35%,transparent);display:flex;justify-content:flex-end}
 .sheet .box{width:min(620px,100%);height:100%;overflow-y:auto;background:var(--surface);padding:18px max(16px,env(safe-area-inset-right,0px)) 40px 18px;display:grid;gap:14px;align-content:start;padding-top:calc(18px + env(safe-area-inset-top,0px))}
+.sheet .box>*{min-width:0}
+.sheet .box .tablebox{overflow-x:auto;max-width:100%}
 .calc{font-family:var(--f-mono);font-size:13.5px;background:var(--sunk);border-radius:var(--r);padding:10px 12px;line-height:1.7;overflow-x:auto}
 dl.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
 dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
@@ -171,7 +173,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb14';
+window.__VERSION = 'sb15';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -194,7 +196,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb14</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb15</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1071,15 +1073,25 @@ function histArtHtml(c) {
   const m = S.maestro[c] || {}, u = m.u || 1;
   const cjun = x => { if (x === null || x === undefined) return '<span class="muted">no contado</span>'; const sp = Core.split(x, u); return `${fmt(x)} u <span class="muted small">(${fmt(sp.cj)} cj ${fmt(sp.un)} u)</span>`; };
   const conDif = ci.filter(x => x.dif).length, neto = ci.reduce((s, x) => s + (x.dif || 0), 0);
+  const verSis = S.admin || !!opt('verSisDep');
   return `<span class="lbl">Historial · últimos ${ci.length} cierres</span>
     ${ci.length ? `<div class="small" style="margin:2px 0 6px">${conDif ? `Con diferencia en <b>${conDif}</b> de ${ci.length} cierres · neto <b style="color:${neto < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(neto)} u</b>` : 'Sin diferencias en estos cierres.'}</div>
-    <div class="tablebox"><table><thead><tr><th>Día</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th>Motivo / obs.</th></tr></thead><tbody>${ci.map(x => `<tr class="${x.dif < 0 ? 'difneg' : x.dif > 0 ? 'difpos' : ''}"><td>${diaSem(x.fecha).slice(0, 3)} ${dm(x.fecha)}</td><td class="n">${fmt(x.sis)}</td><td class="n">${cjun(x.cont)}</td><td class="n dif">${x.dif ? fmtS(x.dif) : '<span class="muted">0</span>'}</td><td class="small">${esc(x.m || '')}${x.obs ? ' · ' + esc(x.obs) : ''}${x.nota ? ` <span style="color:var(--warn)">“${esc(x.nota)}”</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Este artículo todavía no tiene cierres guardados.</div>'}
+    <div class="tablebox"><table><thead><tr><th>Día</th>${verSis ? '<th class="n">Sistema</th>' : ''}<th class="n">Contado</th><th class="n">Dif.</th><th>Motivo / obs.</th></tr></thead><tbody>${ci.map(x => `<tr class="${x.dif < 0 ? 'difneg' : x.dif > 0 ? 'difpos' : ''}"><td>${diaSem(x.fecha).slice(0, 3)} ${dm(x.fecha)}</td>${verSis ? `<td class="n">${fmt(x.sis)}</td>` : ''}<td class="n">${cjun(x.cont)}</td><td class="n dif">${x.dif ? fmtS(x.dif) : '<span class="muted">0</span>'}</td><td class="small">${esc(x.m || '')}${x.obs ? ' · ' + esc(x.obs) : ''}${x.nota ? ` <span style="color:var(--warn)">“${esc(x.nota)}”</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Este artículo todavía no tiene cierres guardados.</div>'}
     <span class="lbl" style="margin-top:10px;display:block">Ajustes del artículo</span>
     ${aj.length ? `<div class="tablebox"><table><thead><tr><th>Desde</th><th>Motivo</th><th>Detalle</th><th class="n">Unidades</th><th>Estado</th></tr></thead><tbody>${aj.map(a => `<tr><td class="small">${a.f ? dm(a.f) : ''}</td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small">${a.estado === 'pasado' ? `<span class="muted">pasado ${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) : ''}</span>` : '<b>pendiente</b>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Sin ajustes pendientes ni pasados en los últimos 30 días.</div>'}`;
 }
 function renderSheet() {
   const c = S.ui.det;
   if (!c) { $('#sheet').innerHTML = ''; return; }
+  if (!S.admin) {
+    const m = S.maestro[c] || {};
+    $('#sheet').innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="Historial del artículo" data-stop="1">
+      <div class="row" style="justify-content:space-between;align-items:start"><div><span class="lbl">${esc(m.s || '')} · ${esc(c)}</span><h3>${esc(m.d || c)}</h3></div><button class="btn sm" data-act="cerrarDet">Cerrar</button></div>
+      <div id="movDiaBox">${movDiaHtml(c)}</div>
+      <div id="histArt">${histArtHtml(c)}</div>
+    </div></div>`;
+    return;
+  }
   const l = lineasVista().find(x => x.c === c) || LINES.find(x => x.c === c);
   const m = S.maestro[c] || {};
   if (!l) { $('#sheet').innerHTML = ''; return; }
@@ -1143,6 +1155,7 @@ function vContar() {
       <div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>
       ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" inputmode="numeric" id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" inputmode="numeric" id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
       ${verSis && (x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
+      ${x?.rec && !cerrado ? `<div class="row" style="grid-column:1/-1;gap:6px"><button class="btn sm" data-act="hart" data-c="${esc(i.c)}">Historial</button><button class="btn sm" data-act="movDia" data-c="${esc(i.c)}">Movimientos</button></div>` : ''}
       ${done ? sumarHtml(i) : ''}
       ${detalleHtml(i)}
       ${x?.rec || x?.nota ? `<label class="small muted" style="grid-column:1/-1;display:grid;gap:3px">Nota para administración (este artículo)<input type="text" id="d-n-${esc(i.c)}" data-act="dnota" data-c="${esc(i.c)}" value="${esc(DD[i.c + 'nota'] ?? x?.nota ?? '')}" placeholder="Ej.: 2 cajas rotas, estaban en otro pasillo…" style="width:100%"></label>` : ''}`}
