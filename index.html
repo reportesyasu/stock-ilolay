@@ -175,6 +175,11 @@ table.mini tr.hl td{background:#fff3b0 !important;color:#3a3000}
 table.mini tr.hl td .muted{color:#6b5c00}
 .hlbox{display:inline-block;background:#fff3b0;border:1px solid #e3cf5a;border-radius:3px;vertical-align:middle}
 .pill.hlp{background:#fff3b0;color:#5a4a00;margin-left:6px}
+details.arch>summary{list-style:none;cursor:pointer}
+details.arch>summary::-webkit-details-marker{display:none}
+details.arch .arch-flecha::before{content:'▸';color:var(--muted);font-size:15px}
+details.arch[open] .arch-flecha::before{content:'▾'}
+details.arch>.arch-body{margin-top:10px}
 details.opsec{padding:0}
 details.opsec>summary{cursor:pointer;list-style:none;padding:14px 16px;display:grid;gap:2px;position:relative;padding-right:40px}
 details.opsec>summary::-webkit-details-marker{display:none}
@@ -227,7 +232,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb31';
+window.__VERSION = 'sb32';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -250,7 +255,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb31</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb32</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -761,7 +766,7 @@ async function refrescar(silencioso) {
     S.opciones = S.opcPend || e.opciones || {};
     S.dia = e.dia; S.diaDoc = true;
     S.conteos = e.conteos || {}; S.ajustes = e.ajustes || []; S.codigos = e.codigos || {};
-    S.remoto = e.sistema; S.cierre = e.cierre; S.cierreCargado = true;
+    S.remoto = e.sistema; S.cierre = e.cierre; S.cierreCargado = true; S.apertura = e.apertura || null;
     S.anterior = e.anterior || {}; S.anteriorFecha = e.anteriorFecha;
     S.online = true; S.errorServidor = null; S.appUrl = e.appUrl || null;
     if (e.movs && (!S.movsRemoto || S.movsRemoto.ts !== e.movs.ts)) { S.movsRemoto = null; if (e.movs.fecha === e.dia) S.movsMeta = e.movs; }
@@ -1160,20 +1165,29 @@ function vFiles() {
       : `${x.data.filas.length} renglones Ilolay de ${x.data.n}${datosDel(x)}`;
     return `<div class="file ${vacio ? 'bad' : viejo ? 'warn' : 'ok'}"><span class="lbl">${titulo}</span><span class="name">${esc(x.name)}</span><span class="small muted">${det}</span><span class="row small" style="justify-content:space-between">${vacio ? '<span class="pill bad">Sin datos: revisá el archivo</span>' : viejo ? '<span class="pill warn">Archivo del ' + dm(new Date(x.mod).toLocaleDateString('sv-SE')) + '</span>' : '<span class="pill ok">De hoy ' + hora(x.mod) + '</span>'}<button class="btn sm" data-act="quitar" data-k="${k}">Quitar</button></span></div>`;
   };
-  return `<section class="panel stack" id="drop">
-    <div class="row" style="justify-content:space-between">
-      <div><h3>Archivos del día</h3><div class="small muted">Se leen en esta PC y no se guardan en ningún lado. ${S.carpeta ? 'Carpeta: <b>' + esc(S.carpeta) + '</b>' : 'Elegí la carpeta donde dejan las descargas de SAP y Yasukawa.'}</div></div>
+  const cards = { sap: card('sap', 'Stock SAP Ilolay', 'Reporte "Stocks WM" del almacén YA1'), yasu: card('yasu', 'Artículos Yasukawa', 'Tabla "articulo" exportada (STK, CAP, precio)'),
+    fya: card('fya', 'Facturación Yasukawa', 'Ventas por vendedor / cliente / artículo (trae el chofer)'), fil: card('fil', 'Facturación Ilolay', 'Lo facturado por Ilolay (SAP)'),
+    comp: card('comp', 'Comprobantes cargados', 'Relaciona la factura de Ilolay con el viaje y el chofer'), vent: card('vent', 'Ventanas', 'Remitos de mostrador') };
+  const est = k => (/class="file (\w+)"/.exec(cards[k]) || [])[1] || 'missing';
+  const chip = (k, n) => { const e = est(k); return `<span class="pill ${e === 'ok' ? 'ok' : e === 'warn' ? 'warn' : e === 'bad' ? 'bad' : ''}">${n} ${e === 'ok' ? '✓' : e === 'warn' ? '!' : e === 'bad' ? '✗' : '–'}</span>`; };
+  const nMov = MOV_KEYS.filter(k => est(k) === 'ok' || est(k) === 'warn').length;
+  let abierto; try { abierto = localStorage.getItem('archAb'); } catch { }
+  abierto = abierto === null || abierto === undefined ? !(['ok', 'warn'].includes(est('sap')) && ['ok', 'warn'].includes(est('yasu'))) : abierto === '1';
+  return `<details class="panel arch" id="drop" ${abierto ? 'open' : ''}><summary>
+    <div class="row" style="justify-content:space-between;width:100%">
+      <div class="stack" style="gap:4px"><span class="row" style="gap:8px"><span class="arch-flecha" aria-hidden="true"></span><h3 style="margin:0">Archivos del día</h3></span><span class="row" style="gap:6px;flex-wrap:wrap">${chip('sap', 'SAP')}${chip('yasu', 'Yasukawa')}<span class="pill">Movimientos ${nMov}/4</span></span></div>
       <div class="row"><button class="btn pri" data-act="actualizar">${S.carpeta || f.sap || f.yasu ? 'Actualizar desde la carpeta' : 'Elegir carpeta'}</button>${S.carpeta ? '<button class="btn sm" data-act="carpeta">Cambiar carpeta</button>' : ''}<button class="btn sm" data-act="archivos">Elegir archivos sueltos</button>${ARCH_KEYS.some(k => f[k]) ? '<button class="btn sm danger" data-act="quitarTodo">Quitar todos</button>' : ''}</div>
-    </div>
+    </div></summary><div class="stack arch-body">
+    <div class="small muted">Se leen en esta PC y no se guardan en ningún lado. ${S.carpeta ? 'Carpeta: <b>' + esc(S.carpeta) + '</b>' : 'Elegí la carpeta donde dejan las descargas de SAP y Yasukawa.'}</div>
     ${!(f.sap && f.yasu) && fuentes().origen === 'remoto' ? `<div class="banner info"><span class="grow">Usando el cruce cargado en otra PC a las ${hora(S.remoto.ts)} (${esc(S.remoto.archivos?.sap || '')} + ${esc(S.remoto.archivos?.yasu || '')}). Si cargás los archivos acá, se reemplaza.</span></div>` : ''}
     ${!(f.sap && f.yasu) && S.remoto && S.remoto.fecha !== S.dia ? `<div class="banner warn"><span class="grow">El último cruce compartido es del ${dm(S.remoto.fecha)}, no de hoy. Cargá los archivos del día.</span></div>` : ''}
-    <div class="files">${card('sap', 'Stock SAP Ilolay', 'Reporte "Stocks WM" del almacén YA1')}${card('yasu', 'Artículos Yasukawa', 'Tabla "articulo" exportada (STK, CAP, precio)')}</div>
+    <div class="files">${cards.sap}${cards.yasu}</div>
     <div class="small muted" style="margin-top:2px"><b>Movimientos del día</b> · opcionales: para ver qué chofer o cliente llevó cada artículo</div>
-    <div class="files">${card('fya', 'Facturación Yasukawa', 'Ventas por vendedor / cliente / artículo (trae el chofer)')}${card('fil', 'Facturación Ilolay', 'Lo facturado por Ilolay (SAP)')}${card('comp', 'Comprobantes cargados', 'Relaciona la factura de Ilolay con el viaje y el chofer')}${card('vent', 'Ventanas', 'Remitos de mostrador')}</div>
+    <div class="files">${cards.fya}${cards.fil}${cards.comp}${cards.vent}</div>
     ${(S.marcoErr || []).length ? `<div class="banner warn"><span class="grow">${S.marcoErr.map(m => `<b>${esc(m.name)}</b>`).join(', ')}: Excel lo guardó como página web y el archivo quedó sin datos; la tabla está en la carpeta <b>${esc(S.marcoErr[0].carpeta)}</b>. Usá <b>Elegir carpeta</b> / <b>Actualizar desde la carpeta</b> (la app la lee sola), o exportá de nuevo la tabla de Yasukawa sin abrirla y guardarla en Excel.</span></div>` : ''}
     ${S.fileErr.length ? `<div class="small muted">No reconocidos: ${S.fileErr.slice(0, 5).map(esc).join(', ')}${S.fileErr.length > 5 ? ' y ' + (S.fileErr.length - 5) + ' más' : ''}</div>` : ''}
     <div class="drop small" id="dropzone">También podés arrastrar los archivos acá.</div>
-  </section>`;
+  </div></details>`;
 }
 function vHoy() {
   const cerrado = !!S.cierre;
@@ -1200,10 +1214,11 @@ function vHoy() {
     ${avisos.join('')}
     <div class="row" style="justify-content:space-between;align-items:end">
       <div><h2>Stock ${cerrado ? 'cerrado' : 'del día'} · ${dm(S.dia)}</h2><div class="small muted">${cerrado ? 'Cerrado por ' + esc(nom(S.cierre.por)) + ' a las ' + hora(S.cierre.ts) : 'Sistema = SAP + Yasukawa + ajustes pendientes. Quesos: contado al cierre anterior + variación de SAP y Yasukawa desde entonces.'}${S.anteriorFecha ? ' · Cierre anterior: ' + dm(S.anteriorFecha) : ''}</div></div>
-      <div class="row"><button class="btn ${cerrado ? 'pri' : ''}" data-act="abrir" title="Elegir el día a contar y, si hace falta, volver los conteos a cero">Abrir stock</button>${cerrado ? `<button class="btn" data-act="pdfCierre">Descargar PDF</button><button class="btn" data-act="exportar">Descargar Excel</button><button class="btn" data-act="mail">Copiar resumen para el mail</button><button class="btn danger sm" data-act="reabrir">Reabrir día</button>` : `<button class="btn pri" data-act="cerrar" ${sis ? '' : 'disabled'}>Cerrar stock del día</button>`}</div>
+      <div class="row"><button class="btn ${cerrado ? 'pri' : ''}" data-act="abrir" title="Elegir el día a contar y, si hace falta, volver los conteos a cero">Abrir stock</button>${cerrado ? `<button class="btn" data-act="pdfCierre">Descargar PDF</button><button class="btn" data-act="exportar">Descargar Excel</button><button class="btn" data-act="mail">Copiar resumen para el mail</button><button class="btn danger sm" data-act="reabrir">Reabrir día</button>` : `${S.apertura && S.apertura.fecha === S.dia ? `<button class="btn danger" data-act="deshacerAp" title="Si el stock se abrió por error: vuelve todo a como estaba antes de abrirlo, sin hacer ningún cierre">Volver a cerrar (abierto por error)</button>` : ''}<button class="btn pri" data-act="cerrar" ${sis ? '' : 'disabled'}>Cerrar stock del día</button>`}</div>
     </div>
     ${S.ui.confirm === 'cerrar' ? vConfirmCierre(r) : ''}
     ${S.ui.confirm === 'abrir' ? vConfirmAbrir() : ''}
+    ${S.ui.confirm === 'deshacerAp' && S.apertura ? vConfirmDeshacer() : ''}
     ${S.ui.confirm === 'reabrir' ? `<div class="confirm"><b>¿Reabrir el ${dm(S.dia)}?</b><span class="small">Se borra el cierre guardado y el día vuelve a quedar abierto con los conteos que tenía. Para cerrarlo de nuevo vas a necesitar los archivos del día.</span><div class="row"><button class="btn danger" data-act="reabrirOk">Reabrir</button><button class="btn" data-act="cancel">Cancelar</button></div></div>` : ''}
     <div class="kpis">
       <div class="kpi"><span class="lbl">Contados</span><b>${r.contados}<span class="muted" style="font-size:15px"> / ${r.total}</span></b></div>
@@ -1236,6 +1251,21 @@ function vConfirmAbrir() {
     <div class="row"><button class="btn danger" data-act="abrirOk" data-v="1">Abrir y poner los conteos en cero</button><button class="btn pri" data-act="abrirOk" data-v="0">Abrir conservando lo contado</button><button class="btn" data-act="cancel">Cancelar</button></div>
     ${S.ui.abrirConf ? `<div class="banner warn"><span class="grow">Se van a borrar <b>${contados}</b> conteos para empezar de cero el ${dm(f)}. Esto no se puede deshacer.</span><button class="btn danger sm" data-act="abrirOk" data-v="2">Sí, borrar y abrir</button></div>` : ''}
   </div>`;
+}
+function vConfirmDeshacer() {
+  const ap = S.apertura, ahora = Object.values(S.conteos || {}).filter(k => k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined).length;
+  return `<div class="confirm stack" id="deshacerPanel"><b>Volver a cerrar: el stock del ${dm(ap.fecha)} se abrió por error</b>
+    <span class="small">Se deja sin efecto la apertura${ap.ts ? ' de las ' + hora(ap.ts) : ''}${ap.por ? ' (abierto por ' + esc(nom(ap.por)) + ')' : ''} y todo vuelve a como estaba antes${ap.diaVisto ? `: queda otra vez el <b>${diaSem(ap.diaVisto)} ${dm(ap.diaVisto)}</b>` : ''}${ap.nConteos ? ` con sus ${ap.nConteos} conteos` : ''}. <b>No se hace ningún cierre</b> ni se guarda nada en el historial.</span>
+    ${ahora ? `<span class="small" style="color:var(--bad)">Se ${ahora > 1 ? 'descartan los <b>' + ahora + ' artículos contados</b>' : 'descarta <b>1 artículo contado</b>'} desde que se abrió el ${dm(ap.fecha)}.</span>` : ''}
+    <div class="row"><button class="btn danger" data-act="deshacerApOk">Sí, volver a como estaba</button><button class="btn" data-act="cancel">Cancelar</button></div></div>`;
+}
+async function deshacerApertura() {
+  try {
+    const r = await API.call('deshacerApertura');
+    S.ui.confirm = false; for (const k of Object.keys(DD)) delete DD[k];
+    toast('Listo: se dejó sin efecto la apertura del ' + dm(r.fecha) + '. Volvió el ' + dm(r.dia) + '.');
+    await refrescar();
+  } catch (e) { toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo: ' + e.message); }
 }
 async function abrirStock(cero) {
   const f = S.ui.abrirF || hoyISO();
@@ -2344,6 +2374,8 @@ async function copiarMail() {
 /* bloque 6 */
 /* ================= Eventos ================= */
 document.addEventListener('click', async e => {
+  if (e.target.closest('summary button, summary label, summary input')) e.preventDefault();
+  else { const sm = e.target.closest('details.arch > summary'); if (sm) { try { localStorage.setItem('archAb', sm.parentElement.open ? '0' : '1'); } catch { } } }
   const t = e.target.closest('[data-act]');
   if (!t) return;
   if (t.dataset.act === 'cerrarDet' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="cerrarDet"]')) return;
@@ -2368,6 +2400,8 @@ document.addEventListener('click', async e => {
     case 'cerrarDet': S.ui.det = null; S.ui.detVista = null; sheetUltimo = null; $('#sheet').innerHTML = ''; break;
     case 'cerrar': S.ui.confirm = 'cerrar'; render(); break;
     case 'reabrir': S.ui.confirm = 'reabrir'; render(); break;
+    case 'deshacerAp': S.ui.confirm = 'deshacerAp'; render(); break;
+    case 'deshacerApOk': deshacerApertura(); break;
     case 'abrir': S.ui.confirm = 'abrir'; S.ui.abrirF = hoyISO(); S.ui.abrirConf = false; render(); break;
     case 'abrirOk': {
       const contados = Object.values(S.conteos || {}).some(k => k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined);
@@ -2566,7 +2600,8 @@ async function corregirCierre(c, patch) {
   try { await API.call('corregirCierre', S.dia, c, patch); toast('Cierre corregido.'); } catch (er) { toast('No se pudo corregir el cierre: ' + er.message); }
 }
 document.addEventListener('toggle', e => {
-  const d = e.target; if (!d.classList?.contains('opsec')) return;
+  const d = e.target;
+  if (d.id === 'drop') return; if (!d.classList?.contains('opsec')) return;
   if (d.open) OP_AB.add(d.dataset.sec); else OP_AB.delete(d.dataset.sec);
   try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { }
 }, true);
