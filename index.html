@@ -206,7 +206,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb22';
+window.__VERSION = 'sb23';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -229,7 +229,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb22</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb23</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -756,7 +756,21 @@ async function refrescar(silencioso) {
   } finally { refrescando = false; }
 }
 function programarRefresco(ms) { clearTimeout(refT); refT = setTimeout(() => refrescar(true), ms || 600); }
+async function chequearVersion() {
+  try {
+    const t = await (await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' })).text();
+    const m = /__VERSION = '([^']+)'/.exec(t);
+    if (m && m[1] !== window.__VERSION && !document.getElementById('nuevaVersion')) {
+      const d = document.createElement('div'); d.id = 'nuevaVersion'; d.className = 'banner info';
+      d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:60;box-shadow:0 4px 18px rgba(0,0,0,.18)';
+      d.innerHTML = '<span class="grow">Hay una versión nueva de la app (' + m[1] + ').</span><button class="btn pri sm" onclick="location.reload()">Actualizar</button>';
+      document.body.appendChild(d);
+    }
+  } catch { }
+}
 function iniciarSondeo() {
+  setInterval(chequearVersion, 5 * 60 * 1000); setTimeout(chequearVersion, 20000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') chequearVersion(); });
   clearInterval(pollT);
   pollT = setInterval(() => { if (document.visibilityState === 'visible') refrescar(true); }, 15000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refrescar(true); });
@@ -1146,7 +1160,7 @@ function vHoy() {
   const r = resumen(all);
   const lines = filtrar(all);
   const sis = cerrado || tieneSistema();
-  const hu = !cerrado && S.files.sap && S.files.yasu ? Core.huerfanos({ maestro: S.maestro, sap: S.files.sap.data, yasu: S.files.yasu.data }) : [];
+  const hu = !cerrado && S.files.sap && S.files.yasu ? Core.huerfanos({ maestro: S.maestro, sap: S.files.sap.data, yasu: S.files.yasu.data }).filter(h => !ignorado(h.c)) : [];
   const avisos = [];
   const hoy = hoyISO();
   if (cerrado && S.dia < hoy) avisos.push(`<div class="banner info"><span class="grow">El stock del ${diaSem(S.dia)} ${dm(S.dia)} ya está cerrado.</span><button class="btn pri sm" data-act="nuevodia">Empezar el conteo de hoy (${dm(hoy)})</button></div>`);
@@ -1712,10 +1726,19 @@ async function toggleLinterna() {
 
 /* ---------- Artículos (maestro) ---------- */
 let draft = null;
+const ignorado = c => (opt('ignorar') || []).includes(c);
+async function cambiarIgnorados(c, si) {
+  const set = new Set(opt('ignorar') || []); if (si) set.add(c); else set.delete(c);
+  const data = { ...S.opciones, ignorar: [...set], ts: Date.now() };
+  const prev = S.opciones; S.opciones = data; render();
+  try { await API.call('guardarOpciones', data); toast(si ? c + ' no se tiene más en cuenta.' : c + ' vuelve a tenerse en cuenta.'); }
+  catch (e) { S.opciones = prev; render(); toast('No se pudo guardar: ' + e.message); }
+}
 function vMaestro() {
   const M = draft || S.maestro;
   const items = Object.entries(M).map(([c, m]) => ({ c, ...m })).sort((a, b) => (a.s || '').localeCompare(b.s || '') || (a.o ?? 999) - (b.o ?? 999));
-  const hu = S.files.sap && S.files.yasu ? Core.huerfanos({ maestro: M, sap: S.files.sap.data, yasu: S.files.yasu.data }) : [];
+  const hu = S.files.sap && S.files.yasu ? Core.huerfanos({ maestro: M, sap: S.files.sap.data, yasu: S.files.yasu.data }).filter(h => !ignorado(h.c)) : [];
+  const ign = opt('ignorar') || [];
   const rows = items.map(i => `<tr class="${i.baja ? 'muted' : ''}">
     <td><span class="code">${esc(i.c)}</span></td>
     <td><input type="text" id="m-d-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="d" value="${esc(i.d)}" style="width:100%;min-width:240px"></td>
@@ -1732,7 +1755,8 @@ function vMaestro() {
   return `<div class="stack">
     <div class="row" style="justify-content:space-between;align-items:end"><div><h2>Artículos</h2><div class="small muted">La lista que se cuenta todos los días, con su sector, orden, unidades por caja y códigos de barras. Si cargás bases por pallet y bultos por base, depósito puede contar ese artículo por pallets, bases y bultos, y la app hace la cuenta. Un/bulto vacío = igual que Un/caja. Si el archivo de Yasukawa trae CAP, manda sobre lo que pongas acá.</div></div>
     <div class="row">${tieneSistema() || S.files.yasu ? '<button class="btn" data-act="mdesdeYasu">Completar desde Yasukawa</button>' : ''}<button class="btn pri" data-act="mguardar" ${draft ? '' : 'disabled'}>Guardar cambios</button>${draft ? '<button class="btn" data-act="mdescartar">Descartar</button>' : ''}</div></div>
-    ${hu.length ? `<div class="panel stack"><h3>Con stock en los archivos pero fuera de la lista</h3><div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">SAP</th><th class="n">Yasukawa</th><th></th></tr></thead><tbody>${hu.map(h => `<tr><td class="code">${esc(h.c)}</td><td>${esc(h.d)}</td><td class="n">${fmt(h.sap)}</td><td class="n">${fmt(h.yasu)}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="FRIO">+ Frío</button><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="SECO">+ Seco</button></div></td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    ${hu.length ? `<div class="panel stack"><h3>Con stock en los archivos pero fuera de la lista</h3><div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">SAP</th><th class="n">Yasukawa</th><th></th></tr></thead><tbody>${hu.map(h => `<tr><td class="code">${esc(h.c)}</td><td>${esc(h.d)}</td><td class="n">${fmt(h.sap)}</td><td class="n">${fmt(h.yasu)}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="FRIO">+ Frío</button><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="SECO">+ Seco</button><button class="btn sm" data-act="mignorar" data-c="${esc(h.c)}" title="No tener en cuenta: no se avisa más y no entra en ningún cruce">No tener en cuenta</button></div></td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    ${ign.length ? `<div class="panel small row" style="gap:6px"><b>No se tienen en cuenta:</b> ${ign.map(c => `<span class="pill">${esc(c)} <button class="link" data-act="mdesignorar" data-c="${esc(c)}" title="Volver a tenerlo en cuenta">✕</button></span>`).join(' ')}</div>` : ''}
     <div class="panel row"><b>Agregar artículo</b><input type="text" id="nuevoCod" placeholder="Código (ej. 1031)" style="width:140px" class="mono"><select id="nuevoSec"><option>FRIO</option><option>SECO</option></select><button class="btn" data-act="mnuevo">Agregar</button></div>
     <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th>Sector</th><th class="n">Orden</th><th class="n">Sistema</th><th class="n">Un/caja</th><th class="n" title="Bases por pallet">Bases/pallet</th><th class="n" title="Bultos por base">Bultos/base</th><th class="n" title="Unidades por bulto">Un/bulto</th><th>Códigos de barras</th><th>Cálculo</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="12" class="empty">Sin artículos.</td></tr>'}</tbody></table></div>
   </div>`;
@@ -2089,6 +2113,8 @@ document.addEventListener('click', async e => {
     case 'cerrarEscaner': cerrarEscaner('botón cerrar'); break;
     case 'linterna': toggleLinterna(); break;
     case 'asigCancel': S.ui.asignar = null; S.ui.asigQ = ''; render(); break;
+    case 'mignorar': cambiarIgnorados(c, true); break;
+    case 'mdesignorar': cambiarIgnorados(c, false); break;
     case 'mbaja': editarMaestro(c, 'baja', !(draft || S.maestro)[c]?.baja); render(); break;
     case 'mguardar': guardarMaestro(); break;
     case 'mdescartar': draft = null; render(); break;
