@@ -258,7 +258,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb46';
+window.__VERSION = 'sb47';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -281,7 +281,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb46</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb47</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2704,32 +2704,35 @@ function armarPdfDifMovs(c, difs, M, t) {
     y += rowH + 6;
     if (!fsMov.length) { P.text(Mg + 4, y, 'Sin movimientos en los archivos cargados.', fs, false, 'l', '#666666'); y += rowH + 6; continue; }
     const total = cuenta.reduce((s, x) => s + x.q, 0);
-    // 1) Por chofer, con columnas por proveedor
-    const porCh = {};
-    for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { Y: 0, I: 0, V: 0, t: 0 }); g[x.o] = (g[x.o] || 0) + x.q; g.t += x.q; const rc = (resumenCh[k] ||= { Y: 0, I: 0, V: 0, arts: new Set() }); rc[x.o] = (rc[x.o] || 0) + x.q; rc.arts.add(l.c); }
-    const oris = ORI.filter(o => cuenta.some(x => x.o === o));
-    const colsA = [{ n: 'Chofer', w: 0.40 }, ...oris.map(o => ({ n: NOM[o], w: 0.45 / oris.length, a: 'r' })), { n: 'Total', w: 0.15, a: 'r' }];
-    P.text(Mg, y, `Por chofer · salieron ${fmt(total)} u (${cjun(total, u)})`, fs, true, 'l', cfg.cTit); y += rowH;
-    tabla(colsA, [
-      ...Object.entries(porCh).sort((a, b) => b[1].t - a[1].t).map(([k, g]) => ({ v: [k, ...oris.map(o => g[o] ? fmt(g[o]) : ''), fmt(g.t)], hl: hl(g.t) || oris.some(o => g[o] && hl(g[o])) })),
-      { v: ['Total', ...oris.map(o => fmt(cuenta.filter(x => x.o === o).reduce((s, x) => s + x.q, 0))), fmt(total)], b: true, fondo: '#f2f2f2' }
-    ]);
-    // 2) Por proveedor: chofer → cliente → comprobante
+    for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const rc = (resumenCh[k] ||= { Y: 0, I: 0, V: 0, arts: new Set() }); rc[x.o] = (rc[x.o] || 0) + x.q; rc.arts.add(l.c); }
+    P.text(Mg, y, `Salieron ${fmt(total)} u (${cjun(total, u)})`, fs, false, 'l', '#555555'); y += rowH;
+    // Ilolay: detallado por chofer → cliente → comprobante, con subtotal por chofer.
+    // Yasukawa y Ventana: un renglón por chofer con su total.
     for (const o of ORI) {
       const rs = fsMov.filter(x => x.o === o).sort((a, b) => (a.ch || '').localeCompare(b.ch || '') || (a.cli || '').localeCompare(b.cli || '') || (a.comp || '').localeCompare(b.comp || ''));
       if (!rs.length) continue;
       const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
       lugar(rowH * 3);
-      P.text(Mg, y, `${NOM[o]} · ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'} · ${fmt(tq)} u`, fs, true, 'l', cfg.cTit); y += rowH;
-      const filas = []; let chAct, sub = 0, n = 0;
-      const cerrar = () => { if (chAct !== undefined) filas.push({ v: ['', 'Subtotal ' + (chAct || 'Sin chofer') + ' · ' + n + (n === 1 ? ' renglón' : ' renglones'), '', fmt(sub)], b: true, fondo: '#f6f6f6', hl: hl(sub) }); };
-      for (const x of rs) {
-        if (x.ch !== chAct) { cerrar(); chAct = x.ch; sub = 0; n = 0; }
-        if (x.ms !== false) sub += x.q; n++;
-        filas.push({ v: [n === 1 ? (x.ch || 'Sin chofer') : '', x.cli || '', comp(x.comp) + (x.viaje ? ' · v' + x.viaje : ''), (x.q < 0 ? '+' + fmt(-x.q) + ' (NC)' : fmt(x.q)) + (x.ms === false ? ' no mueve' : '')], gris: x.ms === false, hl: hl(x.q), color: x.q < 0 ? [null, null, null, cfg.cPos] : null });
+      if (o === 'I') {
+        P.text(Mg, y, `${NOM[o]} · ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'} · ${fmt(tq)} u`, fs, true, 'l', cfg.cTit); y += rowH;
+        const filas = []; let chAct, sub = 0, n = 0;
+        const cerrar = () => { if (chAct !== undefined) filas.push({ v: ['', 'Subtotal ' + (chAct || 'Sin chofer'), '', fmt(sub)], b: true, fondo: '#f6f6f6', hl: hl(sub) }); };
+        for (const x of rs) {
+          if (x.ch !== chAct) { cerrar(); chAct = x.ch; sub = 0; n = 0; }
+          if (x.ms !== false) sub += x.q; n++;
+          filas.push({ v: [n === 1 ? (x.ch || 'Sin chofer') : '', x.cli || '', comp(x.comp) + (x.viaje ? ' · v' + x.viaje : ''), (x.q < 0 ? '+' + fmt(-x.q) + ' (NC)' : fmt(x.q)) + (x.ms === false ? ' no mueve' : '')], gris: x.ms === false, hl: hl(x.q), color: x.q < 0 ? [null, null, null, cfg.cPos] : null });
+        }
+        cerrar();
+        filas.push({ v: ['Total ' + NOM[o], '', '', fmt(tq)], b: true, fondo: '#eeeeee', hl: hl(tq) });
+        tabla([{ n: 'Chofer', w: 0.26 }, { n: 'Cliente', w: 0.38 }, { n: 'Comprobante', w: 0.22 }, { n: 'Unid.', w: 0.14, a: 'r' }], filas);
+      } else {
+        P.text(Mg, y, `${NOM[o]} · total por chofer · ${fmt(tq)} u`, fs, true, 'l', cfg.cTit); y += rowH;
+        const porCh = {};
+        for (const x of rs) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { q: 0, n: 0 }); if (x.ms !== false) g.q += x.q; g.n++; }
+        const filas = Object.entries(porCh).sort((a, b) => b[1].q - a[1].q).map(([k, g]) => ({ v: [k, fmt(g.n), fmt(g.q)], hl: hl(g.q) }));
+        filas.push({ v: ['Total ' + NOM[o], fmt(rs.length), fmt(tq)], b: true, fondo: '#eeeeee', hl: hl(tq) });
+        tabla([{ n: 'Chofer', w: 0.64 }, { n: 'Comprobantes', w: 0.18, a: 'r' }, { n: 'Unid.', w: 0.18, a: 'r' }], filas);
       }
-      cerrar();
-      tabla([{ n: 'Chofer', w: 0.26 }, { n: 'Cliente', w: 0.38 }, { n: 'Comprobante', w: 0.22 }, { n: 'Unid.', w: 0.14, a: 'r' }], filas);
     }
     y += 6;
   }
