@@ -232,7 +232,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb33';
+window.__VERSION = 'sb34';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -255,7 +255,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb33</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb34</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -667,13 +667,17 @@ function sbHeaders(key) {
 }
 async function sbRpc(url, key, fn, args, pin) {
   let r, j;
-  try { r = await fetch(url + '/rest/v1/rpc/api', { method: 'POST', headers: sbHeaders(key), body: JSON.stringify({ p_fn: fn, p_args: args || [], p_pin: pin || '' }) }); }
-  catch (e) { throw new Error('No se pudo conectar con el servidor (' + (e.message || e) + '). Revisá la conexión a internet.'); }
+  // Sin respuesta en 90 s se corta (para que la pantalla no quede esperando para siempre)
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null, tmo = ctl && setTimeout(() => ctl.abort(), 90000);
+  try { r = await fetch(url + '/rest/v1/rpc/api', { method: 'POST', headers: sbHeaders(key), body: JSON.stringify({ p_fn: fn, p_args: args || [], p_pin: pin || '' }), signal: ctl?.signal }); }
+  catch (e) { clearTimeout(tmo); if (e?.name === 'AbortError') throw new Error('el servidor tardó más de 90 segundos en responder. Probá de nuevo en un rato'); throw new Error('No se pudo conectar con el servidor (' + (e.message || e) + '). Revisá la conexión a internet.'); }
+  clearTimeout(tmo);
   try { j = await r.json(); } catch { throw new Error('El servidor respondió algo inesperado (HTTP ' + r.status + ').'); }
   if (!r.ok) {
     const m = (j && (j.message || j.msg || j.error_description || j.error)) || '';
     if (r.status === 401 || /api key/i.test(m)) throw new Error('La clave del proyecto (publishable/anon key) no es válida. ' + m);
     if (r.status === 404 || /could not find the function/i.test(m)) throw new Error('No está creada la función api en la base: falta ejecutar 1_estructura.sql. ' + m);
+    if (/statement timeout|canceling statement/i.test(m)) throw new Error('el servidor cortó el pedido por tardar demasiado. Corré el 1_estructura.sql nuevo en Supabase (le da más tiempo) y probá de nuevo');
     throw new Error('Error del servidor (HTTP ' + r.status + '): ' + m);
   }
   return j;
@@ -2119,12 +2123,16 @@ async function bdDescargar(backup) {
 async function bdLeerArchivo(file) {
   S.ui.bd = { ocupado: true, estado: 'Leyendo ' + esc(file.name) + '…' }; render();
   try {
-    await needXLSX();
+    const paso = async t => { S.ui.bd.estado = t; render(); await new Promise(r => setTimeout(r, 30)); };
+    await paso('Preparando el lector de Excel…');
+    await Promise.race([needXLSX(), new Promise((_, no) => setTimeout(() => no(new Error('no se pudo cargar el lector de Excel (revisá la conexión a internet y recargá la página)')), 30000))]);
+    await paso('Leyendo ' + esc(file.name) + ' (' + fmt(Math.round(file.size / 1024)) + ' KB)…');
     const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
     const norm = s => String(s || '').trim().toUpperCase();
     const hojas = [];
     for (const [hoja, tabla, titulo, cols] of [...BD_HOJAS, ['CONFIG', 'config', 'Opciones y PIN', ['clave', 'valor']]]) {
       const nombre = wb.SheetNames.find(n => norm(n) === hoja); if (!nombre) continue;
+      await paso('Leyendo la hoja ' + esc(nombre) + '…');
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' });
       const hdr = (aoa[0] || []).map(h => String(h).trim().toLowerCase());
       const faltan = cols.filter(k => !hdr.includes(k) && ['codigo', 'fecha', 'ean', 'clave'].includes(k));
@@ -2146,17 +2154,19 @@ async function bdImportar() {
   S.ui.bd = { ...S.ui.bd, ocupado: true }; render();
   const hechos = [];
   try {
+    const total = sel.reduce((s, h) => s + h.filas.length, 0); let hecho = 0;
     for (const h of sel) {
-      const LOTE = 2000;
+      const LOTE = h.tabla === 'cierres' ? 400 : 1000;
       for (let i = 0; i < Math.max(h.filas.length, 1); i += LOTE) {
-        S.ui.bd.estado = `Reemplazando ${esc(h.titulo)}… ${fmt(Math.min(i + LOTE, h.filas.length))} de ${fmt(h.filas.length)}`; render();
+        S.ui.bd.estado = `Reemplazando ${esc(h.titulo)}… ${fmt(Math.min(i + LOTE, h.filas.length))} de ${fmt(h.filas.length)} <span class="muted">(${Math.round(hecho / Math.max(total, 1) * 100)} % del total)</span>`; render();
         await API.call('importarTabla', h.tabla, h.filas.slice(i, i + LOTE), i === 0 && h.tabla !== 'config');
+        hecho += Math.min(LOTE, h.filas.length - i);
       }
       hechos.push(h.hoja + ' (' + fmt(h.filas.length) + ')');
     }
     S.ui.bd = { ocupado: false, estado: '✓ Reemplazado: ' + hechos.join(' · ') + '.' };
     toast('Bases reemplazadas.'); S.ui.hist.lista = []; refrescar();
-  } catch (e) { S.ui.bd = { ocupado: false, prev: P, estado: '<span style="color:var(--bad)">Se cortó en ' + esc(sel[hechos.length]?.titulo || '') + ': ' + esc(e.message) + '. Lo anterior quedó reemplazado: ' + (hechos.join(' · ') || 'nada') + '.</span>' }; }
+  } catch (e) { toast('La importación se cortó: ' + e.message); S.ui.bd = { ocupado: false, prev: P, estado: '<span style="color:var(--bad)">Se cortó en ' + esc(sel[hechos.length]?.titulo || '') + ': ' + esc(e.message) + '. Lo anterior quedó reemplazado: ' + (hechos.join(' · ') || 'nada') + '. Podés volver a tocar "Reemplazar lo tildado".</span>' }; }
   render();
 }
 /* Secciones de Opciones que se expanden y contraen (se recuerda cuáles quedaron abiertas) */
