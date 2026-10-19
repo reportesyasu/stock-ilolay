@@ -258,7 +258,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb43';
+window.__VERSION = 'sb44';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -281,7 +281,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb43</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb44</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1812,6 +1812,12 @@ const tecladoApp = () => { let v = null; try { v = localStorage.getItem('teclado
 // Con el teclado de la app, los campos quedan "solo lectura" para el celular: así nunca abre su propio teclado
 // (algunos celulares ignoran inputmode="none"). El teclado de la app igual escribe en ellos.
 const IM = () => tecladoApp() ? 'inputmode="none" readonly data-tecla="1"' : 'inputmode="numeric"';
+// Después de guardar: en la PC el cursor vuelve a la búsqueda (para el lector de códigos USB);
+// en el celular no, porque abriría el teclado del navegador.
+function focoBusqueda() {
+  if (esTactil()) { try { document.activeElement?.blur(); } catch { } teclaOcultar(); return; }
+  $('#scan')?.focus();
+}
 const esNum = el => !!(el && el.tagName === 'INPUT' && ['dcnt', 'dsum', 'ddet'].includes(el.dataset?.act));
 let teclaOcultarT = null;
 function teclaEl() {
@@ -1913,7 +1919,7 @@ async function sumarDeposito(c) {
     { const d = Core.split(Math.abs(s.delta), s.u); avisoGuardado(s.delta >= 0 ? 'Sumado' : 'Restado', S.maestro[c]?.d || c, `${s.delta >= 0 ? '+' : '−'} ${d.cj ? fmt(d.cj) + ' cj ' : ''}${d.un || !d.cj ? fmt(d.un) + ' u' : ''}<br>Total: <b>${fmt(res.cj)}</b> cajas · <b>${fmt(res.un)}</b> unidades`, s.delta < 0); }
     document.querySelectorAll('[data-dirty]').forEach(el => delete el.dataset.dirty);
     const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; }
-    render(); $('#scan')?.focus();
+    render(); focoBusqueda();
     if (reabrirEscaner) setTimeout(abrirEscaner, 300);
   }
 }
@@ -3013,7 +3019,7 @@ async function guardarDeposito(c) {
     S.ui.okMsg = `✓ Guardado <b>${esc(S.maestro[c]?.d || c)}</b>: ${fmt(patch.cj)} cj ${fmt(patch.un)} u. Los ya contados se ven en "Todos".`;
     S.ui.foco = null;
     document.querySelectorAll('[data-dirty]').forEach(el => delete el.dataset.dirty);
-    const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; render(); $('#scan')?.focus(); }
+    const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; render(); focoBusqueda(); }
     if (reabrirEscaner) setTimeout(abrirEscaner, 300);
   }
 }
