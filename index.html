@@ -258,7 +258,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb44';
+window.__VERSION = 'sb45';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -281,7 +281,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb44</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb45</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1480,6 +1480,7 @@ function vHoy() {
       <div class="chips" role="group" aria-label="Filtro">${filtros.map(([k, n, c]) => `<button class="chip" data-act="filtro" data-v="${k}" aria-pressed="${S.ui.filtro === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
       <input type="search" id="qHoy" data-act="buscar" placeholder="Buscar código o descripción" value="${esc(S.ui.q)}" style="min-width:220px;flex:1;max-width:320px">
       ${!cerrado ? `<button class="btn sm ${opt('verSisDep') ? 'ok' : ''}" data-act="verSisDep" aria-pressed="${!!opt('verSisDep')}" title="Mostrar u ocultar la existencia del sistema a depósito en Recontar y Con diferencia">Depósito ve el sistema: <b>${opt('verSisDep') ? 'Sí' : 'No (a ciegas)'}</b></button>${opt('verSisDep') ? (S.remoto && S.remoto.fecha === S.dia && S.remoto.items ? `<span class="small muted">depósito ve el cruce de las ${hora(S.remoto.ts)}</span>` : `<span class="small" style="color:var(--bad)">depósito todavía no tiene cruce del ${dm(S.dia)}: cargá los archivos en esta PC</span>`) : ''}` : ''}
+      ${!cerrado && sis && r.dif ? `<button class="btn sm" data-act="pdfDif" title="PDF con todos los artículos que hoy tienen diferencia (el día sigue abierto)">PDF de diferencias (${r.dif})</button>` : ''}
       ${!cerrado && sis && r.dif - r.rec > 0 ? `<button class="btn sm" data-act="recTodas">Pedir recuento de las ${r.dif} con diferencia</button>` : ''}
     </div>
     ${tablaHoy(lines, sis, cerrado)}
@@ -2625,6 +2626,22 @@ function vOpciones() {
 }
 
 /* ================= Acciones ================= */
+function docActual() {
+  const r = resumen(LINES);
+  const lineas = LINES.map(l => ({ c: l.c, d: l.d, s: l.s, u: l.uxc, q: l.q ? 1 : 0, sap: l.sap, ya: l.yasu, sk: l.sapRaw, pe: l.peso, aj: l.aj, sis: l.sis, cont: l.contado ? l.cont : null, dif: l.contado ? l.dif : 0, m: l.contado && l.dif ? l.motivo : '', obs: l.obs || '', nota: l.nota || '', imp: l.importe || 0, por: l.por || null }));
+  return { fecha: S.dia, por: S.me.name || S.me.id, ts: Date.now(), lineas, archivos: { sap: S.files.sap?.name || S.remoto?.archivos?.sap || '', yasu: S.files.yasu?.name || S.remoto?.archivos?.yasu || '' }, resumen: { articulos: lineas.length, contados: r.contados, conDif: r.dif, sobra: r.sobra, falta: r.falta, importe: Math.round(r.imp * 100) / 100 } };
+}
+function pdfDiferencias() {
+  if (!tieneSistema()) { toast('Todavía no hay stock del sistema: cargá los archivos del día para calcular las diferencias.'); return; }
+  const c = docActual();
+  const n = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).length;
+  if (!n) { toast('No hay diferencias pendientes.'); return; }
+  try {
+    const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
+    descargar('Diferencias stock Ilolay ' + c.fecha + ' ' + hh + '.pdf', pdfCierre(c, null, { titulo: 'STOCK ILOLAY · Diferencias pendientes del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), sub: 'Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR'), sinContar: false }));
+    toast('PDF con ' + n + ' diferencia' + (n === 1 ? '' : 's') + ' descargado.');
+  } catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
+}
 async function cerrarDia() {
   const r = resumen(LINES);
   const lineas = LINES.map(l => ({ c: l.c, d: l.d, s: l.s, u: l.uxc, q: l.q ? 1 : 0, sap: l.sap, ya: l.yasu, sk: l.sapRaw, pe: l.peso, aj: l.aj, sis: l.sis, cont: l.contado ? l.cont : null, dif: l.contado ? l.dif : 0, m: l.contado && l.dif ? l.motivo : '', obs: l.obs || '', nota: l.nota || '', imp: l.importe || 0, por: l.por || null }));
@@ -2661,7 +2678,7 @@ function anchoTxt(s, size, bold) {
   return t / 1000 * size * (bold ? 1.06 : 1);
 }
 function cortar(s, maxW, size, bold) {
-  s = String(s ?? ''); if (anchoTxt(s, size, bold) <= maxW) return s;
+  s = String(s ?? ''); if (anchoTxt(s, size, bold) <= maxW + 0.5) return s; // medio punto de tolerancia por redondeo
   let lo = 0, hi = s.length;
   while (lo < hi) { const m = (lo + hi + 1) >> 1; if (anchoTxt(s.slice(0, m) + '…', size, bold) <= maxW) lo = m; else hi = m - 1; }
   return s.slice(0, lo) + '…';
@@ -2716,7 +2733,7 @@ function pdfCfg() {
   for (const [k, n] of PDF_COLS) if (!guard.some(x => x.k === k)) guard.push({ k, n, v: false });
   c.cols = guard; return c;
 }
-function pdfCierre(c, cfgIn) {
+function pdfCierre(c, cfgIn, opts = {}) {
   const cfg = cfgIn || pdfCfg();
   const P = pdfDoc(cfg.apaisado !== false); const lin = c.lineas || [];
   const r = c.resumen || {};
@@ -2750,8 +2767,8 @@ function pdfCierre(c, cfgIn) {
   let y = 0;
   const encabezado = titulo => {
     P.nueva(); y = 24 + ft;
-    P.text(M + 4, y, 'STOCK ILOLAY · Cierre del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
-    P.text(M + 4, y, 'Cerrado por ' + (c.por || '—') + (c.ts ? ' el ' + new Date(c.ts).toLocaleString('es-AR') : '') + (c.archivos?.sap || c.archivos?.yasu ? ' · Archivos: ' + [c.archivos.sap, c.archivos.yasu].filter(Boolean).join(' + ') : ''), Math.max(6, fs - 0.5), false, 'l', '#666666'); y += 18;
+    P.text(M + 4, y, opts.titulo || ('STOCK ILOLAY · Cierre del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha)), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(M + 4, y, (opts.sub || ('Cerrado por ' + (c.por || '—') + (c.ts ? ' el ' + new Date(c.ts).toLocaleString('es-AR') : ''))) + (c.archivos?.sap || c.archivos?.yasu ? ' · Archivos: ' + [c.archivos.sap, c.archivos.yasu].filter(Boolean).join(' + ') : ''), Math.max(6, fs - 0.5), false, 'l', '#666666'); y += 18;
     if (titulo) { P.text(M + 4, y, titulo, fs + 3, true, 'l', cfg.cTit); y += 8; }
   };
   const celda = (col, txt, yy, bold = false, color = '#000000', size = fs) => {
@@ -2780,7 +2797,7 @@ function pdfCierre(c, cfgIn) {
   }
   if (!dif.length) { P.text(M + 4, y, 'No hubo diferencias.', fs + 1); y += rowH; }
   const sin = lin.filter(l => l.cont === null || l.cont === undefined);
-  if (sin.length && cfg.sinContar !== false) {
+  if (sin.length && cfg.sinContar !== false && opts.sinContar !== false) {
     y += 10; if (y > P.H - 60) encabezado();
     P.text(M + 4, y, 'Sin contar (' + sin.length + ')', fs + 3, true, 'l', cfg.cTit); y += rowH + 2;
     const cw = Math.min(ancho, 520);
@@ -2871,6 +2888,7 @@ document.addEventListener('click', async e => {
     case 'nuevodia': await setDia(hoyISO()); break;
     case 'exportar': exportar(S.cierre); break;
     case 'pdfCierre': descargarPdfCierre(S.cierre); break;
+    case 'pdfDif': pdfDiferencias(); break;
     case 'hPdf': descargarPdfCierre(S.ui.hist.lista.find(x => x.fecha === v)); break;
     case 'postCierreNo': S.ui.postCierre = null; render(); break;
     case 'postBackup': bdDescargar(true); S.ui.postCierre = { ...S.ui.postCierre, backup: true }; render(); break;
