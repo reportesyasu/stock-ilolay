@@ -258,7 +258,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb45';
+window.__VERSION = 'sb46';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -281,7 +281,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb45</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb46</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1480,7 +1480,7 @@ function vHoy() {
       <div class="chips" role="group" aria-label="Filtro">${filtros.map(([k, n, c]) => `<button class="chip" data-act="filtro" data-v="${k}" aria-pressed="${S.ui.filtro === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
       <input type="search" id="qHoy" data-act="buscar" placeholder="Buscar código o descripción" value="${esc(S.ui.q)}" style="min-width:220px;flex:1;max-width:320px">
       ${!cerrado ? `<button class="btn sm ${opt('verSisDep') ? 'ok' : ''}" data-act="verSisDep" aria-pressed="${!!opt('verSisDep')}" title="Mostrar u ocultar la existencia del sistema a depósito en Recontar y Con diferencia">Depósito ve el sistema: <b>${opt('verSisDep') ? 'Sí' : 'No (a ciegas)'}</b></button>${opt('verSisDep') ? (S.remoto && S.remoto.fecha === S.dia && S.remoto.items ? `<span class="small muted">depósito ve el cruce de las ${hora(S.remoto.ts)}</span>` : `<span class="small" style="color:var(--bad)">depósito todavía no tiene cruce del ${dm(S.dia)}: cargá los archivos en esta PC</span>`) : ''}` : ''}
-      ${!cerrado && sis && r.dif ? `<button class="btn sm" data-act="pdfDif" title="PDF con todos los artículos que hoy tienen diferencia (el día sigue abierto)">PDF de diferencias (${r.dif})</button>` : ''}
+      ${!cerrado && sis && r.dif ? `<button class="btn sm" data-act="pdfDif" title="PDF con todos los artículos que hoy tienen diferencia (el día sigue abierto)">PDF de diferencias (${r.dif})</button><button class="btn sm" data-act="pdfDifMov" title="PDF de las diferencias con lo que salió de cada artículo: por chofer y cliente, y por proveedor (Yasukawa, Ilolay, Ventana)">PDF por chofer y proveedor</button>` : ''}
       ${!cerrado && sis && r.dif - r.rec > 0 ? `<button class="btn sm" data-act="recTodas">Pedir recuento de las ${r.dif} con diferencia</button>` : ''}
     </div>
     ${tablaHoy(lines, sis, cerrado)}
@@ -2642,6 +2642,107 @@ function pdfDiferencias() {
     toast('PDF con ' + n + ' diferencia' + (n === 1 ? '' : 's') + ' descargado.');
   } catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
 }
+/* PDF de diferencias con los movimientos del día: por chofer (y proveedor) y por proveedor (chofer → cliente) */
+async function pdfDifMovs() {
+  if (!tieneSistema()) { toast('Todavía no hay stock del sistema: cargá los archivos del día para calcular las diferencias.'); return; }
+  if (!movimientosLocal() && !S.movsRemoto) { toast('Buscando los movimientos del día…'); await cargarMovsRemoto(); }
+  const M = movsActuales();
+  if (!M || !(M.filas || []).length) { toast('Faltan los archivos de movimientos (Facturación Yasukawa, Facturación Ilolay, Comprobantes o Ventanas). Cargalos en "Archivos del día".'); return; }
+  const c = docActual();
+  const difs = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
+  if (!difs.length) { toast('No hay diferencias pendientes.'); return; }
+  try {
+    const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
+    descargar('Diferencias por chofer y proveedor ' + c.fecha + ' ' + hh + '.pdf', armarPdfDifMovs(c, difs, M, t));
+    toast('PDF por chofer y proveedor descargado (' + difs.length + ' artículo' + (difs.length === 1 ? '' : 's') + ').');
+  } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
+}
+function armarPdfDifMovs(c, difs, M, t) {
+  const cfg = pdfCfg();
+  const P = pdfDoc(cfg.apaisado !== false);
+  const fs = Math.max(6, Math.min(12, Number(cfg.letra) || 8)), ft = Math.max(9, Math.min(28, Number(cfg.titulo) || 15));
+  const rowH = Math.round(fs * 1.55), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov();
+  const ORI = ['Y', 'I', 'V'], NOM = { Y: 'Yasukawa', I: 'Ilolay', V: 'Ventana' };
+  const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
+  const comp = s => String(s || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2');
+  let y = 0;
+  const pagina = () => {
+    P.nueva(); y = 24 + ft;
+    P.text(Mg, y, 'STOCK ILOLAY · Diferencias por chofer y proveedor · ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(Mg, y, 'Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · Movimientos: ' + Object.entries({ fya: 'Fact. Yasukawa', fil: 'Fact. Ilolay', comp: 'Comprobantes', vent: 'Ventanas' }).map(([k, n]) => n + (M.archivos?.[k] ? '' : ' (falta)')).join(', ') + ' · En amarillo: coincide (±' + fmt(tol) + ' %) con la diferencia', Math.max(6, fs - 1), false, 'l', '#666666'); y += 16;
+  };
+  const lugar = h => { if (y + h > P.H - 30) { pagina(); return true; } return false; };
+  // Tabla genérica: cols = [{n, w (fracción), a}], filas = [{v:[...], b:bold, hl:amarillo, gris, fondo}]
+  const tabla = (cols, filas, x0 = Mg, an = ancho) => {
+    const xs = []; let acc = x0; const ws = cols.map(cl => cl.w * an); ws.forEach(w => { xs.push(acc); acc += w; });
+    const cab = () => { P.rect(x0, y - fs - 2, an, rowH, cfg.cHead); cols.forEach((cl, i) => celda(cl, i, cl.n, true, '#000000')); y += rowH; };
+    const celda = (cl, i, v, b, color) => { const s = cortar(v, ws[i] - 6, fs, b); if (cl.a === 'r') P.text(xs[i] + ws[i] - 3, y, s, fs, b, 'r', color); else P.text(xs[i] + 3, y, s, fs, b, 'l', color); };
+    lugar(rowH * 2); cab();
+    for (const f of filas) {
+      if (lugar(rowH)) cab();
+      if (f.hl) P.rect(x0, y - fs - 2, an, rowH, '#fff3a6'); else if (f.fondo) P.rect(x0, y - fs - 2, an, rowH, f.fondo);
+      cols.forEach((cl, i) => celda(cl, i, f.v[i] ?? '', !!f.b, f.color?.[i] || (f.gris ? '#666666' : '#000000')));
+      P.line(x0, y + Math.round(fs * 0.45), x0 + an, y + Math.round(fs * 0.45), '#e2e2e2'); y += rowH;
+    }
+    y += 4;
+  };
+  pagina();
+  // Resumen arriba
+  const r = c.resumen || {};
+  const conMov = difs.filter(l => M.filas.some(x => x.c === l.c)).length;
+  P.text(Mg, y, `${difs.length} artículo${difs.length === 1 ? '' : 's'} con diferencia · ${conMov} con movimientos en el día · Sobrante ${fmtS(r.sobra || 0)} u · Faltante ${fmt(r.falta || 0)} u · Valorizado ${money(r.importe || 0)}`, fs + 1, true); y += rowH + 4;
+  const resumenCh = {}; // chofer → {o: {Y,I,V}, arts:Set}
+  for (const l of difs) {
+    const u = l.u || 1, dif = Math.abs(l.dif), hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
+    const fsMov = M.filas.filter(x => x.c === l.c), cuenta = fsMov.filter(x => x.ms !== false);
+    lugar(rowH * 4);
+    // Encabezado del artículo
+    P.rect(Mg, y - fs - 4, ancho, rowH + 4, '#eef2f6');
+    const izq = cortar(l.c + '  ' + (l.d || ''), ancho * 0.48, fs + 1, true);
+    P.text(Mg + 4, y, izq, fs + 1, true);
+    P.text(Mg + ancho - 4, y, `Sistema ${cjun(l.sis, u)} · Contado ${cjun(l.cont, u)} · Dif. ${fmtS(l.dif)} u (${money(l.imp || 0)})${l.m ? ' · ' + l.m : ''}`, fs, true, 'r', l.dif < 0 ? cfg.cNeg : cfg.cPos);
+    y += rowH + 6;
+    if (!fsMov.length) { P.text(Mg + 4, y, 'Sin movimientos en los archivos cargados.', fs, false, 'l', '#666666'); y += rowH + 6; continue; }
+    const total = cuenta.reduce((s, x) => s + x.q, 0);
+    // 1) Por chofer, con columnas por proveedor
+    const porCh = {};
+    for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { Y: 0, I: 0, V: 0, t: 0 }); g[x.o] = (g[x.o] || 0) + x.q; g.t += x.q; const rc = (resumenCh[k] ||= { Y: 0, I: 0, V: 0, arts: new Set() }); rc[x.o] = (rc[x.o] || 0) + x.q; rc.arts.add(l.c); }
+    const oris = ORI.filter(o => cuenta.some(x => x.o === o));
+    const colsA = [{ n: 'Chofer', w: 0.40 }, ...oris.map(o => ({ n: NOM[o], w: 0.45 / oris.length, a: 'r' })), { n: 'Total', w: 0.15, a: 'r' }];
+    P.text(Mg, y, `Por chofer · salieron ${fmt(total)} u (${cjun(total, u)})`, fs, true, 'l', cfg.cTit); y += rowH;
+    tabla(colsA, [
+      ...Object.entries(porCh).sort((a, b) => b[1].t - a[1].t).map(([k, g]) => ({ v: [k, ...oris.map(o => g[o] ? fmt(g[o]) : ''), fmt(g.t)], hl: hl(g.t) || oris.some(o => g[o] && hl(g[o])) })),
+      { v: ['Total', ...oris.map(o => fmt(cuenta.filter(x => x.o === o).reduce((s, x) => s + x.q, 0))), fmt(total)], b: true, fondo: '#f2f2f2' }
+    ]);
+    // 2) Por proveedor: chofer → cliente → comprobante
+    for (const o of ORI) {
+      const rs = fsMov.filter(x => x.o === o).sort((a, b) => (a.ch || '').localeCompare(b.ch || '') || (a.cli || '').localeCompare(b.cli || '') || (a.comp || '').localeCompare(b.comp || ''));
+      if (!rs.length) continue;
+      const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
+      lugar(rowH * 3);
+      P.text(Mg, y, `${NOM[o]} · ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'} · ${fmt(tq)} u`, fs, true, 'l', cfg.cTit); y += rowH;
+      const filas = []; let chAct, sub = 0, n = 0;
+      const cerrar = () => { if (chAct !== undefined) filas.push({ v: ['', 'Subtotal ' + (chAct || 'Sin chofer') + ' · ' + n + (n === 1 ? ' renglón' : ' renglones'), '', fmt(sub)], b: true, fondo: '#f6f6f6', hl: hl(sub) }); };
+      for (const x of rs) {
+        if (x.ch !== chAct) { cerrar(); chAct = x.ch; sub = 0; n = 0; }
+        if (x.ms !== false) sub += x.q; n++;
+        filas.push({ v: [n === 1 ? (x.ch || 'Sin chofer') : '', x.cli || '', comp(x.comp) + (x.viaje ? ' · v' + x.viaje : ''), (x.q < 0 ? '+' + fmt(-x.q) + ' (NC)' : fmt(x.q)) + (x.ms === false ? ' no mueve' : '')], gris: x.ms === false, hl: hl(x.q), color: x.q < 0 ? [null, null, null, cfg.cPos] : null });
+      }
+      cerrar();
+      tabla([{ n: 'Chofer', w: 0.26 }, { n: 'Cliente', w: 0.38 }, { n: 'Comprobante', w: 0.22 }, { n: 'Unid.', w: 0.14, a: 'r' }], filas);
+    }
+    y += 6;
+  }
+  // Resumen general por chofer y proveedor (solo artículos con diferencia)
+  const chs = Object.entries(resumenCh);
+  if (chs.length) {
+    if (!lugar(rowH * 6)) { y += 4; }
+    P.text(Mg, y, 'Resumen por chofer (solo artículos con diferencia)', fs + 2, true, 'l', cfg.cTit); y += rowH + 2;
+    tabla([{ n: 'Chofer', w: 0.34 }, { n: 'Artículos', w: 0.12, a: 'r' }, { n: 'Yasukawa', w: 0.14, a: 'r' }, { n: 'Ilolay', w: 0.14, a: 'r' }, { n: 'Ventana', w: 0.12, a: 'r' }, { n: 'Total u', w: 0.14, a: 'r' }],
+      chs.sort((a, b) => (b[1].Y + b[1].I + b[1].V) - (a[1].Y + a[1].I + a[1].V)).map(([k, g]) => ({ v: [k, fmt(g.arts.size), g.Y ? fmt(g.Y) : '', g.I ? fmt(g.I) : '', g.V ? fmt(g.V) : '', fmt(g.Y + g.I + g.V)] })));
+  }
+  return P.blob();
+}
 async function cerrarDia() {
   const r = resumen(LINES);
   const lineas = LINES.map(l => ({ c: l.c, d: l.d, s: l.s, u: l.uxc, q: l.q ? 1 : 0, sap: l.sap, ya: l.yasu, sk: l.sapRaw, pe: l.peso, aj: l.aj, sis: l.sis, cont: l.contado ? l.cont : null, dif: l.contado ? l.dif : 0, m: l.contado && l.dif ? l.motivo : '', obs: l.obs || '', nota: l.nota || '', imp: l.importe || 0, por: l.por || null }));
@@ -2889,6 +2990,7 @@ document.addEventListener('click', async e => {
     case 'exportar': exportar(S.cierre); break;
     case 'pdfCierre': descargarPdfCierre(S.cierre); break;
     case 'pdfDif': pdfDiferencias(); break;
+    case 'pdfDifMov': pdfDifMovs(); break;
     case 'hPdf': descargarPdfCierre(S.ui.hist.lista.find(x => x.fecha === v)); break;
     case 'postCierreNo': S.ui.postCierre = null; render(); break;
     case 'postBackup': bdDescargar(true); S.ui.postCierre = { ...S.ui.postCierre, backup: true }; render(); break;
