@@ -171,6 +171,10 @@ table.mini td.cli{white-space:nowrap}
 table.mini td.mono{font-family:var(--f-mono);font-size:11px;word-break:break-all}
 table.mini.g2 td{font-size:12px}
 table.mini tr.subt td{font-weight:600;background:var(--sunk);font-size:12px}
+table.mini tr.hl td{background:#fff3b0 !important;color:#3a3000}
+table.mini tr.hl td .muted{color:#6b5c00}
+.hlbox{display:inline-block;background:#fff3b0;border:1px solid #e3cf5a;border-radius:3px;vertical-align:middle}
+.pill.hlp{background:#fff3b0;color:#5a4a00;margin-left:6px}
 details.movorg{border:1px solid var(--line);border-radius:var(--r);margin-top:6px;background:var(--surface)}
 details.movorg>summary{cursor:pointer;padding:8px 10px;font-size:13px;display:flex;gap:4px;align-items:baseline;flex-wrap:wrap}
 details.movorg>summary .tq{margin-left:auto;font-weight:600;font-family:var(--f-mono)}
@@ -215,7 +219,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb25';
+window.__VERSION = 'sb27';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -238,7 +242,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb25</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb27</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1182,10 +1186,13 @@ function vHoy() {
   const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['cont', 'Contados', r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ['rec', 'Recontar', r.rec]];
   return `<div class="stack">
     ${cerrado ? '' : vFiles()}
+    ${S.ui.postCierre ? `<div class="confirm stack" style="border-color:var(--ok)"><b style="color:var(--ok)">✓ Cierre del ${dm(S.ui.postCierre.doc.fecha)} guardado en la base.</b>
+      <span class="small">Descargá el PDF para mandarlo por mail. ¿Querés guardar también un backup completo de las bases en esta computadora o dispositivo?</span>
+      <div class="row"><button class="btn pri" data-act="postPdf">${S.ui.postCierre.pdf ? '✓ PDF descargado' : 'Descargar PDF del cierre'}</button><button class="btn" data-act="postBackup">${S.ui.postCierre.backup ? '✓ Backup descargado' : 'Sí, guardar backup (XLSX)'}</button><button class="btn" data-act="postCierreNo">${S.ui.postCierre.pdf || S.ui.postCierre.backup ? 'Listo' : 'No, gracias'}</button></div></div>` : ''}
     ${avisos.join('')}
     <div class="row" style="justify-content:space-between;align-items:end">
       <div><h2>Stock ${cerrado ? 'cerrado' : 'del día'} · ${dm(S.dia)}</h2><div class="small muted">${cerrado ? 'Cerrado por ' + esc(nom(S.cierre.por)) + ' a las ' + hora(S.cierre.ts) : 'Sistema = SAP + Yasukawa + ajustes pendientes. Quesos: contado al cierre anterior + variación de SAP y Yasukawa desde entonces.'}${S.anteriorFecha ? ' · Cierre anterior: ' + dm(S.anteriorFecha) : ''}</div></div>
-      <div class="row">${cerrado ? `<button class="btn" data-act="exportar">Descargar Excel</button><button class="btn" data-act="mail">Copiar resumen para el mail</button><button class="btn danger sm" data-act="reabrir">Reabrir día</button>` : `<button class="btn pri" data-act="cerrar" ${sis ? '' : 'disabled'}>Cerrar stock del día</button>`}</div>
+      <div class="row">${cerrado ? `<button class="btn pri" data-act="pdfCierre">Descargar PDF</button><button class="btn" data-act="exportar">Descargar Excel</button><button class="btn" data-act="mail">Copiar resumen para el mail</button><button class="btn danger sm" data-act="reabrir">Reabrir día</button>` : `<button class="btn pri" data-act="cerrar" ${sis ? '' : 'disabled'}>Cerrar stock del día</button>`}</div>
     </div>
     ${S.ui.confirm === 'cerrar' ? vConfirmCierre(r) : ''}
     ${S.ui.confirm === 'reabrir' ? `<div class="confirm"><b>¿Reabrir el ${dm(S.dia)}?</b><span class="small">Se borra el cierre guardado y el día vuelve a quedar abierto con los conteos que tenía. Para cerrarlo de nuevo vas a necesitar los archivos del día.</span><div class="row"><button class="btn danger" data-act="reabrirOk">Reabrir</button><button class="btn" data-act="cancel">Cancelar</button></div></div>` : ''}
@@ -1264,11 +1271,14 @@ function movDiaHtml(c) {
   if (!fs.length) return titulo + `<div class="small muted">Este artículo no tiene movimientos en los archivos cargados.</div><div class="small muted">${arch}</div>`;
   const cuenta = fs.filter(x => x.ms !== false);
   const total = cuenta.reduce((s, x) => s + x.q, 0);
+  // Resaltar en amarillo lo que coincide (±5 %) con la diferencia entre contado y sistema
+  const lx = LINES.find(x => x.c === c); const dif = lx && lx.contado && lx.dif ? Math.abs(lx.dif) : 0;
+  const hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * 0.05;
   // Grilla 1: por chofer, con el desglose por origen debajo
   const porCh = {};
   for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { q: 0, n: 0, o: {} }); g.q += x.q; g.n++; g.o[x.o] = (g.o[x.o] || 0) + x.q; }
   const chs = Object.entries(porCh).sort((a, b) => b[1].q - a[1].q);
-  const g1 = `<table class="mini"><thead><tr><th>Chofer</th><th class="n">Unidades</th></tr></thead><tbody>${chs.map(([k, v]) => `<tr class="ch"><td><b>${esc(k)}</b><div class="muted">${Object.entries(v.o).map(([o, q]) => `${ORIGEN[o] || o} ${fmt(q)}`).join(' · ')}</div></td><td class="n"><b>${fmt(v.q)}</b><div>${cj(v.q)}</div></td></tr>`).join('')}
+  const g1 = `<table class="mini"><thead><tr><th>Chofer</th><th class="n">Unidades</th></tr></thead><tbody>${chs.map(([k, v]) => `<tr class="ch ${hl(v.q) ? 'hl' : ''}"><td><b>${esc(k)}</b><div class="muted">${Object.entries(v.o).map(([o, q]) => `${ORIGEN[o] || o} ${fmt(q)}`).join(' · ')}</div></td><td class="n"><b>${fmt(v.q)}</b><div>${cj(v.q)}</div></td></tr>`).join('')}
     <tr class="tot"><td>Total</td><td class="n">${fmt(total)} ${cj(total)}</td></tr></tbody></table>`;
   // Grilla 2: una por origen, desplegable (cerrada por defecto), con subtotal al final de cada chofer
   const g2 = ['Y', 'I', 'V'].filter(o => fs.some(x => x.o === o)).map(o => {
@@ -1276,18 +1286,19 @@ function movDiaHtml(c) {
     const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
     const fechas = [...new Set(rs.map(x => x.f).filter(Boolean))].map(dm).join(', ');
     let filas = '', chAct = null, sub = 0, subN = 0;
-    const cierreCh = () => { if (chAct !== null) filas += `<tr class="subt"><td colspan="3">Subtotal ${esc(chAct || 'Sin chofer')} <span class="muted">· ${subN} ${subN === 1 ? 'renglón' : 'renglones'}</span></td><td class="n">${fmt(sub)}</td></tr>`; };
+    const cierreCh = () => { if (chAct !== null) filas += `<tr class="subt ${hl(sub) ? 'hl' : ''}"><td colspan="3">Subtotal ${esc(chAct || 'Sin chofer')} <span class="muted">· ${subN} ${subN === 1 ? 'renglón' : 'renglones'}</span></td><td class="n">${fmt(sub)}</td></tr>`; };
     for (const x of rs) {
       if (x.ch !== chAct) { cierreCh(); chAct = x.ch; sub = 0; subN = 0; }
       if (x.ms !== false) sub += x.q; subN++;
-      filas += `<tr class="${x.ms === false ? 'muted' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`;
+      filas += `<tr class="${x.ms === false ? 'muted' : ''} ${hl(x.q) ? 'hl' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`;
     }
     cierreCh();
     const ab = !!(S.ui.movAb || {})[o];
-    return `<details class="movorg" data-o="${o}" ${ab ? 'open' : ''}><summary><b>${ORIGEN[o] || o}</b>${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span><span class="tq">${fmt(tq)} u</span></summary>
+    const nHl = rs.filter(x => hl(x.q)).length;
+    return `<details class="movorg" data-o="${o}" ${ab ? 'open' : ''}><summary><b>${ORIGEN[o] || o}</b>${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span>${nHl ? `<span class="pill hlp">${nHl} coincide${nHl > 1 ? 'n' : ''}</span>` : ''}<span class="tq">${fmt(tq)} u</span></summary>
       <table class="mini g2"><colgroup><col style="width:29%"><col style="width:33%"><col style="width:26%"><col style="width:12%"></colgroup><thead><tr><th>Comprob.</th><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${filas}</tbody></table></details>`;
   }).join('');
-  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
+  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${dif ? `<div class="small" style="margin:0 0 6px"><span class="hlbox">&nbsp;&nbsp;&nbsp;</span> En amarillo: lo que coincide (±5 %) con la diferencia de <b>${fmt(dif)} u</b> entre contado y sistema.</div>` : ''}${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
     <div class="small muted" style="margin-top:6px">${arch}${fs.some(x => x.q < 0) ? ' · en verde: notas de crédito (vuelve al stock)' : ''}</div>`;
 }
 function histArtHtml(c) {
@@ -1873,7 +1884,7 @@ function vHistorial() {
     ${L.map(c => { let so = 0, fa = 0; for (const l of c.lineas || []) { if (l.dif > 0) so += l.dif; else if (l.dif < 0) fa += l.dif; }
       return `<tr><td><button class="link" data-act="hAbrir" data-v="${esc(c.fecha)}">${diaSem(c.fecha).slice(0, 3)} ${dm(c.fecha)}</button></td><td class="n">${c.resumen?.articulos ?? (c.lineas || []).length}</td><td class="n">${c.resumen?.conDif ?? ''}</td><td class="n" style="color:var(--ok)">${so ? fmtS(so) : ''}</td><td class="n" style="color:var(--bad)">${fa ? fmt(fa) : ''}</td><td class="n">${money(c.resumen?.importe)}</td><td class="small muted">${c.origen === 'planilla' ? 'Excel' : 'App'}</td></tr>`; }).join('')}
     </tbody></table></div>
-    ${ab ? `<div class="panel stack"><div class="row" style="justify-content:space-between"><h3>Diferencias del ${diaSem(ab.fecha)} ${dm(ab.fecha)}</h3><div class="row"><button class="btn sm" data-act="hExport" data-v="${esc(ab.fecha)}">Descargar Excel</button><button class="btn sm" data-act="hCerrar">Cerrar</button></div></div>
+    ${ab ? `<div class="panel stack"><div class="row" style="justify-content:space-between"><h3>Diferencias del ${diaSem(ab.fecha)} ${dm(ab.fecha)}</h3><div class="row"><button class="btn sm" data-act="hPdf" data-v="${esc(ab.fecha)}">Descargar PDF</button><button class="btn sm" data-act="hExport" data-v="${esc(ab.fecha)}">Descargar Excel</button><button class="btn sm" data-act="hCerrar">Cerrar</button></div></div>
       <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th>Sector</th><th class="n">Sistema u</th><th class="n">Contado u</th><th class="n">Dif.</th><th>Motivo</th><th class="n">Valorizado</th></tr></thead><tbody>${(ab.lineas || []).filter(l => l.dif).map(l => `<tr class="${l.dif < 0 ? 'difneg' : 'difpos'}"><td class="code">${esc(l.c)}</td><td>${esc(l.d)}</td><td>${esc(l.s)}</td><td class="n">${fmt(l.sis)}</td><td class="n">${fmt(l.cont)}</td><td class="n dif">${fmtS(l.dif)}</td><td>${esc(l.m)}${l.obs ? ' · ' + esc(l.obs) : ''}</td><td class="n">${money(l.imp)}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Sin diferencias.</td></tr>'}</tbody></table></div></div>` : ''}`}
   </div>`;
 }
@@ -2006,8 +2017,97 @@ async function cerrarDia() {
   try { await API.call('cerrarDia', doc); }
   catch (e) { toast('No se pudo guardar el cierre: ' + e.message); return; }
   S.ui.confirm = false; toast('Stock del ' + dm(S.dia) + ' cerrado y guardado.');
+  S.ui.postCierre = { doc: { ...doc, por: S.me.id } };
   S.files = { sap: null, yasu: null, vent: null, fya: null, fil: null, comp: null }; S.remoto = null; S.movsRemoto = null;
   await refrescar();
+}
+/* ---------- PDF del cierre (generado acá, sin librerías externas) ---------- */
+const PDF_W = { '–': 150, '—': 151, '“': 147, '”': 148, '‘': 145, '’': 146, '•': 149, '€': 128, '…': 133 };
+function pdfTxt(s) {
+  let o = '';
+  for (const ch of String(s ?? '')) {
+    let c = ch.charCodeAt(0); if (c === 0xA0 || c === 0x202F || c === 0x2009) c = 32; if (c > 255) c = PDF_W[ch] || 63;
+    if (ch === '(' || ch === ')' || ch === '\\') o += '\\' + ch; else if (c < 32) o += ' '; else if (c > 126) o += '\\' + c.toString(8).padStart(3, '0'); else o += ch;
+  }
+  return o;
+}
+function pdfDoc() {
+  const W = 842, H = 595, pages = []; let cur = null;
+  const api = {
+    W, H,
+    nueva() { cur = []; pages.push(cur); return api; },
+    text(x, y, s, size = 9, bold = false, align = 'l', gray = 0) {
+      const t = pdfTxt(s); let xx = x;
+      if (align !== 'l') { const w = String(s ?? '').length * size * (bold ? 0.56 : 0.52); xx = align === 'r' ? x - w : x - w / 2; }
+      cur.push(`${gray} g BT /${bold ? 'F2' : 'F1'} ${size} Tf ${xx.toFixed(1)} ${(H - y).toFixed(1)} Td (${t}) Tj ET 0 g`); return api;
+    },
+    rect(x, y, w, h, gray) { cur.push(`${gray} g ${x} ${(H - y - h).toFixed(1)} ${w} ${h} re f 0 g`); return api; },
+    line(x1, y1, x2, y2, gray = 0.7) { cur.push(`${gray} G 0.5 w ${x1} ${(H - y1).toFixed(1)} m ${x2} ${(H - y2).toFixed(1)} l S 0 G`); return api; },
+    blob() {
+      const objs = [];
+      objs.push('<< /Type /Catalog /Pages 2 0 R >>');
+      const kids = pages.map((_, i) => `${5 + i * 2} 0 R`).join(' ');
+      objs.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`);
+      objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+      objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+      pages.forEach((ops, i) => {
+        const pie = `0.45 g BT /F1 7 Tf ${W - 110} 18 Td (${pdfTxt('Página ' + (i + 1) + ' de ' + pages.length)}) Tj ET 0 g`;
+        const st = ops.concat(pie).join('\n');
+        objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6 + i * 2} 0 R >>`);
+        objs.push(`<< /Length ${st.length} >>\nstream\n${st}\nendstream`);
+      });
+      let out = '%PDF-1.4\n', offs = [];
+      objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+      const xref = out.length;
+      out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+      out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+      const b = new Uint8Array(out.length); for (let i = 0; i < out.length; i++) b[i] = out.charCodeAt(i) & 255;
+      return new Blob([b], { type: 'application/pdf' });
+    }
+  };
+  return api;
+}
+function pdfCierre(c) {
+  const P = pdfDoc(); const lin = c.lineas || [];
+  const r = c.resumen || {};
+  const cut = (s, n) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(q, u || 1); return fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
+  const cols = [['Código', 32, 'l'], ['Descripción', 82, 'l'], ['Sistema', 352, 'r'], ['Contado', 432, 'r'], ['Dif. u', 478, 'r'], ['Valorizado', 552, 'r'], ['Motivo', 562, 'l'], ['Obs. / nota de depósito', 660, 'l']];
+  let y = 0;
+  const encabezado = (titulo) => {
+    P.nueva(); y = 34;
+    P.text(32, y, 'STOCK ILOLAY · Cierre del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), 15, true); y += 16;
+    P.text(32, y, 'Cerrado por ' + (c.por || '—') + (c.ts ? ' el ' + new Date(c.ts).toLocaleString('es-AR') : '') + (c.archivos?.sap || c.archivos?.yasu ? ' · Archivos: ' + [c.archivos.sap, c.archivos.yasu].filter(Boolean).join(' + ') : ''), 8, false, 'l', 0.4); y += 18;
+    if (titulo) { P.text(32, y, titulo, 11, true); y += 8; }
+  };
+  const cabecera = () => { P.rect(28, y, 786, 14, 0.9); cols.forEach(([n, x, a]) => P.text(x, y + 10, n, 7.5, true, a)); y += 26; };
+  encabezado();
+  const kp = [['Artículos', fmt(r.articulos ?? lin.length)], ['Contados', fmt(r.contados)], ['Con diferencia', fmt(r.conDif)], ['Sobrante', fmtS(r.sobra || 0) + ' u'], ['Faltante', fmt(r.falta || 0) + ' u'], ['Valorizado', money(r.importe || 0)]];
+  kp.forEach(([n, v], i) => { const x = 32 + i * 130; P.rect(x - 4, y, 124, 34, 0.95); P.text(x + 2, y + 12, n.toUpperCase(), 7, true, 'l', 0.4); P.text(x + 2, y + 27, v, 12, true); }); y += 50;
+  const dif = lin.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
+  P.text(32, y, 'Artículos con diferencia (' + dif.length + ')', 11, true); y += 8; cabecera();
+  let sec = null;
+  for (const l of dif) {
+    if (y > 560) { encabezado('Artículos con diferencia (continuación)'); cabecera(); sec = null; }
+    if (l.s !== sec) { sec = l.s; P.text(32, y, sec === 'FRIO' ? 'FRÍO' : (sec || 'SIN SECTOR'), 7.5, true, 'l', 0.35); y += 12; }
+    P.text(32, y, l.c, 8); P.text(82, y, cut(l.d, 52), 8); P.text(352, y, cjun(l.sis, l.u), 8, false, 'r'); P.text(432, y, cjun(l.cont, l.u), 8, false, 'r');
+    P.text(478, y, fmtS(l.dif), 8, true, 'r', l.dif < 0 ? 0.15 : 0); P.text(552, y, money(l.imp || 0), 8, false, 'r');
+    P.text(562, y, cut(l.m || 'sin motivo', 18), 8, false, 'l', l.m ? 0 : 0.45); P.text(660, y, cut([l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · '), 38), 7.5, false, 'l', 0.25);
+    P.line(28, y + 4, 814, y + 4, 0.88); y += 13;
+  }
+  if (!dif.length) { P.text(32, y, 'No hubo diferencias.', 9); y += 14; }
+  const sin = lin.filter(l => l.cont === null || l.cont === undefined);
+  if (sin.length) {
+    y += 10; if (y > 540) encabezado();
+    P.text(32, y, 'Sin contar (' + sin.length + ')', 11, true); y += 14;
+    for (const l of sin) { if (y > 570) { encabezado('Sin contar (continuación)'); } P.text(32, y, l.c, 8); P.text(82, y, cut(l.d, 60), 8); P.text(432, y, 'sistema ' + cjun(l.sis, l.u), 8, false, 'r'); y += 12; }
+  }
+  return P.blob();
+}
+function descargarPdfCierre(c) {
+  if (!c) return;
+  try { descargar('Cierre stock Ilolay ' + c.fecha + '.pdf', pdfCierre(c)); toast('PDF descargado. Adjuntalo al mail.'); }
+  catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
 }
 function filasExport(lineas) {
   return lineas.map(l => {
@@ -2077,6 +2177,11 @@ document.addEventListener('click', async e => {
     case 'reabrirOk': try { await API.call('reabrirDia', S.dia); S.ui.confirm = false; toast('Día reabierto.'); await refrescar(); } catch (er) { toast('No se pudo reabrir: ' + er.message); } break;
     case 'nuevodia': await setDia(hoyISO()); break;
     case 'exportar': exportar(S.cierre); break;
+    case 'pdfCierre': descargarPdfCierre(S.cierre); break;
+    case 'hPdf': descargarPdfCierre(S.ui.hist.lista.find(x => x.fecha === v)); break;
+    case 'postCierreNo': S.ui.postCierre = null; render(); break;
+    case 'postBackup': bdDescargar(true); S.ui.postCierre = { ...S.ui.postCierre, backup: true }; render(); break;
+    case 'postPdf': descargarPdfCierre(S.ui.postCierre?.doc); S.ui.postCierre = { ...S.ui.postCierre, pdf: true }; render(); break;
     case 'mail': copiarMail(); break;
     case 'igual': { const l = LINES.find(x => x.c === c); if (l) await guardarConteo(c, { cj: l.sisCj, un: l.sisUn, by: S.me.id, rec: false }); break; }
     case 'reabrirOk': await guardarConteo(c, { ok: false, sisOk: null }); break;
