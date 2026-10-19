@@ -232,7 +232,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb32';
+window.__VERSION = 'sb33';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -255,7 +255,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb32</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb33</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2028,6 +2028,29 @@ async function cbGuardar(otro) {
     if (otro) cbEscanear();
   } catch (er) { toast('No se pudo guardar: ' + er.message); }
 }
+function vBorrarConteos() {
+  if (!S.admin) return '';
+  const B = S.ui.borrar || {};
+  const n = Object.values(S.conteos || {}).filter(k => k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined).length;
+  const cerrado = !!S.cierre, conCierre = cerrado && B.cierre;
+  const nCierre = cerrado ? (S.cierre.lineas || []).filter(l => l.cont !== null && l.cont !== undefined).length : 0;
+  return `<div style="max-width:760px" id="borrarPanel">${secOp('borrar', 'Borrar lo contado', 'Para limpiar pruebas: deja todos los artículos sin contar, con el stock abierto o cerrado.')}
+    <span class="small">${cerrado ? `El ${diaSem(S.dia)} ${dm(S.dia)} está <b>cerrado</b>: sus conteos (${nCierre}) están guardados en el cierre.` : `Día ${diaSem(S.dia)} ${dm(S.dia)} abierto: hay <b>${n} artículo${n === 1 ? '' : 's'} contado${n === 1 ? '' : 's'}</b>.`}</span>
+    ${cerrado ? `<label class="row small" style="gap:8px"><input type="checkbox" data-act="borrarCierre" ${B.cierre ? 'checked' : ''}> <span>Borrar también el <b>cierre del ${dm(S.dia)}</b> (sale del historial y el día vuelve a quedar abierto, sin conteos)</span></label>` : ''}
+    <span class="small muted">Se borran los conteos de depósito y administración (cajas, unidades, motivos, observaciones y notas). No se tocan los artículos, los ajustes, los códigos de barra ni ${conCierre ? 'los demás cierres' : 'el historial de cierres'}.</span>
+    <div class="row"><button class="btn danger" data-act="borrarConteos" ${!n && !conCierre ? 'disabled' : ''}>Borrar lo contado</button>${!n && !conCierre ? `<span class="small muted">${cerrado ? 'No hay conteos sin cerrar. Para borrar los del cierre, tildá la casilla.' : 'No hay nada contado.'}</span>` : ''}</div>
+    ${B.conf ? `<div class="banner warn"><span class="grow"><b>¿Seguro?</b> Se ${n > 1 || (n && conCierre) ? 'van' : 'va'} a borrar ${n ? `<b>${n} conteo${n === 1 ? '' : 's'}</b>` : ''}${n && conCierre ? ' y ' : ''}${conCierre ? `<b>el cierre del ${dm(S.dia)}</b> con sus ${nCierre} conteos` : ''}. Esto no se puede deshacer.</span><button class="btn danger sm" data-act="borrarConteosOk">Sí, borrar</button><button class="btn sm" data-act="borrarCancel">Cancelar</button></div>` : ''}
+  </div></details></div>`;
+}
+async function borrarConteos() {
+  const B = S.ui.borrar || {}, fecha = S.cierre && B.cierre ? S.dia : null;
+  try {
+    const r = await API.call('borrarConteos', fecha);
+    for (const k of Object.keys(DD)) delete DD[k];
+    S.ui.borrar = {}; toast('Listo: se borraron ' + r.conteos + ' conteo' + (r.conteos === 1 ? '' : 's') + (r.cierre ? ' y el cierre del ' + dm(fecha) : '') + '.');
+    await refrescar();
+  } catch (e) { toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo borrar: ' + e.message); }
+}
 function vCodigosBarra() {
   if (!S.admin) return '';
   const cb = S.ui.cb, art = c => `<span class="mono">${esc(c)}</span> ${esc(S.maestro[c]?.d || '(no está en Artículos)')}`;
@@ -2163,7 +2186,8 @@ function vOpciones() {
   </form>
   ${vPdfCfg()}
   ${vBaseDatos()}
-  ${vCodigosBarra()}</div>`;
+  ${vCodigosBarra()}
+  ${vBorrarConteos()}</div>`;
 }
 
 /* ================= Acciones ================= */
@@ -2475,6 +2499,9 @@ document.addEventListener('click', async e => {
 
     case 'asigOk': { const code = S.ui.asignar; try { S.codigos[code] = c; await API.call('asignarCodigo', code, c); toast('Código asociado a ' + c + '.'); } catch (er) { toast('No se pudo asociar el código: ' + er.message); } S.ui.asignar = null; S.ui.asigQ = ''; onScan(code); break; }
     case 'escanear': if (S.ui.tab !== 'opciones') scanDestino = null; abrirEscaner(); break;
+    case 'borrarConteos': S.ui.borrar = { ...(S.ui.borrar || {}), conf: true }; render(); break;
+    case 'borrarCancel': S.ui.borrar = { ...(S.ui.borrar || {}), conf: false }; render(); break;
+    case 'borrarConteosOk': borrarConteos(); break;
     case 'opTodas': for (const d of document.querySelectorAll('details.opsec')) { d.open = v === '1'; if (v === '1') OP_AB.add(d.dataset.sec); else OP_AB.delete(d.dataset.sec); } try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { } break;
     case 'cbEscanear': case 'cbOtro': S.ui.cb = null; render(); cbEscanear(); break;
     case 'cbCambiar': S.ui.cb.cambiar = true; render(); break;
@@ -2570,6 +2597,7 @@ document.addEventListener('change', async e => {
   if (a === 'pdfSet') { const d = pdfDraft(), k = t.dataset.k; d[k] = t.type === 'checkbox' ? t.checked : t.type === 'radio' ? t.value === '1' : t.type === 'number' ? Number(t.value) : t.value; render(); return; }
   if (a === 'pdfColV') { pdfDraft().cols[+t.dataset.i].v = t.checked; render(); return; }
   if (a === 'pdfColN') { pdfDraft().cols[+t.dataset.i].n = t.value; render(); return; }
+  if (a === 'borrarCierre') { S.ui.borrar = { cierre: t.checked, conf: false }; render(); return; }
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
