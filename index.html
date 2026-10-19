@@ -143,6 +143,19 @@ html,body{overflow-x:hidden}
 .sheet{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,var(--ink) 35%,transparent);display:flex;justify-content:flex-end}
 .sheet .box{width:min(620px,100%);height:100%;overflow-y:auto;background:var(--surface);padding:18px max(16px,env(safe-area-inset-right,0px)) 40px 18px;display:grid;gap:14px;align-content:start;padding-top:calc(18px + env(safe-area-inset-top,0px))}
 .sheet .box>*{min-width:0}
+table.mini{width:100%;border-collapse:collapse;font-size:12.5px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;table-layout:fixed}
+table.mini th,table.mini td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+table.mini th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);background:var(--sunk);text-align:left}
+table.mini .n{text-align:right;white-space:nowrap}
+table.mini tr.sub td{padding-left:18px;color:var(--muted);font-size:12px;border-bottom-style:dashed}
+table.mini tr.tot td{font-weight:600;background:var(--sunk)}
+table.mini tr.org th{font-size:12.5px;color:var(--ink);text-transform:none;letter-spacing:0}
+table.mini td.cli{white-space:nowrap}
+table.mini td.mono{font-family:var(--f-mono);font-size:11px;word-break:break-all}
+table.mini.g2 td{font-size:12px}
+table.mini.g2 td.cli{white-space:normal;word-break:break-word}
+table.mini tr.ch td .muted{font-size:11.5px;font-weight:400}
+table.mini th:nth-child(1),table.mini td:nth-child(1){width:auto}
 .sheet .box .tablebox{overflow-x:auto;max-width:100%}
 .calc{font-family:var(--f-mono);font-size:13.5px;background:var(--sunk);border-radius:var(--r);padding:10px 12px;line-height:1.7;overflow-x:auto}
 dl.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
@@ -176,7 +189,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb18';
+window.__VERSION = 'sb19';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -199,7 +212,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb18</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb19</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1203,18 +1216,29 @@ function movDiaHtml(c) {
   const titulo = '<span class="lbl">Movimientos del día</span>';
   if (!M) return titulo + `<div class="small muted">${S.movsCargando ? 'Buscando los movimientos…' : 'Todavía no se cargaron los archivos de facturación (Yasukawa, Ilolay y comprobantes) ni el de ventanas. Se cargan en Administración, en "Archivos del día".'}</div>`;
   const u = (LINES.find(x => x.c === c)?.uxc) || S.maestro[c]?.u || 1;
-  const cj = q => { const sp = Core.split(Math.abs(q), u); return `<span class="muted small">(${fmt(sp.cj)} cj ${fmt(sp.un)} u)</span>`; };
-  const fs = M.filas.filter(x => x.c === c).sort((a, b) => (a.ch || '').localeCompare(b.ch || '') || (a.comp || '').localeCompare(b.comp || ''));
-  const arch = Object.entries({ fya: 'Fact. Yasukawa', fil: 'Fact. Ilolay', comp: 'Comprobantes', vent: 'Ventanas' }).map(([k, n]) => `${n}: ${M.archivos?.[k] ? '✓' : '<span style="color:var(--bad)">falta</span>'}`).join(' · ');
+  const cj = q => { const sp = Core.split(Math.abs(q), u); return `<span class="muted">${fmt(sp.cj)}cj ${fmt(sp.un)}u</span>`; };
+  const corto = n => String(n || '').split(/\s+/).slice(0, 2).join(' ');
+  const arch = Object.entries({ fya: 'Fact. Yasukawa', fil: 'Fact. Ilolay', comp: 'Comprobantes', vent: 'Ventanas' }).map(([k, n]) => `${n} ${M.archivos?.[k] ? '✓' : '<span style="color:var(--bad)">falta</span>'}`).join(' · ');
+  const fs = M.filas.filter(x => x.c === c);
   if (!fs.length) return titulo + `<div class="small muted">Este artículo no tiene movimientos en los archivos cargados.</div><div class="small muted">${arch}</div>`;
   const cuenta = fs.filter(x => x.ms !== false);
-  const porCh = {}; for (const x of cuenta) { const k = x.ch || 'Sin chofer'; (porCh[k] ||= { q: 0, n: 0 }); porCh[k].q += x.q; porCh[k].n++; }
   const total = cuenta.reduce((s, x) => s + x.q, 0);
+  // Grilla 1: por chofer, con el desglose por origen debajo
+  const porCh = {};
+  for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { q: 0, n: 0, o: {} }); g.q += x.q; g.n++; g.o[x.o] = (g.o[x.o] || 0) + x.q; }
   const chs = Object.entries(porCh).sort((a, b) => b[1].q - a[1].q);
-  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> ${cj(total)} en ${cuenta.length} ${cuenta.length === 1 ? 'renglón' : 'renglones'} · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>
-    <div class="tablebox"><table><thead><tr><th>Chofer</th><th class="n">Unidades</th><th class="n">Renglones</th></tr></thead><tbody>${chs.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n"><b>${fmt(v.q)}</b> ${cj(v.q)}</td><td class="n">${v.n}</td></tr>`).join('')}</tbody></table></div>
-    <div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Origen</th><th>Comprobante</th><th>Cliente</th><th>Chofer</th><th class="n">Unidades</th></tr></thead><tbody>${fs.map(x => `<tr class="${x.ms === false ? 'muted' : ''}"><td>${ORIGEN[x.o] || x.o}${x.f ? `<div class="small muted">${dm(x.f)}${x.h ? ' ' + esc(x.h.slice(0, 5)) : ''}</div>` : ''}</td><td class="mono small">${esc(x.comp || '')}</td><td class="small">${esc(x.cli || '')}${x.loc ? `<div class="muted">${esc(x.loc)}</div>` : ''}</td><td class="small">${esc(x.ch || '')}${x.viaje ? `<div class="muted">viaje ${esc(x.viaje)}</div>` : ''}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">vuelve ' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? `<div class="small muted">${esc(x.nota)}</div>` : ''}${x.ms === false ? '<div class="small">no mueve stock</div>' : ''}</td></tr>`).join('')}</tbody></table></div>
-    <div class="small muted" style="margin-top:6px">${arch}</div>`;
+  const g1 = `<table class="mini"><thead><tr><th>Chofer</th><th class="n">Unidades</th></tr></thead><tbody>${chs.map(([k, v]) => `<tr class="ch"><td><b>${esc(k)}</b><div class="muted">${Object.entries(v.o).map(([o, q]) => `${ORIGEN[o] || o} ${fmt(q)}`).join(' · ')}</div></td><td class="n"><b>${fmt(v.q)}</b><div>${cj(v.q)}</div></td></tr>`).join('')}
+    <tr class="tot"><td>Total</td><td class="n">${fmt(total)} ${cj(total)}</td></tr></tbody></table>`;
+  // Grilla 2: una por origen
+  const g2 = ['Y', 'I', 'V'].filter(o => fs.some(x => x.o === o)).map(o => {
+    const rs = fs.filter(x => x.o === o).sort((a, b) => (a.ch || '').localeCompare(b.ch || '') || (a.comp || '').localeCompare(b.comp || ''));
+    const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
+    const fechas = [...new Set(rs.map(x => x.f).filter(Boolean))].map(dm).join(', ');
+    return `<table class="mini g2" style="margin-top:8px"><colgroup><col style="width:29%"><col style="width:33%"><col style="width:26%"><col style="width:12%"></colgroup><thead><tr class="org"><th colspan="3">${ORIGEN[o] || o}${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span></th><th class="n">${fmt(tq)}</th></tr>
+      <tr><th>Comprob.</th><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${rs.map(x => `<tr class="${x.ms === false ? 'muted' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`).join('')}</tbody></table>`;
+  }).join('');
+  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${g1}${g2}
+    <div class="small muted" style="margin-top:6px">${arch}${fs.some(x => x.q < 0) ? ' · en verde: notas de crédito (vuelve al stock)' : ''}</div>`;
 }
 function histArtHtml(c) {
   const h = HART[c];
@@ -1691,17 +1715,19 @@ function vAjustes() {
   const tot = {}; for (const a of list) tot[a.c] = (tot[a.c] || 0) + Core.num(a.u);
   const sel = S.ui.ajSel ||= new Set();
   for (const id of [...sel]) if (!list.some(a => a.id === id)) sel.delete(id);
-  // Agrupados por motivo (tipo de ajuste)
+  // Agrupados por detalle (ROTO, CRÉDITO…) o por motivo (tipo de ajuste)
+  const porDet = (S.ui.ajAgr || 'det') === 'det';
   const orden = Object.keys(TIPOS_AJ);
   const grupos = {};
-  for (const a of list) (grupos[a.t] ||= []).push(a);
-  const claves = Object.keys(grupos).sort((x, y) => (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99));
-  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
+  for (const a of list) (grupos[grupoAj(a)] ||= []).push(a);
+  const claves = Object.keys(grupos).sort(porDet ? ((x, y) => (x === '' ? 1 : y === '' ? -1 : 0) || grupos[y].length - grupos[x].length || x.localeCompare(y)) : ((x, y) => (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99)));
+  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${porDet ? esc(TIPOS_AJ[a.t]?.n || a.t) : esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
   const bloques = claves.map(k => {
     const g = grupos[k].sort((a, b) => (a.c || '').localeCompare(b.c || ''));
     const todos = g.every(a => sel.has(a.id));
     const suma = g.reduce((s, a) => s + Core.num(a.u), 0);
-    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="7">${esc(TIPOS_AJ[k]?.n || k)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
+    const nombre = porDet ? (k || 'Sin detalle') : (TIPOS_AJ[k]?.n || k);
+    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="7">${esc(nombre)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
   }).join('');
   const P = S.ui.ajPasados;
   return `<div class="stack">
@@ -1715,9 +1741,9 @@ function vAjustes() {
       <input type="text" id="ajM" placeholder="Detalle (opcional)" style="flex:1;min-width:160px">
       <button class="btn pri" type="submit">Agregar</button>
     </form>
-    <div class="row" style="justify-content:space-between"><span class="small muted">${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
+    <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Detalle'], ['tipo', 'Motivo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
       <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
-    <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>Detalle</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
+    <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>${porDet ? 'Motivo' : 'Detalle'}</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
     ${bloques || '<tr><td colspan="8" class="empty">No hay ajustes pendientes.</td></tr>'}
     </tbody></table></div>
     <details class="panel" id="ajPasDet" ${S.ui.ajPasAb ? 'open' : ''}><summary><b>Ajustes ya pasados al sistema</b> <span class="small muted">(últimos 90 días; ya no cuentan en el stock)</span></summary>
@@ -1725,6 +1751,7 @@ function vAjustes() {
     </details>
   </div>`;
 }
+function grupoAj(a) { return (S.ui.ajAgr || 'det') === 'det' ? String(a.m || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : a.t; }
 async function cargarAjPasados() {
   try { S.ui.ajPasados = await API.call('listarAjustesPasados', 90); } catch (e) { S.ui.ajPasados = []; toast('No se pudo leer el registro de ajustes: ' + e.message); }
   if (S.ui.tab === 'ajustes') render();
@@ -1767,8 +1794,104 @@ function vHistorial() {
 }
 
 /* ---------- Opciones ---------- */
+/* ---------- Opciones → Base de datos: plantilla, reemplazo y backup ---------- */
+const BD_HOJAS = [
+  ['ARTICULOS', 'articulos', 'Lista de artículos', ['codigo', 'descripcion', 'sector', 'orden', 'uxc', 'ean', 'queso', 'peso', 'baja', 'bases_pallet', 'bultos_base', 'u_bulto']],
+  ['AJUSTES', 'ajustes', 'Ajustes (pendientes y pasados)', ['id', 'codigo', 'unidades', 'tipo', 'motivo', 'fecha', 'estado', 'pasado_ts', 'pasado_por', 'ts']],
+  ['CIERRES', 'cierres', 'Historial: un renglón por artículo y día', ['fecha', 'codigo', 'descripcion', 'sector', 'uxc', 'queso', 'sap', 'ya', 'sk', 'pe', 'aj', 'sis', 'cont', 'dif', 'motivo', 'obs', 'nota', 'imp', 'por']],
+  ['CIERRES_RESUMEN', 'cierres_resumen', 'Historial: un renglón por día cerrado', ['fecha', 'origen', 'articulos', 'contados', 'con_dif', 'sobra', 'falta', 'importe', 'por', 'ts', 'archivos']],
+  ['CODIGOS', 'codigos', 'Códigos de barras asignados desde depósito', ['ean', 'codigo', 'por', 'ts']]
+];
+const BD_LEEME = [
+  ['STOCK ILOLAY · bases de datos'], [''],
+  ['Cada hoja reemplaza una tabla de la base: ARTICULOS, AJUSTES, CIERRES, CIERRES_RESUMEN y CODIGOS.'],
+  ['No cambies los títulos de la primera fila. Podés agregar, borrar o corregir renglones.'],
+  ['Al cargar el archivo en Opciones → Base de datos, la app muestra cuántos renglones trae cada hoja y elegís cuáles reemplazar.'],
+  ['Las hojas que borres del archivo (o que destildes) no se tocan.'], [''],
+  ['ARTICULOS: sector FRIO o SECO · queso y baja: 1 = sí, 0 = no · uxc = unidades por caja · ean: varios códigos separados por espacio.'],
+  ['AJUSTES: tipo egr (falta facturar), dec (decomiso), pend (pendiente/corte), otro, ing (ingreso del día), vta (venta del día) · unidades con signo (− resta) · estado pend o pasado.'],
+  ['CIERRES: fecha AAAA-MM-DD · sis = sistema · cont = contado (vacío = no contado) · dif = cont − sis · imp = valorizado.'],
+  ['CIERRES_RESUMEN: una fila por día cerrado; con_dif = artículos con diferencia.'],
+  ['CONFIG (solo en el backup): opciones y PIN; al restaurar un backup se cargan si la hoja está.']
+];
+function vBaseDatos() {
+  if (!S.admin) return '';
+  const B = S.ui.bd || {};
+  return `<div class="panel stack" style="max-width:760px" id="bdPanel">
+    <div><h3>Base de datos</h3><div class="small muted">Plantilla para reemplazar las bases, carga del archivo y backup completo.</div></div>
+    <div class="row"><button class="btn" data-act="bdPlantilla" ${B.ocupado ? 'disabled' : ''}>Descargar plantilla con los datos actuales (XLSX)</button><button class="btn" data-act="bdBackup" ${B.ocupado ? 'disabled' : ''}>Descargar backup completo (XLSX)</button></div>
+    <label class="stack" style="gap:4px"><span class="lbl">Cargar un XLSX para reemplazar las bases</span><input type="file" id="bdFile" accept=".xlsx,.xls" ${B.ocupado ? 'disabled' : ''}><span class="small muted">Usá la plantilla o un backup. Antes de reemplazar se muestra qué trae cada hoja.</span></label>
+    ${B.prev ? `<div class="confirm stack"><b>${esc(B.prev.nombre)}</b>
+      ${B.prev.hojas.map((h, i) => `<label class="row small" style="gap:8px"><input type="checkbox" data-act="bdHoja" data-i="${i}" ${h.sel ? 'checked' : ''} ${h.err ? 'disabled' : ''}> <b>${esc(h.titulo)}</b> · ${h.err ? `<span style="color:var(--bad)">${esc(h.err)}</span>` : `${fmt(h.filas.length)} renglones${h.extra ? ' · ' + esc(h.extra) : ''}`}</label>`).join('')}
+      <span class="small" style="color:var(--bad)">Lo tildado se <b>borra y se reemplaza</b> por lo del archivo. Conviene descargar antes un backup.</span>
+      <div class="row"><button class="btn danger" data-act="bdImportar" ${B.ocupado || !B.prev.hojas.some(h => h.sel) ? 'disabled' : ''}>Reemplazar lo tildado</button><button class="btn" data-act="bdCancelar">Cancelar</button></div></div>` : ''}
+    ${B.estado ? `<div class="small">${B.estado}</div>` : ''}
+  </div>`;
+}
+async function bdDescargar(backup) {
+  S.ui.bd = { ...(S.ui.bd || {}), ocupado: true, estado: 'Leyendo la base…' }; render();
+  try {
+    const d = await API.call('exportarTodo');
+    await needXLSX();
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(BD_LEEME), 'LEEME');
+    for (const [hoja, tabla, , cols] of BD_HOJAS) {
+      const filas = (d[tabla] || []).map(r => cols.map(k => { const v = r[k]; if (v === null || v === undefined) return ''; if (typeof v === 'boolean') return v ? 1 : 0; if (typeof v === 'object') return JSON.stringify(v); return v; }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cols, ...filas]), hoja);
+    }
+    if (backup) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['clave', 'valor'], ...(d.config || []).map(r => [r.clave, r.valor])]), 'CONFIG');
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const nombre = (backup ? 'Stock Ilolay - backup ' : 'Stock Ilolay - plantilla bases ') + hoyISO() + '.xlsx';
+    descargar(nombre, new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    S.ui.bd = { ocupado: false, estado: `Descargado <b>${esc(nombre)}</b>: ${BD_HOJAS.map(([h, t]) => h + ' ' + fmt((d[t] || []).length)).join(' · ')}.` };
+  } catch (e) { S.ui.bd = { ocupado: false, estado: '<span style="color:var(--bad)">No se pudo descargar: ' + esc(e.message) + '</span>' }; }
+  render();
+}
+async function bdLeerArchivo(file) {
+  S.ui.bd = { ocupado: true, estado: 'Leyendo ' + esc(file.name) + '…' }; render();
+  try {
+    await needXLSX();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const norm = s => String(s || '').trim().toUpperCase();
+    const hojas = [];
+    for (const [hoja, tabla, titulo, cols] of [...BD_HOJAS, ['CONFIG', 'config', 'Opciones y PIN', ['clave', 'valor']]]) {
+      const nombre = wb.SheetNames.find(n => norm(n) === hoja); if (!nombre) continue;
+      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' });
+      const hdr = (aoa[0] || []).map(h => String(h).trim().toLowerCase());
+      const faltan = cols.filter(k => !hdr.includes(k) && ['codigo', 'fecha', 'ean', 'clave'].includes(k));
+      if (faltan.length) { hojas.push({ hoja, tabla, titulo, filas: [], err: 'faltan columnas: ' + faltan.join(', ') }); continue; }
+      const filas = aoa.slice(1).filter(r => r.some(v => String(v).trim() !== '')).map(r => {
+        const o = {}; hdr.forEach((k, i) => { if (!k) return; let v = r[i]; if (v instanceof Date || k === 'fecha') v = Core.fISO(v) || (v instanceof Date ? '' : v); o[k] = v; }); return o;
+      });
+      const extra = tabla === 'cierres' ? new Set(filas.map(f => f.fecha)).size + ' días' : '';
+      hojas.push({ hoja, tabla, titulo, filas, extra, sel: tabla !== 'config' || true });
+    }
+    if (!hojas.length) throw new Error('el archivo no tiene ninguna hoja de la plantilla (ARTICULOS, AJUSTES, CIERRES, CIERRES_RESUMEN, CODIGOS)');
+    S.ui.bd = { ocupado: false, prev: { nombre: file.name, hojas } };
+  } catch (e) { S.ui.bd = { ocupado: false, estado: '<span style="color:var(--bad)">No se pudo leer el archivo: ' + esc(e.message) + '</span>' }; }
+  render();
+}
+async function bdImportar() {
+  const P = S.ui.bd?.prev; if (!P) return;
+  const sel = P.hojas.filter(h => h.sel && !h.err);
+  S.ui.bd = { ...S.ui.bd, ocupado: true }; render();
+  const hechos = [];
+  try {
+    for (const h of sel) {
+      const LOTE = 2000;
+      for (let i = 0; i < Math.max(h.filas.length, 1); i += LOTE) {
+        S.ui.bd.estado = `Reemplazando ${esc(h.titulo)}… ${fmt(Math.min(i + LOTE, h.filas.length))} de ${fmt(h.filas.length)}`; render();
+        await API.call('importarTabla', h.tabla, h.filas.slice(i, i + LOTE), i === 0 && h.tabla !== 'config');
+      }
+      hechos.push(h.hoja + ' (' + fmt(h.filas.length) + ')');
+    }
+    S.ui.bd = { ocupado: false, estado: '✓ Reemplazado: ' + hechos.join(' · ') + '.' };
+    toast('Bases reemplazadas.'); S.ui.hist.lista = []; refrescar();
+  } catch (e) { S.ui.bd = { ocupado: false, prev: P, estado: '<span style="color:var(--bad)">Se cortó en ' + esc(sel[hechos.length]?.titulo || '') + ': ' + esc(e.message) + '. Lo anterior quedó reemplazado: ' + (hechos.join(' · ') || 'nada') + '.</span>' }; }
+  render();
+}
 function vOpciones() {
-  return `<form class="stack" id="fOpt" style="max-width:760px">
+  return `<div class="stack"><form class="stack" id="fOpt" style="max-width:760px">
     <div><h2>Opciones</h2><div class="small muted">Reglas para leer los archivos y armar el cierre.</div></div>
     <div class="panel stack">
       <label class="stack" style="gap:4px"><span class="lbl">Prefijo de los artículos Ilolay en Yasukawa</span><input type="text" id="oPre" value="${esc(opt('prefijo'))}" style="max-width:120px" class="mono"><span class="small muted">En la tabla "articulo", COD_FAB viene como 21/1031: se toma lo que sigue al prefijo.</span></label>
@@ -1783,8 +1906,9 @@ function vOpciones() {
       <label class="stack" style="gap:4px"><span class="lbl">Destinatarios del mail de cierre</span><textarea id="oDest" style="min-height:60px">${esc(opt('destinatarios'))}</textarea></label>
       <div class="row"><button class="btn pri" type="submit">Guardar opciones</button></div>
     </div>
-    <div class="panel stack small"><b>Cómo compartir con depósito</b><span>Pasales la dirección de esta página y su <b>PIN de depósito</b>. Los PIN se ven y se editan en la planilla: menú <b>Stock Ilolay → Ver PINs</b>, o la hoja CONFIG, clave <span class="mono">pins</span> (podés agregar uno por persona, con su nombre, para saber quién contó). Con PIN de depósito solo se ve la pestaña Depósito, sin el stock del sistema.</span><span class="muted">Conectado como ${esc(S.me.id || '')}${S.admin ? ' (administración)' : ' (depósito)'} · servidor: ${esc(CFG.url)}</span></div>
-  </form>`;
+    <div class="panel stack small"><b>Cómo compartir con depósito</b><span>Pasales la dirección de esta página y su <b>PIN de depósito</b>. Los PIN se ven y se editan en Supabase: Table Editor → tabla <span class="mono">config</span>, clave <span class="mono">pins</span> (podés agregar uno por persona, con su nombre, para saber quién contó). Con PIN de depósito solo se ve la pestaña Depósito.</span><span class="muted">Conectado como ${esc(S.me.id || '')}${S.admin ? ' (administración)' : ' (depósito)'} · servidor: ${esc(CFG.url)}</span></div>
+  </form>
+  ${vBaseDatos()}</div>`;
 }
 
 /* ================= Acciones ================= */
@@ -1876,7 +2000,7 @@ document.addEventListener('click', async e => {
       const l = LINES.find(x => x.c === c); if (!l?.dif) break;
       const k = S.conteos[c] || {};
       const motivo = ($('#a-m-' + CSS.escape(c))?.value || k.m || '').trim(), obs = ($('#a-o-' + CSS.escape(c))?.value || k.obs || '').trim();
-      if (!motivo && !obs) { toast('Cargá un motivo o una observación antes de resolver la diferencia.'); ($('#a-m-' + CSS.escape(c)) || $('#a-o-' + CSS.escape(c)))?.focus(); break; }
+      if (a === 'aConteo' && !motivo && !obs) { toast('Cargá un motivo o una observación antes de crear el ajuste.'); ($('#a-m-' + CSS.escape(c)) || $('#a-o-' + CSS.escape(c)))?.focus(); break; }
       t.disabled = true;
       if (a === 'aStock') {
         await guardarConteo(c, { cj: l.sisCj, un: l.sisUn, m: motivo, obs: obs || ('Se tomó el stock del sistema; contado ' + fmt(l.contCj) + ' cj ' + fmt(l.contUn) + ' u'), by: S.me.id, rec: false, res: 'stock' });
@@ -1895,6 +2019,11 @@ document.addEventListener('click', async e => {
     case 'ajustarSis': { const l = LINES.find(x => x.c === c); if (!l?.dif) break; try { await API.call('agregarAjuste', { c, u: l.dif, t: 'otro', m: 'Ajuste a lo contado ' + dm(S.dia) + (l.motivo ? ' · ' + l.motivo : ''), f: S.dia }); toast('Ajuste creado.'); programarRefresco(200); } catch (er) { toast('No se pudo crear el ajuste: ' + er.message); } break; }
     case 'dsave': await guardarDeposito(c); break;
     case 'dsumar': await sumarDeposito(c); break;
+    case 'bdPlantilla': bdDescargar(false); break;
+    case 'ajAgr': S.ui.ajAgr = v; render(); break;
+    case 'bdBackup': bdDescargar(true); break;
+    case 'bdCancelar': S.ui.bd = {}; render(); break;
+    case 'bdImportar': bdImportar(); break;
     case 'verSisDep': {
       const data = { ...S.opciones, verSisDep: !opt('verSisDep'), ts: Date.now() };
       const prev = S.opciones; S.opciones = data; render();
@@ -1990,9 +2119,11 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', async e => {
   const t = e.target, a = t.dataset?.act, c = t.dataset?.c;
+  if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
+  if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'ajSel' || a === 'ajSelGrupo') S.ui.ajConfDel = false;
   if (a === 'ajSel') { const sel = S.ui.ajSel ||= new Set(); if (t.checked) sel.add(t.dataset.id); else sel.delete(t.dataset.id); render(); return; }
-  if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => x.t === t.dataset.v)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
+  if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => grupoAj(x) === t.dataset.v)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
   if (a === 'cnt') {
     delete t.dataset.dirty;
     const other = $(`#a-${t.dataset.k === 'cj' ? 'un' : 'cj'}-${CSS.escape(c)}`);
