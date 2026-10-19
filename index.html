@@ -125,12 +125,14 @@ td select{max-width:170px} td input.obs{width:140px}
 .banner.warn{background:var(--warn-bg);color:var(--warn)} .banner.info{background:var(--info-bg);color:var(--accent)} .banner.bad{background:var(--bad-bg);color:var(--bad)} .banner.ok{background:var(--ok-bg);color:var(--ok)}
 .banner .grow{flex:1;min-width:200px}
 /* depósito */
-.scan{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--topH,58px));z-index:10;background:var(--bg);padding-block:10px;display:grid;gap:8px}
+.scan{display:contents}
+.scan .bar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--topH,58px));z-index:10;background:var(--bg);padding-block:8px;box-shadow:0 6px 8px -8px rgba(0,0,0,.25)}
 .scan .bar{display:flex;gap:8px;min-width:0}
 .scan .bar input{flex:1 1 auto;min-width:0;width:auto}
 .scan .bar .btn{flex:0 0 auto}
 .scan{min-width:0}
-html,body{overflow-x:hidden}
+html,body{overflow-x:clip}
+@supports not (overflow-x:clip){html{overflow-x:hidden}}
 .scan input[type=search]{flex:1;min-width:0;font-size:17px;min-height:46px;font-family:var(--f-mono)}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .btn.cam{position:relative;overflow:hidden}
@@ -256,7 +258,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb42';
+window.__VERSION = 'sb43';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -279,7 +281,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb42</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb43</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
