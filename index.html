@@ -60,6 +60,14 @@ h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0}
 .btn.pri:hover{filter:brightness(1.08)}
 .btn.danger{color:var(--bad);border-color:var(--bad)}
 .btn.ok{color:var(--ok);border-color:var(--ok)}
+.btn.xs{min-height:26px;padding:2px 8px;font-size:12px}
+.desc-btns{gap:4px;margin-top:4px}
+td.val{white-space:nowrap;font-family:var(--f-mono)}
+td.acc .acc-btns{display:grid;grid-template-columns:repeat(2,auto);gap:4px;justify-content:start}
+td.acc .btn{min-height:28px;padding:2px 8px;font-size:12px}
+.tablebox td input.obs{width:130px}
+.tablebox td select{max-width:150px}
+.tablebox td.desc{min-width:170px;max-width:260px}
 .btn.modo{font-weight:600}
 .btn.sm{padding:4px 10px;min-height:30px;font-size:13px}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
@@ -198,7 +206,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb21';
+window.__VERSION = 'sb22';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -221,7 +229,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb21</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb22</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1195,18 +1203,18 @@ function tablaHoy(lines, sis, cerrado) {
     const ayer = l.prevDif ? `<span class="${l.prevDif < 0 ? 'pill bad' : 'pill ok'}" title="${esc(l.prevMotivo)}">${fmtS(l.prevDif)}</span>` : '';
     rows += `<tr class="${cls}">
       <td><span class="code">${esc(l.c)}</span></td>
-      <td class="desc"><button class="link" data-act="det" data-c="${esc(l.c)}">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}</td>
+      <td class="desc"><button class="link" data-act="det" data-c="${esc(l.c)}">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}<div class="row desc-btns"><button class="btn xs" data-act="hart" data-c="${esc(l.c)}" title="Últimos cierres y ajustes de este artículo">Historial</button><button class="btn xs" data-act="movDia" data-c="${esc(l.c)}" title="Lo que salió hoy de este artículo, por chofer">Movimientos</button></div></td>
       <td class="n hide-sm">${sis ? `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>` : '<span class="muted small" title="Faltan los archivos del día">sin archivos</span>'}</td>
       <td class="n"><span class="cnt">${inCj}<span>cj</span>${inUn}<span>u</span></span></td>
       <td class="n dif">${sis && l.contado ? (l.dif ? fmtS(l.dif) : '<span class="muted">0</span>') : ''}</td>
-      <td class="n hide-sm">${sis && l.contado && l.dif ? money(l.importe) : ''}</td>
       <td>${l.contado && l.dif ? motivoSel('a-m-' + l.c, l.motivo, false).replace('data-act="motivo"', `data-act="motivo" data-c="${esc(l.c)}"`) : ''}</td>
       <td class="hide-sm">${l.contado && l.dif ? `<input type="text" class="obs" id="a-o-${esc(l.c)}" data-act="obs" data-c="${esc(l.c)}" value="${esc(l.obs)}" placeholder="Observación">` : ''}</td>
       <td class="n hide-sm">${ayer}</td>
-      <td>${cerrado ? '' : `<div class="row" style="flex-wrap:nowrap;gap:4px">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button>${(l.contado && l.dif) || l.rec ? `<button class="btn sm" data-act="hart" data-c="${esc(l.c)}" title="Últimos cierres y ajustes de este artículo">Historial</button><button class="btn sm" data-act="movDia" data-c="${esc(l.c)}" title="Lo facturado hoy de este artículo, por chofer (en preparación)">Movimientos</button>` : ''}</div>`}</td>
+      <td class="acc">${cerrado ? '' : `<div class="row acc-btns">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button></div>`}</td>
+      <td class="n val">${sis && l.contado && l.dif ? money(l.importe) : ''}</td>
     </tr>`;
   }
-  return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n hide-sm">Sistema</th><th class="n">Contado</th><th class="n">Dif. u</th><th class="n hide-sm">Valorizado</th><th>Motivo</th><th class="hide-sm">Obs.</th><th class="n hide-sm">Ayer</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n hide-sm">Sistema</th><th class="n">Contado</th><th class="n">Dif. u</th><th>Motivo</th><th class="hide-sm">Obs.</th><th class="n hide-sm">Ayer</th><th></th><th class="n">Valorizado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 /* bloque 3 */
