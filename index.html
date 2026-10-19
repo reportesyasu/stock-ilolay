@@ -177,7 +177,11 @@ table.mini tr.hl td{background:#fff3b0 !important;color:#3a3000}
 table.mini tr.hl td .muted{color:#6b5c00}
 .hlbox{display:inline-block;background:#fff3b0;border:1px solid #e3cf5a;border-radius:3px;vertical-align:middle}
 .pill.hlp{background:#fff3b0;color:#5a4a00;margin-left:6px}
-details.arch>summary{list-style:none;cursor:pointer}
+details.arch>summary,details.resdia>summary{list-style:none;cursor:pointer}
+details.resdia>summary::-webkit-details-marker{display:none}
+details.resdia .arch-flecha::before{content:'▸';color:var(--muted);font-size:15px}
+details.resdia[open] .arch-flecha::before{content:'▾'}
+details.resdia>.resdia-body{margin-top:12px}
 details.arch>summary::-webkit-details-marker{display:none}
 details.arch .arch-flecha::before{content:'▸';color:var(--muted);font-size:15px}
 details.arch[open] .arch-flecha::before{content:'▾'}
@@ -258,7 +262,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb48';
+window.__VERSION = 'sb49';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -281,7 +285,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb48</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb49</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1421,7 +1425,7 @@ function vFiles() {
   const nMov = MOV_KEYS.filter(k => est(k) === 'ok' || est(k) === 'warn').length;
   let abierto; try { abierto = localStorage.getItem('archAb'); } catch { }
   abierto = abierto === null || abierto === undefined ? !(['ok', 'warn'].includes(est('sap')) && ['ok', 'warn'].includes(est('yasu'))) : abierto === '1';
-  return `<details class="panel arch" id="drop" ${abierto ? 'open' : ''}><summary>
+  return `<details class="panel arch" id="drop" data-recordar="archAb" ${abierto ? 'open' : ''}><summary>
     <div class="row" style="justify-content:space-between;width:100%">
       <div class="stack" style="gap:4px"><span class="row" style="gap:8px"><span class="arch-flecha" aria-hidden="true"></span><h3 style="margin:0">Archivos del día</h3></span><span class="row" style="gap:6px;flex-wrap:wrap">${chip('sap', 'SAP')}${chip('yasu', 'Yasukawa')}<span class="pill">Movimientos ${nMov}/4</span></span></div>
       <div class="row"><button class="btn pri" data-act="actualizar">${S.carpeta || f.sap || f.yasu ? 'Actualizar desde la carpeta' : 'Elegir carpeta'}</button>${S.carpeta ? '<button class="btn sm" data-act="carpeta">Cambiar carpeta</button>' : ''}<button class="btn sm" data-act="archivos">Elegir archivos sueltos</button>${ARCH_KEYS.some(k => f[k]) ? '<button class="btn sm danger" data-act="quitarTodo">Quitar todos</button>' : ''}</div>
@@ -1460,14 +1464,15 @@ function vHoy() {
       <span class="small">Descargá el PDF para mandarlo por mail. ¿Querés guardar también un backup completo de las bases en esta computadora o dispositivo?</span>
       <div class="row"><button class="btn pri" data-act="postPdf">${S.ui.postCierre.pdf ? '✓ PDF descargado' : 'Descargar PDF del cierre'}</button><button class="btn" data-act="postBackup">${S.ui.postCierre.backup ? '✓ Backup descargado' : 'Sí, guardar backup (XLSX)'}</button><button class="btn" data-act="postCierreNo">${S.ui.postCierre.pdf || S.ui.postCierre.backup ? 'Listo' : 'No, gracias'}</button></div></div>` : ''}
     ${avisos.join('')}
+    <details class="panel resdia" data-recordar="resAb" ${resAbierto() ? 'open' : ''}>
+      <summary><span class="row" style="gap:8px;align-items:baseline;flex-wrap:wrap"><span class="arch-flecha" aria-hidden="true"></span><b style="font-size:19px">Stock ${cerrado ? 'cerrado' : 'del día'} · ${dm(S.dia)}</b>
+        <span class="small">${r.contados}/${r.total} contados${sis ? ` · <b style="color:${r.dif ? 'var(--bad)' : 'var(--ok)'}">${r.dif} con diferencia</b> · ${money(r.imp)}` : ''}</span>
+        <span class="small muted">· tocá para ${resAbierto() ? 'ocultar' : 'ver totales y abrir / cerrar el stock'}</span></span></summary>
+      <div class="stack resdia-body">
     <div class="row" style="justify-content:space-between;align-items:end">
       <div><h2>Stock ${cerrado ? 'cerrado' : 'del día'} · ${dm(S.dia)}</h2><div class="small muted">${cerrado ? 'Cerrado por ' + esc(nom(S.cierre.por)) + ' a las ' + hora(S.cierre.ts) : 'Sistema = SAP + Yasukawa + ajustes pendientes. Quesos: contado al cierre anterior + variación de SAP y Yasukawa desde entonces.'}${S.anteriorFecha ? ' · Cierre anterior: ' + dm(S.anteriorFecha) : ''}</div></div>
       <div class="row"><button class="btn ${cerrado ? 'pri' : ''}" data-act="abrir" title="Elegir el día a contar y, si hace falta, volver los conteos a cero">Abrir stock</button>${cerrado ? `<button class="btn" data-act="pdfCierre">Descargar PDF</button><button class="btn" data-act="exportar">Descargar Excel</button><button class="btn" data-act="mail">Copiar resumen para el mail</button><button class="btn danger sm" data-act="reabrir">Reabrir día</button>` : `${S.apertura && S.apertura.fecha === S.dia ? `<button class="btn danger" data-act="deshacerAp" title="Si el stock se abrió por error: vuelve todo a como estaba antes de abrirlo, sin hacer ningún cierre">Volver a cerrar (abierto por error)</button>` : ''}<button class="btn pri" data-act="cerrar" ${sis ? '' : 'disabled'}>Cerrar stock del día</button>`}</div>
     </div>
-    ${S.ui.confirm === 'cerrar' ? vConfirmCierre(r) : ''}
-    ${S.ui.confirm === 'abrir' ? vConfirmAbrir() : ''}
-    ${S.ui.confirm === 'deshacerAp' && S.apertura ? vConfirmDeshacer() : ''}
-    ${S.ui.confirm === 'reabrir' ? `<div class="confirm"><b>¿Reabrir el ${dm(S.dia)}?</b><span class="small">Se borra el cierre guardado y el día vuelve a quedar abierto con los conteos que tenía. Para cerrarlo de nuevo vas a necesitar los archivos del día.</span><div class="row"><button class="btn danger" data-act="reabrirOk">Reabrir</button><button class="btn" data-act="cancel">Cancelar</button></div></div>` : ''}
     <div class="kpis">
       <div class="kpi"><span class="lbl">Contados</span><b>${r.contados}<span class="muted" style="font-size:15px"> / ${r.total}</span></b></div>
       <div class="kpi ${r.dif ? 'bad' : 'ok'}"><span class="lbl">Con diferencia</span><b>${sis ? r.dif : '—'}</b></div>
@@ -1475,6 +1480,12 @@ function vHoy() {
       <div class="kpi bad"><span class="lbl">Faltante</span><b>${sis ? fmt(r.falta) + ' u' : '—'}</b></div>
       <div class="kpi"><span class="lbl">Valorizado</span><b style="font-size:19px">${sis ? money(r.imp) : '—'}</b></div>
     </div>
+      </div>
+    </details>
+    ${S.ui.confirm === 'cerrar' ? vConfirmCierre(r) : ''}
+    ${S.ui.confirm === 'abrir' ? vConfirmAbrir() : ''}
+    ${S.ui.confirm === 'deshacerAp' && S.apertura ? vConfirmDeshacer() : ''}
+    ${S.ui.confirm === 'reabrir' ? `<div class="confirm"><b>¿Reabrir el ${dm(S.dia)}?</b><span class="small">Se borra el cierre guardado y el día vuelve a quedar abierto con los conteos que tenía. Para cerrarlo de nuevo vas a necesitar los archivos del día.</span><div class="row"><button class="btn danger" data-act="reabrirOk">Reabrir</button><button class="btn" data-act="cancel">Cancelar</button></div></div>` : ''}
     <div class="row" style="justify-content:space-between">
       ${chipsSector(all)}
       <div class="chips" role="group" aria-label="Filtro">${filtros.map(([k, n, c]) => `<button class="chip" data-act="filtro" data-v="${k}" aria-pressed="${S.ui.filtro === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
@@ -1486,6 +1497,7 @@ function vHoy() {
     ${tablaHoy(lines, sis, cerrado)}
   </div>`;
 }
+const resAbierto = () => { try { return localStorage.getItem('resAb') === '1'; } catch { return false; } };
 function vConfirmAbrir() {
   const f = S.ui.abrirF || hoyISO(), hoy = hoyISO();
   const contados = Object.values(S.conteos || {}).filter(k => k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined).length;
@@ -2956,7 +2968,7 @@ async function copiarMail() {
 /* ================= Eventos ================= */
 document.addEventListener('click', async e => {
   if (e.target.closest('summary button, summary label, summary input')) e.preventDefault();
-  else { const sm = e.target.closest('details.arch > summary'); if (sm) { try { localStorage.setItem('archAb', sm.parentElement.open ? '0' : '1'); } catch { } } }
+  else { const sm = e.target.closest('details[data-recordar] > summary'); if (sm) { try { localStorage.setItem(sm.parentElement.dataset.recordar, sm.parentElement.open ? '0' : '1'); } catch { } setTimeout(render, 0); } }
   const t = e.target.closest('[data-act]');
   if (!t) return;
   if (t.dataset.act === 'cerrarDet' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="cerrarDet"]')) return;
