@@ -183,6 +183,8 @@ details.arch>.arch-body{margin-top:10px}
 .progreso{height:8px;border-radius:4px;background:var(--line);overflow:hidden;max-width:420px}
 .progreso>div{height:100%;background:var(--accent,#1d5f86);transition:width .2s}
 /* teclado numérico chico */
+input[data-tecla]{background:var(--surface);color:var(--text,#111);cursor:pointer;caret-color:transparent}
+input[data-tecla]:focus{outline:3px solid var(--accent,#1d5f86);outline-offset:1px;background:color-mix(in srgb,var(--surface) 88%,var(--accent,#1d5f86))}
 .tecla{position:fixed;left:0;right:0;bottom:0;z-index:70;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:var(--line);box-shadow:0 -2px 10px rgba(0,0,0,.15);max-width:520px;margin:0 auto}
 .tecla[hidden]{display:none}
 .tecla button{height:38px;border:0;border-radius:7px;background:var(--surface);color:var(--text,#111);font:600 19px/1 var(--f-ui,system-ui);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -254,7 +256,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb41';
+window.__VERSION = 'sb42';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -277,7 +279,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb41</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb42</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1805,7 +1807,9 @@ const modoSuma = c => (S.ui.modoSuma?.[c] === 'restar' ? 'restar' : 'sumar');
 /* ---------- Teclado numérico chico de la app (en vez del teclado del celular) ---------- */
 const esTactil = () => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } };
 const tecladoApp = () => { let v = null; try { v = localStorage.getItem('teclado'); } catch { } return v === 'app' || (v !== 'cel' && esTactil()); };
-const IM = () => tecladoApp() ? 'inputmode="none"' : 'inputmode="numeric"';
+// Con el teclado de la app, los campos quedan "solo lectura" para el celular: así nunca abre su propio teclado
+// (algunos celulares ignoran inputmode="none"). El teclado de la app igual escribe en ellos.
+const IM = () => tecladoApp() ? 'inputmode="none" readonly data-tecla="1"' : 'inputmode="numeric"';
 const esNum = el => !!(el && el.tagName === 'INPUT' && ['dcnt', 'dsum', 'ddet'].includes(el.dataset?.act));
 let teclaOcultarT = null;
 function teclaEl() {
@@ -1843,6 +1847,7 @@ function teclaPulsar(v) {
   }
   if (v === 'ok') { if (el.dataset.act === 'dsum') sumarDeposito(c); else guardarDeposito(c); }
 }
+document.addEventListener('click', e => { const el = e.target; if (esNum(el) && el.readOnly && tecladoApp()) { if (document.activeElement !== el) el.focus(); teclaMostrar(el); } });
 document.addEventListener('focusin', e => { if (esNum(e.target) && tecladoApp()) teclaMostrar(e.target); else if (e.target.matches?.('input, textarea, select')) teclaOcultar(); });
 document.addEventListener('focusout', () => { clearTimeout(teclaOcultarT); teclaOcultarT = setTimeout(() => { if (!esNum(document.activeElement)) teclaOcultar(); }, 150); });
 /* Aviso grande de "Guardado" en el centro de la pantalla (depósito) */
