@@ -234,7 +234,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb36';
+window.__VERSION = 'sb37';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -257,7 +257,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb36</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb37</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2153,7 +2153,7 @@ async function pdfPrueba() {
 function vBaseDatos() {
   if (!S.admin) return '';
   const B = S.ui.bd || {};
-  return `<div style="max-width:760px" id="bdPanel">${secOp('bd', 'Base de datos', 'Plantilla para reemplazar las bases, carga del archivo y backup completo.')}
+  return `<div style="max-width:760px" id="bdPanel">${secOp('bd', 'Base de datos', 'Plantilla para reemplazar las bases, backup completo y carga solo del armado de los artículos (pallets, bases, bultos).')}
     <div class="row"><button class="btn" data-act="bdPlantilla" ${B.ocupado ? 'disabled' : ''}>Descargar plantilla con los datos actuales (XLSX)</button><button class="btn" data-act="bdBackup" ${B.ocupado ? 'disabled' : ''}>Descargar backup completo (XLSX)</button></div>
     <label class="stack" style="gap:4px"><span class="lbl">Cargar un XLSX para reemplazar las bases</span><input type="file" id="bdFile" accept=".xlsx,.xls" ${B.ocupado ? 'disabled' : ''}><span class="small muted">Usá la plantilla o un backup. Antes de reemplazar se muestra qué trae cada hoja.</span></label>
     ${B.prev ? `<div class="confirm stack"><b>${esc(B.prev.nombre)}</b>
@@ -2161,7 +2161,87 @@ function vBaseDatos() {
       <span class="small" style="color:var(--bad)">Lo tildado se <b>borra y se reemplaza</b> por lo del archivo. Conviene descargar antes un backup.</span>
       <div class="row"><button class="btn danger" data-act="bdImportar" ${B.ocupado || !B.prev.hojas.some(h => h.sel) ? 'disabled' : ''}>Reemplazar lo tildado</button><button class="btn" data-act="bdCancelar">Cancelar</button></div></div>` : ''}
     ${B.estado ? `<div class="small">${B.estado}</div>` : ''}
+    ${vArmado()}
   </div></details></div>`;
+}
+/* ---------- Solo el armado de los artículos (bases/pallet, bultos/base, unidades/bulto) ---------- */
+function vArmado() {
+  const A = S.ui.arm || {};
+  const p = A.prev;
+  return `<div class="stack" style="border-top:1px solid var(--line);padding-top:12px;margin-top:4px" id="armPanel">
+    <div><b>Solo el armado de los artículos</b><div class="small muted">Actualiza únicamente <b>bases por pallet</b>, <b>bultos por base</b> y <b>unidades por bulto</b> de los artículos que ya están cargados. No borra ni agrega artículos y no toca nada más.</div></div>
+    <div class="row"><button class="btn" data-act="armPlantilla" ${A.ocupado ? 'disabled' : ''}>Descargar planilla de armado (XLSX)</button></div>
+    <label class="stack" style="gap:4px"><span class="lbl">Cargar la planilla de armado</span><input type="file" id="armFile" accept=".xlsx,.xls,.csv" ${A.ocupado ? 'disabled' : ''}><span class="small muted">Sirve la planilla de armado o la plantilla completa (se toma solo la hoja ARTICULOS y esas tres columnas). Una celda vacía deja el dato vacío.</span></label>
+    ${p ? `<div class="confirm stack"><b>${esc(p.nombre)}</b> <span class="small muted">hoja ${esc(p.hoja)}</span>
+      <span class="small">${p.cambios.length ? `Se van a actualizar <b>${p.cambios.length} artículo${p.cambios.length === 1 ? '' : 's'}</b>` : 'No hay cambios respecto de lo cargado'}${p.iguales ? ` · ${p.iguales} sin cambios` : ''}${p.noEsta.length ? ` · <span style="color:var(--warn)">${p.noEsta.length} código${p.noEsta.length === 1 ? '' : 's'} que no está${p.noEsta.length === 1 ? '' : 'n'} en Artículos (se ignora${p.noEsta.length === 1 ? '' : 'n'}): ${p.noEsta.slice(0, 6).map(esc).join(', ')}${p.noEsta.length > 6 ? '…' : ''}</span>` : ''}${p.malos.length ? ` · <span style="color:var(--bad)">${p.malos.length} con números inválidos (se ignoran): ${p.malos.slice(0, 4).map(esc).join(', ')}</span>` : ''}.</span>
+      ${p.cambios.length ? `<div class="tablebox" style="max-height:260px"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">Bases/pallet</th><th class="n">Bultos/base</th><th class="n">Un/bulto</th></tr></thead><tbody>${p.cambios.map(x => {
+        const m = S.maestro[x.c] || {}, cel = (k, mk) => k in x ? (Number(m[mk] || 0) === Number(x[k] || 0) ? fmt(x[k] || 0) : `<span class="muted" style="text-decoration:line-through">${fmt(m[mk] || 0)}</span> <b>${x[k] === null ? '—' : fmt(x[k])}</b>`) : `<span class="muted">${fmt(m[mk] || 0)}</span>`;
+        return `<tr><td class="mono">${esc(x.c)}</td><td>${esc(m.d || '')}</td><td class="n">${cel('bpp', 'bpp')}</td><td class="n">${cel('bpb', 'bpb')}</td><td class="n">${cel('upb', 'upb')}</td></tr>`;
+      }).join('')}</tbody></table></div>` : ''}
+      <div class="row"><button class="btn pri" data-act="armActualizar" ${A.ocupado || !p.cambios.length ? 'disabled' : ''}>Actualizar el armado</button><button class="btn" data-act="armCancelar">Cancelar</button></div></div>` : ''}
+    ${A.estado ? `<div class="small">${A.estado}</div>` : ''}
+  </div>`;
+}
+async function armPlantilla() {
+  S.ui.arm = { ocupado: true, estado: 'Armando la planilla…' }; render();
+  try {
+    await needXLSX();
+    const filas = Object.entries(S.maestro).filter(([, m]) => !m.baja).sort((a, b) => (a[1].s || '').localeCompare(b[1].s || '') || (a[1].o || 0) - (b[1].o || 0) || a[0].localeCompare(b[0]))
+      .map(([c, m]) => [c, m.d || '', m.s || '', m.u || 1, m.bpp || '', m.bpb || '', m.upb || '']);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['codigo', 'descripcion', 'sector', 'uxc', 'bases_pallet', 'bultos_base', 'u_bulto'], ...filas]), 'ARMADO');
+    const nombre = 'Stock Ilolay - armado articulos ' + hoyISO() + '.xlsx';
+    descargar(nombre, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    S.ui.arm = { estado: `Descargada <b>${esc(nombre)}</b> con ${filas.length} artículos. Completá las columnas <b>bases_pallet</b>, <b>bultos_base</b> y <b>u_bulto</b> y cargala acá. Las otras columnas son de referencia y no se importan.` };
+  } catch (e) { S.ui.arm = { estado: '<span style="color:var(--bad)">No se pudo armar la planilla: ' + esc(e.message) + '</span>' }; }
+  render();
+}
+async function armLeer(file) {
+  S.ui.arm = { ocupado: true, estado: 'Leyendo ' + esc(file.name) + '…' }; render();
+  try {
+    await needXLSX();
+    const buf = await file.arrayBuffer();
+    const nombres = XLSX.read(buf, { type: 'array', bookSheets: true }).SheetNames || [];
+    const N = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const COLS = { c: ['codigo', 'cod', 'articulo', 'material'], bpp: ['basespallet', 'basesporpallet', 'basespale', 'basesporpale', 'bpp'], bpb: ['bultosbase', 'bultosporbase', 'bultoscamada', 'bultosporcamada', 'bpb'], upb: ['ubulto', 'unbulto', 'unidadesbulto', 'unidadesporbulto', 'unidbulto', 'upb'] };
+    const orden = [...nombres].sort((a, b) => (N(b) === 'armado') - (N(a) === 'armado') || (N(b) === 'articulos') - (N(a) === 'articulos'));
+    let hoja = null, aoa = null, idx = null;
+    for (const n of orden) {
+      const ws = XLSX.read(buf, { type: 'array', sheets: n }).Sheets[n]; if (!ws) continue;
+      const a = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      const hdr = (a[0] || []).map(N), ix = {};
+      for (const [k, al] of Object.entries(COLS)) ix[k] = hdr.findIndex(h => al.includes(h));
+      if (ix.c >= 0 && (ix.bpp >= 0 || ix.bpb >= 0 || ix.upb >= 0)) { hoja = n; aoa = a; idx = ix; break; }
+    }
+    if (!hoja) throw new Error('no encontré una hoja con la columna "codigo" y alguna de "bases_pallet", "bultos_base" o "u_bulto"');
+    const cambios = [], noEsta = [], malos = [], vistos = new Set(); let iguales = 0;
+    const val = v => { if (v === '' || v === null || v === undefined) return null; const n = Number(String(v).replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : NaN; };
+    for (const r of aoa.slice(1)) {
+      const raw = String(r[idx.c] ?? '').trim(); if (!raw) continue;
+      const c = Core.code(raw); if (vistos.has(c)) continue; vistos.add(c);
+      const m = S.maestro[c]; if (!m) { noEsta.push(raw); continue; }
+      const x = { c }; let mal = false, cambia = false;
+      for (const [k, mk] of [['bpp', 'bpp'], ['bpb', 'bpb'], ['upb', 'upb']]) {
+        if (idx[k] < 0) continue;
+        const v = val(r[idx[k]]); if (Number.isNaN(v)) { mal = true; continue; }
+        x[k] = v; if (Number(v || 0) !== Number(m[mk] || 0)) cambia = true;
+      }
+      if (mal) { malos.push(raw); continue; }
+      if (cambia) cambios.push(x); else iguales++;
+    }
+    S.ui.arm = { prev: { nombre: file.name, hoja, cambios, iguales, noEsta, malos } };
+  } catch (e) { S.ui.arm = { estado: '<span style="color:var(--bad)">No se pudo leer el archivo: ' + esc(e.message) + '</span>' }; }
+  render();
+}
+async function armActualizar() {
+  const p = S.ui.arm?.prev; if (!p?.cambios.length) return;
+  S.ui.arm = { ...S.ui.arm, ocupado: true, estado: 'Actualizando el armado de ' + p.cambios.length + ' artículos…' }; render();
+  try {
+    const n = await API.call('actualizarArmado', p.cambios);
+    S.ui.arm = { estado: `✓ Armado actualizado en <b>${n}</b> artículo${n === 1 ? '' : 's'}. Depósito ya puede usar "Contar detallado" en esos artículos.` };
+    toast('Armado actualizado (' + n + ').'); await refrescar(true);
+  } catch (e) { S.ui.arm = { ...S.ui.arm, ocupado: false, estado: '<span style="color:var(--bad)">No se pudo actualizar: ' + esc(/desconocida/i.test(e.message) ? 'falta correr el 1_estructura.sql nuevo en Supabase' : e.message) + '</span>' }; }
+  render();
 }
 async function bdDescargar(backup) {
   S.ui.bd = { ...(S.ui.bd || {}), ocupado: true, estado: 'Leyendo la base…' }; render();
@@ -2559,6 +2639,9 @@ document.addEventListener('click', async e => {
     case 'dsave': await guardarDeposito(c); break;
     case 'dsumar': await sumarDeposito(c); break;
     case 'bdPlantilla': bdDescargar(false); break;
+    case 'armPlantilla': armPlantilla(); break;
+    case 'armActualizar': armActualizar(); break;
+    case 'armCancelar': S.ui.arm = {}; render(); break;
     case 'pdfColUp': case 'pdfColDn': { const d = pdfDraft(), i = +t.dataset.i, j = a === 'pdfColUp' ? i - 1 : i + 1; [d.cols[i], d.cols[j]] = [d.cols[j], d.cols[i]]; render(); break; }
     case 'pdfReset': S.ui.pdfDraft = JSON.parse(JSON.stringify(PDF_DEF)); render(); break;
     case 'pdfPrueba': pdfPrueba(); break;
@@ -2688,6 +2771,7 @@ document.addEventListener('change', async e => {
   if (a === 'pdfColN') { pdfDraft().cols[+t.dataset.i].n = t.value; render(); return; }
   if (a === 'borrarCierre') { S.ui.borrar = { cierre: t.checked, conf: false }; render(); return; }
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
+  if (t.id === 'armFile' && t.files?.[0]) { armLeer(t.files[0]); t.value = ''; return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'ajSel' || a === 'ajSelGrupo') S.ui.ajConfDel = false;
