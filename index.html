@@ -227,7 +227,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb30';
+window.__VERSION = 'sb31';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -250,7 +250,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb30</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb31</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1307,9 +1307,10 @@ function movDiaHtml(c) {
   if (!fs.length) return titulo + `<div class="small muted">Este artículo no tiene movimientos en los archivos cargados.</div><div class="small muted">${arch}</div>`;
   const cuenta = fs.filter(x => x.ms !== false);
   const total = cuenta.reduce((s, x) => s + x.q, 0);
-  // Resaltar en amarillo lo que coincide (±5 %) con la diferencia entre contado y sistema
+  // Resaltar en amarillo lo que coincide (± el % de Opciones) con la diferencia entre contado y sistema
+  const tol = tolMov();
   const lx = LINES.find(x => x.c === c); const dif = lx && lx.contado && lx.dif ? Math.abs(lx.dif) : 0;
-  const hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * 0.05;
+  const hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
   // Grilla 1: por chofer, con el desglose por origen debajo
   const porCh = {};
   for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { q: 0, n: 0, o: {} }); g.q += x.q; g.n++; g.o[x.o] = (g.o[x.o] || 0) + x.q; }
@@ -1334,7 +1335,7 @@ function movDiaHtml(c) {
     return `<details class="movorg" data-o="${o}" ${ab ? 'open' : ''}><summary><b>${ORIGEN[o] || o}</b>${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span>${nHl ? `<span class="pill hlp">${nHl} coincide${nHl > 1 ? 'n' : ''}</span>` : ''}<span class="tq">${fmt(tq)} u</span></summary>
       <table class="mini g2"><colgroup><col style="width:29%"><col style="width:33%"><col style="width:26%"><col style="width:12%"></colgroup><thead><tr><th>Comprob.</th><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${filas}</tbody></table></details>`;
   }).join('');
-  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${dif ? `<div class="small" style="margin:0 0 6px"><span class="hlbox">&nbsp;&nbsp;&nbsp;</span> En amarillo: lo que coincide (±5 %) con la diferencia de <b>${fmt(dif)} u</b> entre contado y sistema.</div>` : ''}${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
+  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${dif ? `<div class="small" style="margin:0 0 6px"><span class="hlbox">&nbsp;&nbsp;&nbsp;</span> En amarillo: lo que coincide (±${fmt(tol)} %) con la diferencia de <b>${fmt(dif)} u</b> entre contado y sistema.</div>` : ''}${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
     <div class="small muted" style="margin-top:6px">${arch}${fs.some(x => x.q < 0) ? ' · en verde: notas de crédito (vuelve al stock)' : ''}</div>`;
 }
 function histArtHtml(c) {
@@ -2109,11 +2110,12 @@ async function bdImportar() {
 const OP_AB = (() => { try { return new Set(JSON.parse(localStorage.getItem('opAbiertas') || '[]')); } catch { return new Set(); } })();
 const secOp = (id, titulo, sub) => `<details class="panel opsec" data-sec="${id}" ${OP_AB.has(id) ? 'open' : ''}><summary><span class="opt-t">${titulo}</span>${sub ? `<span class="small muted">${sub}</span>` : ''}</summary><div class="stack opsec-body">`;
 function abrirSecOp(id) { OP_AB.add(id); try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { } }
+const tolMov = () => { const n = Number(opt('tolMov')); return Number.isFinite(n) && n >= 0 ? n : 5; };
 function vOpciones() {
   return `<div class="stack"><form class="stack" id="fOpt" style="max-width:760px">
     <div><h2>Opciones</h2><div class="small muted">Tocá cada sección para abrirla o cerrarla.</div></div>
     <div class="row" style="gap:6px"><button class="btn sm" type="button" data-act="opTodas" data-v="1">Abrir todas</button><button class="btn sm" type="button" data-act="opTodas" data-v="0">Cerrar todas</button></div>
-    ${secOp('gral', 'Lectura de archivos y cierre', 'Prefijo, almacenes que no cuentan, motivos, quesos, recuento y mail.')}
+    ${secOp('gral', 'Lectura de archivos y cierre', 'Prefijo, almacenes que no cuentan, motivos, quesos, recuento, margen de movimientos y mail.')}
       <label class="stack" style="gap:4px"><span class="lbl">Prefijo de los artículos Ilolay en Yasukawa</span><input type="text" id="oPre" value="${esc(opt('prefijo'))}" style="max-width:120px" class="mono"><span class="small muted">En la tabla "articulo", COD_FAB viene como 21/1031: se toma lo que sigue al prefijo.</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Almacenes o tipos de almacén de SAP que no cuentan</span><input type="text" id="oExc" value="${esc(opt('excluir').join(', '))}" class="mono"><span class="small muted">Separados por coma. La planilla descartaba SFED (mercadería dañada).</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Motivos de diferencia (uno por línea)</span><textarea id="oMot">${esc(opt('motivos').join('\n'))}</textarea></label>
@@ -2123,6 +2125,7 @@ function vOpciones() {
         <span class="small muted">La variación de Yasukawa (en hormas) se aplica en los dos casos. No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="row" style="gap:8px"><input type="checkbox" id="oAuto" ${opt('autoRec') ? 'checked' : ''}> <span>Marcar para recontar automáticamente cuando el conteo no coincide con el sistema</span></label>
       <span class="small muted">Con esto activado, depósito se entera de que algo no cerró en cuanto lo guarda. Sin activar, el recuento lo pide administración desde Stock del día.</span>
+      <label class="stack" style="gap:4px"><span class="lbl">Movimientos: margen para resaltar en amarillo (%)</span><input type="number" id="oTol" value="${esc(tolMov())}" min="0" max="100" step="0.5" inputmode="decimal" style="max-width:110px"><span class="small muted">En Movimientos del día se pintan las filas cuya cantidad coincide con la diferencia entre contado y sistema, con este margen de más o de menos. Con 0 solo se pinta la coincidencia exacta.</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Destinatarios del mail de cierre</span><textarea id="oDest" style="min-height:60px">${esc(opt('destinatarios'))}</textarea></label>
       <div class="row"><button class="btn pri" type="submit">Guardar opciones</button></div>
     </div></details>
@@ -2593,7 +2596,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), f: S.dia }); e.target.reset(); toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: $('#oAuto').checked, quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: $('#oAuto').checked, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
