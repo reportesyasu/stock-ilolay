@@ -175,6 +175,14 @@ table.mini tr.hl td{background:#fff3b0 !important;color:#3a3000}
 table.mini tr.hl td .muted{color:#6b5c00}
 .hlbox{display:inline-block;background:#fff3b0;border:1px solid #e3cf5a;border-radius:3px;vertical-align:middle}
 .pill.hlp{background:#fff3b0;color:#5a4a00;margin-left:6px}
+details.opsec{padding:0}
+details.opsec>summary{cursor:pointer;list-style:none;padding:14px 16px;display:grid;gap:2px;position:relative;padding-right:40px}
+details.opsec>summary::-webkit-details-marker{display:none}
+details.opsec>summary::after{content:'▸';position:absolute;right:16px;top:14px;color:var(--muted);font-size:16px}
+details.opsec[open]>summary::after{content:'▾'}
+details.opsec>summary .opt-t{font-size:17px;font-weight:600}
+details.opsec[open]>summary{border-bottom:1px solid var(--line)}
+details.opsec>.opsec-body{padding:14px 16px}
 details.movorg{border:1px solid var(--line);border-radius:var(--r);margin-top:6px;background:var(--surface)}
 details.movorg>summary{cursor:pointer;padding:8px 10px;font-size:13px;display:flex;gap:4px;align-items:baseline;flex-wrap:wrap}
 details.movorg>summary .tq{margin-left:auto;font-weight:600;font-family:var(--f-mono)}
@@ -219,7 +227,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb28';
+window.__VERSION = 'sb29';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -242,7 +250,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb28</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb29</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1917,8 +1925,7 @@ function vPdfCfg() {
   const color = (k, n) => `<label class="row small" style="gap:6px"><input type="color" data-act="pdfSet" data-k="${k}" value="${esc(c[k])}"> ${n}</label>`;
   const num = (k, n, min, max, ayuda) => `<label class="stack" style="gap:2px"><span class="lbl">${n}</span><input type="number" data-act="pdfSet" data-k="${k}" value="${esc(c[k])}" min="${min}" max="${max}" style="max-width:90px">${ayuda ? `<span class="small muted">${ayuda}</span>` : ''}</label>`;
   const chk = (k, n) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="pdfSet" data-k="${k}" ${c[k] ? 'checked' : ''}> ${n}</label>`;
-  return `<div class="panel stack" style="max-width:760px" id="pdfPanel">
-    <div><h3>PDF del cierre</h3><div class="small muted">Cómo se arma el PDF que se descarga al cerrar y desde Historial.</div></div>
+  return `<div style="max-width:760px" id="pdfPanel">${secOp('pdf', 'PDF del cierre', 'Letra, columnas, autoajuste y colores del PDF que se descarga al cerrar y desde Historial.')}
     <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">
       ${num('letra', 'Letra de la tabla (pt)', 5, 14)}${num('titulo', 'Letra del título (pt)', 9, 28)}
       ${num('autoPct', 'Autoajuste de columnas (%)', 10, 100, 'Cada columna toma el ancho que necesita ese % de las filas; las más largas se cortan con “…”.')}
@@ -1928,7 +1935,7 @@ function vPdfCfg() {
     <div class="row" style="gap:16px;flex-wrap:wrap">${color('cHead', 'Fondo del encabezado')}${color('cTit', 'Títulos')}${color('cNeg', 'Faltante')}${color('cPos', 'Sobrante')}${color('cZebra', 'Filas alternadas')}</div>
     <div class="tablebox" style="max-height:none"><table><thead><tr><th style="width:36px">Ver</th><th>Rótulo en el PDF</th><th>Dato</th><th>Orden</th></tr></thead><tbody>${c.cols.map(col).join('')}</tbody></table></div>
     <div class="row"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfPrueba">Descargar PDF de prueba</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
-  </div>`;
+  </div></details></div>`;
 }
 /* ---------- Opciones → Códigos de barra: escanear y asociar a un artículo ---------- */
 let scanDestino = null; // a dónde va el código leído por la cámara/foto (null = pantalla de Depósito)
@@ -1941,7 +1948,7 @@ function cbLeido(raw) {
   const code = String(raw || '').replace(/\s/g, '').replace(/^'+/, '');
   if (!/^\d{8,14}$/.test(code)) { toast('"' + code + '" no parece un código de barras (8 a 14 números).'); return; }
   const c = buscarCodigo(code);
-  S.ui.cb = { code, actual: c, origen: c ? origenCodigo(code) : '', sel: null, q: '', cambiar: !c };
+  S.ui.cb = { code, actual: c, origen: c ? origenCodigo(code) : '', sel: null, q: '', cambiar: !c }; abrirSecOp('cb');
   if (navigator.vibrate && c) navigator.vibrate([80, 60, 80]);
   render(); try { document.activeElement?.blur(); } catch { }
   $('#cbPanel')?.scrollIntoView({ block: 'start', behavior: 'auto' });
@@ -1974,14 +1981,13 @@ function vCodigosBarra() {
     ${cb.sel ? `<div class="small">Se va a asociar a: <b>${art(cb.sel)}</b></div>` : ''}
     <div class="row"><button class="btn pri" data-act="cbGuardarOtro" ${cb.sel ? '' : 'disabled'}>Guardar y escanear otro</button><button class="btn" data-act="cbGuardar" ${cb.sel ? '' : 'disabled'}>Guardar</button><button class="btn" data-act="cbCancel">Cancelar</button></div>`;
   const hechos = S.ui.cbHechos || [];
-  return `<div class="panel stack" style="max-width:760px" id="cbPanel">
-    <div><h3>Códigos de barra</h3><div class="small muted">Escaneá un código para ver a qué artículo corresponde o asociarlo. Lo que se guarde acá lo reconoce Depósito al escanear.</div></div>
+  return `<div style="max-width:760px" id="cbPanel">${secOp('cb', 'Códigos de barra', 'Escaneá un código para ver a qué artículo corresponde o asociarlo. Lo que se guarde acá lo reconoce Depósito al escanear.')}
     <div class="row"><button class="btn pri" data-act="cbEscanear">Escanear con la cámara</button><label class="btn cam">Foto<input type="file" id="pickPhoto" accept="image/*" capture="environment" data-dest="cb"></label>
       <form id="fCb" class="row" style="gap:6px;margin:0"><input type="search" id="cbManual" inputmode="numeric" placeholder="o escribí el número" autocomplete="off" style="max-width:200px"><button class="btn" type="submit">Buscar</button></form></div>
     <div id="scanMsg"></div>
     ${res}
     ${hechos.length ? `<details class="small"><summary class="muted">Guardados ahora (${hechos.length})</summary><div class="stack" style="margin-top:6px">${hechos.map(h => `<div><span class="mono">${esc(h.code)}</span> → ${art(h.c)}${h.antes ? ` <span class="muted">(antes ${esc(h.antes)})</span>` : ''}</div>`).join('')}</div></details>` : ''}
-  </div>`;
+  </div></details></div>`;
 }
 function pdfDraft() { return (S.ui.pdfDraft ||= JSON.parse(JSON.stringify(pdfCfg()))); }
 async function pdfPrueba() {
@@ -1999,8 +2005,7 @@ async function pdfPrueba() {
 function vBaseDatos() {
   if (!S.admin) return '';
   const B = S.ui.bd || {};
-  return `<div class="panel stack" style="max-width:760px" id="bdPanel">
-    <div><h3>Base de datos</h3><div class="small muted">Plantilla para reemplazar las bases, carga del archivo y backup completo.</div></div>
+  return `<div style="max-width:760px" id="bdPanel">${secOp('bd', 'Base de datos', 'Plantilla para reemplazar las bases, carga del archivo y backup completo.')}
     <div class="row"><button class="btn" data-act="bdPlantilla" ${B.ocupado ? 'disabled' : ''}>Descargar plantilla con los datos actuales (XLSX)</button><button class="btn" data-act="bdBackup" ${B.ocupado ? 'disabled' : ''}>Descargar backup completo (XLSX)</button></div>
     <label class="stack" style="gap:4px"><span class="lbl">Cargar un XLSX para reemplazar las bases</span><input type="file" id="bdFile" accept=".xlsx,.xls" ${B.ocupado ? 'disabled' : ''}><span class="small muted">Usá la plantilla o un backup. Antes de reemplazar se muestra qué trae cada hoja.</span></label>
     ${B.prev ? `<div class="confirm stack"><b>${esc(B.prev.nombre)}</b>
@@ -2008,7 +2013,7 @@ function vBaseDatos() {
       <span class="small" style="color:var(--bad)">Lo tildado se <b>borra y se reemplaza</b> por lo del archivo. Conviene descargar antes un backup.</span>
       <div class="row"><button class="btn danger" data-act="bdImportar" ${B.ocupado || !B.prev.hojas.some(h => h.sel) ? 'disabled' : ''}>Reemplazar lo tildado</button><button class="btn" data-act="bdCancelar">Cancelar</button></div></div>` : ''}
     ${B.estado ? `<div class="small">${B.estado}</div>` : ''}
-  </div>`;
+  </div></details></div>`;
 }
 async function bdDescargar(backup) {
   S.ui.bd = { ...(S.ui.bd || {}), ocupado: true, estado: 'Leyendo la base…' }; render();
@@ -2072,10 +2077,15 @@ async function bdImportar() {
   } catch (e) { S.ui.bd = { ocupado: false, prev: P, estado: '<span style="color:var(--bad)">Se cortó en ' + esc(sel[hechos.length]?.titulo || '') + ': ' + esc(e.message) + '. Lo anterior quedó reemplazado: ' + (hechos.join(' · ') || 'nada') + '.</span>' }; }
   render();
 }
+/* Secciones de Opciones que se expanden y contraen (se recuerda cuáles quedaron abiertas) */
+const OP_AB = (() => { try { return new Set(JSON.parse(localStorage.getItem('opAbiertas') || '[]')); } catch { return new Set(); } })();
+const secOp = (id, titulo, sub) => `<details class="panel opsec" data-sec="${id}" ${OP_AB.has(id) ? 'open' : ''}><summary><span class="opt-t">${titulo}</span>${sub ? `<span class="small muted">${sub}</span>` : ''}</summary><div class="stack opsec-body">`;
+function abrirSecOp(id) { OP_AB.add(id); try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { } }
 function vOpciones() {
   return `<div class="stack"><form class="stack" id="fOpt" style="max-width:760px">
-    <div><h2>Opciones</h2><div class="small muted">Reglas para leer los archivos y armar el cierre.</div></div>
-    <div class="panel stack">
+    <div><h2>Opciones</h2><div class="small muted">Tocá cada sección para abrirla o cerrarla.</div></div>
+    <div class="row" style="gap:6px"><button class="btn sm" type="button" data-act="opTodas" data-v="1">Abrir todas</button><button class="btn sm" type="button" data-act="opTodas" data-v="0">Cerrar todas</button></div>
+    ${secOp('gral', 'Lectura de archivos y cierre', 'Prefijo, almacenes que no cuentan, motivos, quesos, recuento y mail.')}
       <label class="stack" style="gap:4px"><span class="lbl">Prefijo de los artículos Ilolay en Yasukawa</span><input type="text" id="oPre" value="${esc(opt('prefijo'))}" style="max-width:120px" class="mono"><span class="small muted">En la tabla "articulo", COD_FAB viene como 21/1031: se toma lo que sigue al prefijo.</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Almacenes o tipos de almacén de SAP que no cuentan</span><input type="text" id="oExc" value="${esc(opt('excluir').join(', '))}" class="mono"><span class="small muted">Separados por coma. La planilla descartaba SFED (mercadería dañada).</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Motivos de diferencia (uno por línea)</span><textarea id="oMot">${esc(opt('motivos').join('\n'))}</textarea></label>
@@ -2087,8 +2097,8 @@ function vOpciones() {
       <span class="small muted">Con esto activado, depósito se entera de que algo no cerró en cuanto lo guarda. Sin activar, el recuento lo pide administración desde Stock del día.</span>
       <label class="stack" style="gap:4px"><span class="lbl">Destinatarios del mail de cierre</span><textarea id="oDest" style="min-height:60px">${esc(opt('destinatarios'))}</textarea></label>
       <div class="row"><button class="btn pri" type="submit">Guardar opciones</button></div>
-    </div>
-    <div class="panel stack small"><b>Cómo compartir con depósito</b><span>Pasales la dirección de esta página y su <b>PIN de depósito</b>. Los PIN se ven y se editan en Supabase: Table Editor → tabla <span class="mono">config</span>, clave <span class="mono">pins</span> (podés agregar uno por persona, con su nombre, para saber quién contó). Con PIN de depósito solo se ve la pestaña Depósito.</span><span class="muted">Conectado como ${esc(S.me.id || '')}${S.admin ? ' (administración)' : ' (depósito)'} · servidor: ${esc(CFG.url)}</span></div>
+    </div></details>
+    ${secOp('compartir', 'Cómo compartir con depósito', 'Dirección de la página y PIN.')}<span class="small">Pasales la dirección de esta página y su <b>PIN de depósito</b>. Los PIN se ven y se editan en Supabase: Table Editor → tabla <span class="mono">config</span>, clave <span class="mono">pins</span> (podés agregar uno por persona, con su nombre, para saber quién contó). Con PIN de depósito solo se ve la pestaña Depósito.</span><span class="muted">Conectado como ${esc(S.me.id || '')}${S.admin ? ' (administración)' : ' (depósito)'} · servidor: ${esc(CFG.url)}</span></div></details>
   </form>
   ${vPdfCfg()}
   ${vBaseDatos()}
@@ -2394,6 +2404,7 @@ document.addEventListener('click', async e => {
 
     case 'asigOk': { const code = S.ui.asignar; try { S.codigos[code] = c; await API.call('asignarCodigo', code, c); toast('Código asociado a ' + c + '.'); } catch (er) { toast('No se pudo asociar el código: ' + er.message); } S.ui.asignar = null; S.ui.asigQ = ''; onScan(code); break; }
     case 'escanear': if (S.ui.tab !== 'opciones') scanDestino = null; abrirEscaner(); break;
+    case 'opTodas': for (const d of document.querySelectorAll('details.opsec')) { d.open = v === '1'; if (v === '1') OP_AB.add(d.dataset.sec); else OP_AB.delete(d.dataset.sec); } try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { } break;
     case 'cbEscanear': case 'cbOtro': S.ui.cb = null; render(); cbEscanear(); break;
     case 'cbCambiar': S.ui.cb.cambiar = true; render(); break;
     case 'cbCancel': S.ui.cb = null; render(); break;
@@ -2516,6 +2527,11 @@ async function corregirCierre(c, patch) {
   S.cierre.lineas = lineas; render();
   try { await API.call('corregirCierre', S.dia, c, patch); toast('Cierre corregido.'); } catch (er) { toast('No se pudo corregir el cierre: ' + er.message); }
 }
+document.addEventListener('toggle', e => {
+  const d = e.target; if (!d.classList?.contains('opsec')) return;
+  if (d.open) OP_AB.add(d.dataset.sec); else OP_AB.delete(d.dataset.sec);
+  try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { }
+}, true);
 document.addEventListener('keydown', e => {
   const t = e.target;
   if (e.key === 'Escape' && S.ui.det) { S.ui.det = null; $('#sheet').innerHTML = ''; }
