@@ -219,7 +219,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb27';
+window.__VERSION = 'sb28';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -242,7 +242,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb27</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb28</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1629,7 +1629,7 @@ async function leerFoto(file) {
     if (!code) throw new Error('No encontré ningún código de barras en la foto');
     msg.innerHTML = '';
     S.ui.ultimaFoto = code; S.ui.porFoto = true;
-    $('#scan').value = code; onScan(code);
+    const sc = $('#scan'); if (sc) sc.value = code; (scanDestino || onScan)(code);
   } catch (e) {
     msg.innerHTML = '<div class="banner warn"><span class="grow">' + esc(e.message || 'No pude leer el código') + '. Probá con el código de barras ocupando buena parte de la foto, derecho y con luz, o escribí el número.<br><span class="small muted">' + esc(pasos.join(' · ')) + '</span></span></div>';
   } finally { URL.revokeObjectURL(url); }
@@ -1713,7 +1713,7 @@ async function abrirEscaner() {
     cerrarEscaner('leído');
     S.ui.ultimaFoto = code; S.ui.porFoto = true; S.ui.porEscaner = true;
     const sc = $('#scan'); if (sc) sc.value = code;
-    onScan(code);
+    (scanDestino || onScan)(code);
   };
   if (detector) {
     const cv = document.createElement('canvas');
@@ -1910,6 +1910,92 @@ const BD_LEEME = [
   ['CIERRES_RESUMEN: una fila por día cerrado; con_dif = artículos con diferencia.'],
   ['CONFIG (solo en el backup): opciones y PIN; al restaurar un backup se cargan si la hoja está.']
 ];
+function vPdfCfg() {
+  if (!S.admin) return '';
+  const c = S.ui.pdfDraft || pdfCfg();
+  const col = (x, i) => `<tr><td><input type="checkbox" data-act="pdfColV" data-i="${i}" ${x.v ? 'checked' : ''} aria-label="Mostrar ${esc(x.n)}"></td><td><input type="text" data-act="pdfColN" data-i="${i}" value="${esc(x.n)}" style="width:100%"></td><td class="small muted">${esc(PDF_COLS.find(([k]) => k === x.k)?.[1] || x.k)}</td><td style="white-space:nowrap"><button class="btn xs" data-act="pdfColUp" data-i="${i}" ${i ? '' : 'disabled'} title="Subir">▲</button><button class="btn xs" data-act="pdfColDn" data-i="${i}" ${i < c.cols.length - 1 ? '' : 'disabled'} title="Bajar">▼</button></td></tr>`;
+  const color = (k, n) => `<label class="row small" style="gap:6px"><input type="color" data-act="pdfSet" data-k="${k}" value="${esc(c[k])}"> ${n}</label>`;
+  const num = (k, n, min, max, ayuda) => `<label class="stack" style="gap:2px"><span class="lbl">${n}</span><input type="number" data-act="pdfSet" data-k="${k}" value="${esc(c[k])}" min="${min}" max="${max}" style="max-width:90px">${ayuda ? `<span class="small muted">${ayuda}</span>` : ''}</label>`;
+  const chk = (k, n) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="pdfSet" data-k="${k}" ${c[k] ? 'checked' : ''}> ${n}</label>`;
+  return `<div class="panel stack" style="max-width:760px" id="pdfPanel">
+    <div><h3>PDF del cierre</h3><div class="small muted">Cómo se arma el PDF que se descarga al cerrar y desde Historial.</div></div>
+    <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">
+      ${num('letra', 'Letra de la tabla (pt)', 5, 14)}${num('titulo', 'Letra del título (pt)', 9, 28)}
+      ${num('autoPct', 'Autoajuste de columnas (%)', 10, 100, 'Cada columna toma el ancho que necesita ese % de las filas; las más largas se cortan con “…”.')}
+      <div class="stack" style="gap:4px"><span class="lbl">Hoja</span><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="1" ${c.apaisado !== false ? 'checked' : ''}> Apaisada</label><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="0" ${c.apaisado === false ? 'checked' : ''}> Vertical</label></div>
+    </div>
+    <div class="row" style="gap:16px;flex-wrap:wrap">${chk('ajustarAncho', 'Estirar la tabla al ancho de la hoja')}${chk('totales', 'Mostrar los totales arriba')}${chk('sinContar', 'Incluir la lista de "sin contar"')}${chk('zebra', 'Filas alternadas')}</div>
+    <div class="row" style="gap:16px;flex-wrap:wrap">${color('cHead', 'Fondo del encabezado')}${color('cTit', 'Títulos')}${color('cNeg', 'Faltante')}${color('cPos', 'Sobrante')}${color('cZebra', 'Filas alternadas')}</div>
+    <div class="tablebox" style="max-height:none"><table><thead><tr><th style="width:36px">Ver</th><th>Rótulo en el PDF</th><th>Dato</th><th>Orden</th></tr></thead><tbody>${c.cols.map(col).join('')}</tbody></table></div>
+    <div class="row"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfPrueba">Descargar PDF de prueba</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
+  </div>`;
+}
+/* ---------- Opciones → Códigos de barra: escanear y asociar a un artículo ---------- */
+let scanDestino = null; // a dónde va el código leído por la cámara/foto (null = pantalla de Depósito)
+function origenCodigo(code) {
+  const s = String(code).replace(/^'+/, '').trim(), tries = [s, s.replace(/^0+/, '')];
+  const e13 = Core.ean13FromDun(s); if (e13) tries.push(e13); if (/^\d{14}$/.test(s)) tries.push(s.slice(1));
+  return tries.some(t => S.codigos[t]) ? 'asociado a mano' : 'del archivo de artículos de Yasukawa';
+}
+function cbLeido(raw) {
+  const code = String(raw || '').replace(/\s/g, '').replace(/^'+/, '');
+  if (!/^\d{8,14}$/.test(code)) { toast('"' + code + '" no parece un código de barras (8 a 14 números).'); return; }
+  const c = buscarCodigo(code);
+  S.ui.cb = { code, actual: c, origen: c ? origenCodigo(code) : '', sel: null, q: '', cambiar: !c };
+  if (navigator.vibrate && c) navigator.vibrate([80, 60, 80]);
+  render(); try { document.activeElement?.blur(); } catch { }
+  $('#cbPanel')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+}
+function cbLista(q) {
+  const Q = String(q || '').toUpperCase().trim(), sel = S.ui.cb?.sel;
+  const L = Object.entries(S.maestro).filter(([, m]) => !m.baja).filter(([c, m]) => !Q || c.includes(Q) || (m.d || '').toUpperCase().includes(Q)).slice(0, 40);
+  if (!L.length) return '<div class="small muted">No hay artículos que coincidan.</div>';
+  return L.map(([c, m]) => `<button class="btn sm ${c === sel ? 'pri' : ''}" style="justify-content:flex-start;text-align:left" data-act="cbSel" data-c="${esc(c)}"><span class="mono">${esc(c)}</span> ${esc(m.d)}</button>`).join('');
+}
+function cbEscanear() { scanDestino = cbLeido; abrirEscaner(); }
+async function cbGuardar(otro) {
+  const cb = S.ui.cb; if (!cb?.sel) { toast('Elegí primero el artículo.'); return; }
+  try {
+    await API.call('asignarCodigo', cb.code, cb.sel); S.codigos[cb.code] = cb.sel;
+    (S.ui.cbHechos ||= []).unshift({ code: cb.code, c: cb.sel, antes: cb.actual || '' }); S.ui.cbHechos = S.ui.cbHechos.slice(0, 15);
+    toast('Código ' + cb.code + ' asociado a ' + cb.sel + '.'); S.ui.cb = null; render();
+    if (otro) cbEscanear();
+  } catch (er) { toast('No se pudo guardar: ' + er.message); }
+}
+function vCodigosBarra() {
+  if (!S.admin) return '';
+  const cb = S.ui.cb, art = c => `<span class="mono">${esc(c)}</span> ${esc(S.maestro[c]?.d || '(no está en Artículos)')}`;
+  let res = '';
+  if (cb && !cb.cambiar) res = `<div class="banner warn"><span class="grow"><b>Este código ya está cargado.</b> <span class="mono">${esc(cb.code)}</span> corresponde a ${art(cb.actual)} <span class="small muted">(${esc(cb.origen)})</span>.</span></div>
+    <div class="row"><button class="btn pri" data-act="cbOtro">Escanear otro</button><button class="btn" data-act="cbCambiar">Cambiar el artículo</button><button class="btn" data-act="cbCancel">Listo</button></div>`;
+  else if (cb) res = `<div class="banner ${cb.actual ? 'info' : 'warn'}"><span class="grow">${cb.actual ? `Elegí el artículo nuevo para <b class="mono">${esc(cb.code)}</b> (hoy es ${art(cb.actual)}).` : `El código <b class="mono">${esc(cb.code)}</b> no está asociado a ningún artículo. Elegí cuál es:`}</span></div>
+    <input type="search" id="cbQ" data-act="cbQ" placeholder="Buscar artículo por nombre o código" value="${esc(cb.q || '')}" autocomplete="off">
+    <div id="cbList" class="stack" style="max-height:280px;overflow:auto">${cbLista(cb.q)}</div>
+    ${cb.sel ? `<div class="small">Se va a asociar a: <b>${art(cb.sel)}</b></div>` : ''}
+    <div class="row"><button class="btn pri" data-act="cbGuardarOtro" ${cb.sel ? '' : 'disabled'}>Guardar y escanear otro</button><button class="btn" data-act="cbGuardar" ${cb.sel ? '' : 'disabled'}>Guardar</button><button class="btn" data-act="cbCancel">Cancelar</button></div>`;
+  const hechos = S.ui.cbHechos || [];
+  return `<div class="panel stack" style="max-width:760px" id="cbPanel">
+    <div><h3>Códigos de barra</h3><div class="small muted">Escaneá un código para ver a qué artículo corresponde o asociarlo. Lo que se guarde acá lo reconoce Depósito al escanear.</div></div>
+    <div class="row"><button class="btn pri" data-act="cbEscanear">Escanear con la cámara</button><label class="btn cam">Foto<input type="file" id="pickPhoto" accept="image/*" capture="environment" data-dest="cb"></label>
+      <form id="fCb" class="row" style="gap:6px;margin:0"><input type="search" id="cbManual" inputmode="numeric" placeholder="o escribí el número" autocomplete="off" style="max-width:200px"><button class="btn" type="submit">Buscar</button></form></div>
+    <div id="scanMsg"></div>
+    ${res}
+    ${hechos.length ? `<details class="small"><summary class="muted">Guardados ahora (${hechos.length})</summary><div class="stack" style="margin-top:6px">${hechos.map(h => `<div><span class="mono">${esc(h.code)}</span> → ${art(h.c)}${h.antes ? ` <span class="muted">(antes ${esc(h.antes)})</span>` : ''}</div>`).join('')}</div></details>` : ''}
+  </div>`;
+}
+function pdfDraft() { return (S.ui.pdfDraft ||= JSON.parse(JSON.stringify(pdfCfg()))); }
+async function pdfPrueba() {
+  const cfg = S.ui.pdfDraft || pdfCfg();
+  let c = S.cierre;
+  if (!c) {
+    try {
+      const mes = hoyISO().slice(0, 7), ant = new Date(Date.now() - 32 * 864e5).toISOString().slice(0, 7);
+      c = (await API.call('listarCierres', mes))[0] || (await API.call('listarCierres', ant))[0];
+    } catch { }
+  }
+  if (!c) { toast('Todavía no hay un cierre para usar de ejemplo.'); return; }
+  try { descargar('PDF de prueba ' + c.fecha + '.pdf', pdfCierre(c, cfg)); toast('PDF de prueba con el cierre del ' + dm(c.fecha) + '.'); } catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
+}
 function vBaseDatos() {
   if (!S.admin) return '';
   const B = S.ui.bd || {};
@@ -2004,7 +2090,9 @@ function vOpciones() {
     </div>
     <div class="panel stack small"><b>Cómo compartir con depósito</b><span>Pasales la dirección de esta página y su <b>PIN de depósito</b>. Los PIN se ven y se editan en Supabase: Table Editor → tabla <span class="mono">config</span>, clave <span class="mono">pins</span> (podés agregar uno por persona, con su nombre, para saber quién contó). Con PIN de depósito solo se ve la pestaña Depósito.</span><span class="muted">Conectado como ${esc(S.me.id || '')}${S.admin ? ' (administración)' : ' (depósito)'} · servidor: ${esc(CFG.url)}</span></div>
   </form>
-  ${vBaseDatos()}</div>`;
+  ${vPdfCfg()}
+  ${vBaseDatos()}
+  ${vCodigosBarra()}</div>`;
 }
 
 /* ================= Acciones ================= */
@@ -2031,23 +2119,41 @@ function pdfTxt(s) {
   }
   return o;
 }
-function pdfDoc() {
-  const W = 842, H = 595, pages = []; let cur = null;
+/* Anchos de Helvetica (milésimas del tamaño de letra), para medir y autoajustar columnas */
+const HELV = (() => {
+  const w = {}; const set = (chs, v) => { for (const ch of chs) w[ch] = v; };
+  set(' !,./:;I[\\]f', 278); set('il', 222); set('j', 222); set('"', 355); set('#$0123456789?L_abdeghnopqu', 556); set('%', 889);
+  set("&ABEKPSVXY", 667); set("'", 191); set('()-`r', 333); set('*', 389); set('+<=>~', 584); set('@', 1015); set('CDHNRUw', 722);
+  set('FTZ', 611); set('GOQ', 778); set('J', 500); set('M', 833); set('W', 944); set('^', 469); set('ckssvxyz', 500); set('m', 833); set('t', 278);
+  set('{}', 334); set('|', 260); return w;
+})();
+function anchoTxt(s, size, bold) {
+  let t = 0; for (const ch of String(s ?? '')) { const b = ch.normalize('NFD')[0]; t += HELV[b] ?? 556; }
+  return t / 1000 * size * (bold ? 1.06 : 1);
+}
+function cortar(s, maxW, size, bold) {
+  s = String(s ?? ''); if (anchoTxt(s, size, bold) <= maxW) return s;
+  let lo = 0, hi = s.length;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (anchoTxt(s.slice(0, m) + '…', size, bold) <= maxW) lo = m; else hi = m - 1; }
+  return s.slice(0, lo) + '…';
+}
+const hexRgb = (h, def = '#000000') => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || def)) || /^#?([0-9a-f]{6})$/i.exec(def); const n = parseInt(m[1], 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(x => x.toFixed(3)).join(' '); };
+function pdfDoc(apaisado = true) {
+  const W = apaisado ? 842 : 595, H = apaisado ? 595 : 842, pages = []; let cur = null;
   const api = {
     W, H,
     nueva() { cur = []; pages.push(cur); return api; },
-    text(x, y, s, size = 9, bold = false, align = 'l', gray = 0) {
+    text(x, y, s, size = 9, bold = false, align = 'l', color = '#000000') {
       const t = pdfTxt(s); let xx = x;
-      if (align !== 'l') { const w = String(s ?? '').length * size * (bold ? 0.56 : 0.52); xx = align === 'r' ? x - w : x - w / 2; }
-      cur.push(`${gray} g BT /${bold ? 'F2' : 'F1'} ${size} Tf ${xx.toFixed(1)} ${(H - y).toFixed(1)} Td (${t}) Tj ET 0 g`); return api;
+      if (align !== 'l') { const w = anchoTxt(s, size, bold); xx = align === 'r' ? x - w : x - w / 2; }
+      cur.push(`${hexRgb(color)} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${xx.toFixed(1)} ${(H - y).toFixed(1)} Td (${t}) Tj ET 0 g`); return api;
     },
-    rect(x, y, w, h, gray) { cur.push(`${gray} g ${x} ${(H - y - h).toFixed(1)} ${w} ${h} re f 0 g`); return api; },
-    line(x1, y1, x2, y2, gray = 0.7) { cur.push(`${gray} G 0.5 w ${x1} ${(H - y1).toFixed(1)} m ${x2} ${(H - y2).toFixed(1)} l S 0 G`); return api; },
+    rect(x, y, w, h, color) { cur.push(`${hexRgb(color)} rg ${x.toFixed(1)} ${(H - y - h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f 0 g`); return api; },
+    line(x1, y1, x2, y2, color = '#cccccc') { cur.push(`${hexRgb(color)} RG 0.5 w ${x1.toFixed(1)} ${(H - y1).toFixed(1)} m ${x2.toFixed(1)} ${(H - y2).toFixed(1)} l S 0 G`); return api; },
     blob() {
       const objs = [];
       objs.push('<< /Type /Catalog /Pages 2 0 R >>');
-      const kids = pages.map((_, i) => `${5 + i * 2} 0 R`).join(' ');
-      objs.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`);
+      objs.push(`<< /Type /Pages /Kids [${pages.map((_, i) => `${5 + i * 2} 0 R`).join(' ')}] /Count ${pages.length} >>`);
       objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
       objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
       pages.forEach((ops, i) => {
@@ -2056,7 +2162,7 @@ function pdfDoc() {
         objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6 + i * 2} 0 R >>`);
         objs.push(`<< /Length ${st.length} >>\nstream\n${st}\nendstream`);
       });
-      let out = '%PDF-1.4\n', offs = [];
+      let out = '%PDF-1.4\n'; const offs = [];
       objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
       const xref = out.length;
       out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('');
@@ -2067,40 +2173,89 @@ function pdfDoc() {
   };
   return api;
 }
-function pdfCierre(c) {
-  const P = pdfDoc(); const lin = c.lineas || [];
+/* Configuración del PDF (Opciones → PDF del cierre) */
+const PDF_COLS = [
+  ['codigo', 'Código', 'l'], ['descripcion', 'Descripción', 'l'], ['sector', 'Sector', 'l'], ['sistema', 'Sistema', 'r'], ['contado', 'Contado', 'r'],
+  ['dif', 'Dif. u', 'r'], ['valorizado', 'Valorizado', 'r'], ['motivo', 'Motivo', 'l'], ['obs', 'Obs. / nota de depósito', 'l']
+];
+const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, sinContar: true, totales: true,
+  cHead: '#e6e6e6', cTit: '#000000', cNeg: '#b3261e', cPos: '#1e7a3c', cZebra: '#f5f5f5', zebra: false,
+  cols: PDF_COLS.map(([k, n]) => ({ k, n, v: k !== 'sector' })) };
+function pdfCfg() {
+  const c = { ...PDF_DEF, ...(opt('pdf') || {}) };
+  const guard = (c.cols || []).filter(x => PDF_COLS.some(([k]) => k === x.k));
+  for (const [k, n] of PDF_COLS) if (!guard.some(x => x.k === k)) guard.push({ k, n, v: false });
+  c.cols = guard; return c;
+}
+function pdfCierre(c, cfgIn) {
+  const cfg = cfgIn || pdfCfg();
+  const P = pdfDoc(cfg.apaisado !== false); const lin = c.lineas || [];
   const r = c.resumen || {};
-  const cut = (s, n) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const fs = Math.max(5, Math.min(14, Number(cfg.letra) || 8)), ft = Math.max(9, Math.min(28, Number(cfg.titulo) || 15));
+  const rowH = Math.round(fs * 1.6), M = 28, ancho = P.W - 2 * M;
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(q, u || 1); return fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
-  const cols = [['Código', 32, 'l'], ['Descripción', 82, 'l'], ['Sistema', 352, 'r'], ['Contado', 432, 'r'], ['Dif. u', 478, 'r'], ['Valorizado', 552, 'r'], ['Motivo', 562, 'l'], ['Obs. / nota de depósito', 660, 'l']];
-  let y = 0;
-  const encabezado = (titulo) => {
-    P.nueva(); y = 34;
-    P.text(32, y, 'STOCK ILOLAY · Cierre del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), 15, true); y += 16;
-    P.text(32, y, 'Cerrado por ' + (c.por || '—') + (c.ts ? ' el ' + new Date(c.ts).toLocaleString('es-AR') : '') + (c.archivos?.sap || c.archivos?.yasu ? ' · Archivos: ' + [c.archivos.sap, c.archivos.yasu].filter(Boolean).join(' + ') : ''), 8, false, 'l', 0.4); y += 18;
-    if (titulo) { P.text(32, y, titulo, 11, true); y += 8; }
-  };
-  const cabecera = () => { P.rect(28, y, 786, 14, 0.9); cols.forEach(([n, x, a]) => P.text(x, y + 10, n, 7.5, true, a)); y += 26; };
-  encabezado();
-  const kp = [['Artículos', fmt(r.articulos ?? lin.length)], ['Contados', fmt(r.contados)], ['Con diferencia', fmt(r.conDif)], ['Sobrante', fmtS(r.sobra || 0) + ' u'], ['Faltante', fmt(r.falta || 0) + ' u'], ['Valorizado', money(r.importe || 0)]];
-  kp.forEach(([n, v], i) => { const x = 32 + i * 130; P.rect(x - 4, y, 124, 34, 0.95); P.text(x + 2, y + 12, n.toUpperCase(), 7, true, 'l', 0.4); P.text(x + 2, y + 27, v, 12, true); }); y += 50;
+  const valor = (k, l) => ({ codigo: l.c, descripcion: l.d, sector: l.s === 'FRIO' ? 'Frío' : l.s === 'SECO' ? 'Seco' : (l.s || ''), sistema: cjun(l.sis, l.u), contado: cjun(l.cont, l.u),
+    dif: fmtS(l.dif), valorizado: money(l.imp || 0), motivo: l.m || 'sin motivo', obs: [l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · ') })[k];
   const dif = lin.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
-  P.text(32, y, 'Artículos con diferencia (' + dif.length + ')', 11, true); y += 8; cabecera();
-  let sec = null;
-  for (const l of dif) {
-    if (y > 560) { encabezado('Artículos con diferencia (continuación)'); cabecera(); sec = null; }
-    if (l.s !== sec) { sec = l.s; P.text(32, y, sec === 'FRIO' ? 'FRÍO' : (sec || 'SIN SECTOR'), 7.5, true, 'l', 0.35); y += 12; }
-    P.text(32, y, l.c, 8); P.text(82, y, cut(l.d, 52), 8); P.text(352, y, cjun(l.sis, l.u), 8, false, 'r'); P.text(432, y, cjun(l.cont, l.u), 8, false, 'r');
-    P.text(478, y, fmtS(l.dif), 8, true, 'r', l.dif < 0 ? 0.15 : 0); P.text(552, y, money(l.imp || 0), 8, false, 'r');
-    P.text(562, y, cut(l.m || 'sin motivo', 18), 8, false, 'l', l.m ? 0 : 0.45); P.text(660, y, cut([l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · '), 38), 7.5, false, 'l', 0.25);
-    P.line(28, y + 4, 814, y + 4, 0.88); y += 13;
+  // Columnas visibles y autoajuste: cada columna mide lo que necesita el X % de las filas (X = cfg.autoPct)
+  const vis = cfg.cols.filter(x => x.v).map(x => { const d = PDF_COLS.find(([k]) => k === x.k); return { k: x.k, n: x.n || d[1], a: d[2] }; });
+  const pct = Math.max(10, Math.min(100, Number(cfg.autoPct) || 80)) / 100, pad = 8;
+  for (const col of vis) {
+    const ws = dif.map(l => anchoTxt(valor(col.k, l), fs, col.k === 'dif')).sort((a, b) => a - b);
+    const p = ws.length ? ws[Math.min(ws.length - 1, Math.max(0, Math.ceil(ws.length * pct) - 1))] : 0;
+    col.w = Math.max(anchoTxt(col.n, fs - 0.5, true), p) + pad;
   }
-  if (!dif.length) { P.text(32, y, 'No hubo diferencias.', 9); y += 14; }
+  // Si no entra, achican primero las columnas de texto (descripción, obs., motivo); los números conservan su ancho
+  const flex = vis.filter(x => ['descripcion', 'obs', 'motivo', 'sector'].includes(x.k));
+  const tot = () => vis.reduce((s, x) => s + x.w, 0);
+  if (tot() > ancho && flex.length) {
+    const fijo = tot() - flex.reduce((s, x) => s + x.w, 0), libre = ancho - fijo;
+    const minimo = flex.map(x => anchoTxt(x.n, fs - 0.5, true) + pad), sMin = minimo.reduce((a, b) => a + b, 0);
+    if (libre > sMin) { const sExtra = flex.reduce((s, x, i) => s + x.w - minimo[i], 0), f = (libre - sMin) / sExtra; flex.forEach((x, i) => x.w = minimo[i] + (x.w - minimo[i]) * f); }
+    else flex.forEach((x, i) => x.w = minimo[i]);
+  }
+  if (tot() > ancho) { const f = ancho / tot(); vis.forEach(x => x.w *= f); }
+  else if (cfg.ajustarAncho && tot() < ancho) { const extra = ancho - tot(), dest = flex.length ? flex : vis, s = dest.reduce((a, x) => a + x.w, 0) || 1; dest.forEach(x => x.w += extra * x.w / s); }
+  let xx = M; vis.forEach(x => { x.x = xx; xx += x.w; });
+  const anchoTabla = xx - M;
+  let y = 0;
+  const encabezado = titulo => {
+    P.nueva(); y = 24 + ft;
+    P.text(M + 4, y, 'STOCK ILOLAY · Cierre del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(M + 4, y, 'Cerrado por ' + (c.por || '—') + (c.ts ? ' el ' + new Date(c.ts).toLocaleString('es-AR') : '') + (c.archivos?.sap || c.archivos?.yasu ? ' · Archivos: ' + [c.archivos.sap, c.archivos.yasu].filter(Boolean).join(' + ') : ''), Math.max(6, fs - 0.5), false, 'l', '#666666'); y += 18;
+    if (titulo) { P.text(M + 4, y, titulo, fs + 3, true, 'l', cfg.cTit); y += 8; }
+  };
+  const celda = (col, txt, yy, bold = false, color = '#000000', size = fs) => {
+    const t = cortar(txt, col.w - pad, size, bold);
+    if (col.a === 'r') P.text(col.x + col.w - pad / 2, yy, t, size, bold, 'r', color); else P.text(col.x + pad / 2, yy, t, size, bold, 'l', color);
+  };
+  const cabecera = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); vis.forEach(col => celda(col, col.n, y + rowH - 2, true, '#000000', fs - 0.5)); y += rowH + 2 + fs + 2; };
+  encabezado();
+  if (cfg.totales !== false) {
+    const kp = [['Artículos', fmt(r.articulos ?? lin.length)], ['Contados', fmt(r.contados)], ['Con diferencia', fmt(r.conDif)], ['Sobrante', fmtS(r.sobra || 0) + ' u'], ['Faltante', fmt(r.falta || 0) + ' u'], ['Valorizado', money(r.importe || 0)]];
+    const kw = ancho / kp.length;
+    kp.forEach(([n, v], i) => { const x = M + i * kw; P.rect(x + 2, y, kw - 4, 34, '#f2f2f2'); P.text(x + 8, y + 12, n.toUpperCase(), 7, true, 'l', '#666666'); P.text(x + 8, y + 27, v, 12, true, 'l', i === 4 ? cfg.cNeg : i === 3 ? cfg.cPos : '#000000'); }); y += 50;
+  }
+  P.text(M + 4, y, 'Artículos con diferencia (' + dif.length + ')', fs + 3, true, 'l', cfg.cTit); y += 8; cabecera();
+  let sec = null, i = 0;
+  for (const l of dif) {
+    if (y > P.H - 34) { encabezado('Artículos con diferencia (continuación)'); cabecera(); sec = null; }
+    if (l.s !== sec && !vis.some(x => x.k === 'sector')) { sec = l.s; P.text(M + 4, y, sec === 'FRIO' ? 'FRÍO' : (sec || 'SIN SECTOR'), fs - 0.5, true, 'l', '#555555'); y += rowH; }
+    if (cfg.zebra && i++ % 2) P.rect(M, y - fs - 1, anchoTabla, rowH, cfg.cZebra);
+    for (const col of vis) {
+      const v = valor(col.k, l);
+      const color = col.k === 'dif' || col.k === 'valorizado' ? (l.dif < 0 ? cfg.cNeg : cfg.cPos) : col.k === 'motivo' && !l.m ? '#888888' : col.k === 'obs' ? '#333333' : '#000000';
+      celda(col, v, y, col.k === 'dif', color);
+    }
+    P.line(M, y + Math.round(fs * 0.5), M + anchoTabla, y + Math.round(fs * 0.5), '#dddddd'); y += rowH;
+  }
+  if (!dif.length) { P.text(M + 4, y, 'No hubo diferencias.', fs + 1); y += rowH; }
   const sin = lin.filter(l => l.cont === null || l.cont === undefined);
-  if (sin.length) {
-    y += 10; if (y > 540) encabezado();
-    P.text(32, y, 'Sin contar (' + sin.length + ')', 11, true); y += 14;
-    for (const l of sin) { if (y > 570) { encabezado('Sin contar (continuación)'); } P.text(32, y, l.c, 8); P.text(82, y, cut(l.d, 60), 8); P.text(432, y, 'sistema ' + cjun(l.sis, l.u), 8, false, 'r'); y += 12; }
+  if (sin.length && cfg.sinContar !== false) {
+    y += 10; if (y > P.H - 60) encabezado();
+    P.text(M + 4, y, 'Sin contar (' + sin.length + ')', fs + 3, true, 'l', cfg.cTit); y += rowH + 2;
+    const cw = Math.min(ancho, 520);
+    for (const l of sin) { if (y > P.H - 34) encabezado('Sin contar (continuación)'); P.text(M + 4, y, l.c, fs); P.text(M + 60, y, cortar(l.d, cw - 180, fs), fs); P.text(M + cw, y, 'sistema ' + cjun(l.sis, l.u), fs, false, 'r'); y += rowH - 1; }
   }
   return P.blob();
 }
@@ -2153,7 +2308,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'cerrarDet' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="cerrarDet"]')) return;
   const a = t.dataset.act, c = t.dataset.c, v = t.dataset.v;
   switch (a) {
-    case 'tab': S.ui.tab = v; S.ui.q = ''; if (v !== 'ajustes') S.ui.ajPre = null; S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); render(); window.scrollTo(0, 0); break;
+    case 'tab': S.ui.tab = v; S.ui.q = ''; scanDestino = null; if (v !== 'ajustes') S.ui.ajPre = null; S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); render(); window.scrollTo(0, 0); break;
     case 'vista': if (v === 'auto') delete document.documentElement.dataset.vista; else document.documentElement.dataset.vista = v; try { localStorage.setItem('vista', v); } catch { } render(); break;
     case 'copiarLog': try { await navigator.clipboard.writeText(S.scanLog.join('\n')); toast('Registro copiado.'); } catch { toast('No se pudo copiar; sacá una captura.'); } break;
     case 'probarConexion': probarConexion(); break;
@@ -2210,6 +2365,10 @@ document.addEventListener('click', async e => {
     case 'dsave': await guardarDeposito(c); break;
     case 'dsumar': await sumarDeposito(c); break;
     case 'bdPlantilla': bdDescargar(false); break;
+    case 'pdfColUp': case 'pdfColDn': { const d = pdfDraft(), i = +t.dataset.i, j = a === 'pdfColUp' ? i - 1 : i + 1; [d.cols[i], d.cols[j]] = [d.cols[j], d.cols[i]]; render(); break; }
+    case 'pdfReset': S.ui.pdfDraft = JSON.parse(JSON.stringify(PDF_DEF)); render(); break;
+    case 'pdfPrueba': pdfPrueba(); break;
+    case 'pdfGuardar': { const data = { ...S.opciones, pdf: S.ui.pdfDraft, ts: Date.now() }; try { await API.call('guardarOpciones', data); S.opciones = data; S.ui.pdfDraft = null; toast('Configuración del PDF guardada.'); } catch (er) { toast('No se pudo guardar: ' + er.message); } render(); break; }
     case 'ajAgr': S.ui.ajAgr = v; render(); break;
     case 'bdBackup': bdDescargar(true); break;
     case 'bdCancelar': S.ui.bd = {}; render(); break;
@@ -2234,7 +2393,12 @@ document.addEventListener('click', async e => {
     case 'dmodo': { S.ui.modoSuma ||= {}; S.ui.modoSuma[c] = modoSuma(c) === 'restar' ? 'sumar' : 'restar'; S.ui.foco = c; render(); document.getElementById('d-acj-' + c)?.focus(); break; }
 
     case 'asigOk': { const code = S.ui.asignar; try { S.codigos[code] = c; await API.call('asignarCodigo', code, c); toast('Código asociado a ' + c + '.'); } catch (er) { toast('No se pudo asociar el código: ' + er.message); } S.ui.asignar = null; S.ui.asigQ = ''; onScan(code); break; }
-    case 'escanear': abrirEscaner(); break;
+    case 'escanear': if (S.ui.tab !== 'opciones') scanDestino = null; abrirEscaner(); break;
+    case 'cbEscanear': case 'cbOtro': S.ui.cb = null; render(); cbEscanear(); break;
+    case 'cbCambiar': S.ui.cb.cambiar = true; render(); break;
+    case 'cbCancel': S.ui.cb = null; render(); break;
+    case 'cbSel': S.ui.cb.sel = c; render(); break;
+    case 'cbGuardar': case 'cbGuardarOtro': cbGuardar(a === 'cbGuardarOtro'); break;
     case 'pantallaCompleta': cerrarEscaner('pantalla completa'); abrirPantallaCompleta(); break;
     case 'cerrarEscaner': cerrarEscaner('botón cerrar'); break;
     case 'linterna': toggleLinterna(); break;
@@ -2311,6 +2475,7 @@ document.addEventListener('input', e => {
   const t = e.target; if (t.dataset?.act === undefined) return;
   t.dataset.dirty = '1';
   if (t.dataset.act === 'buscar') { S.ui.q = t.value; render(); }
+  if (t.dataset.act === 'cbQ' && S.ui.cb) { S.ui.cb.q = t.value; const l = $('#cbList'); if (l) l.innerHTML = cbLista(t.value); }
   if (t.dataset.act === 'asigQ') { S.ui.asigQ = t.value; const l = $('#asigList'); if (l) l.innerHTML = listaAsignar(t.value); }
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'dnota') DD[t.dataset.c + 'nota'] = t.value;
@@ -2320,6 +2485,9 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', async e => {
   const t = e.target, a = t.dataset?.act, c = t.dataset?.c;
+  if (a === 'pdfSet') { const d = pdfDraft(), k = t.dataset.k; d[k] = t.type === 'checkbox' ? t.checked : t.type === 'radio' ? t.value === '1' : t.type === 'number' ? Number(t.value) : t.value; render(); return; }
+  if (a === 'pdfColV') { pdfDraft().cols[+t.dataset.i].v = t.checked; render(); return; }
+  if (a === 'pdfColN') { pdfDraft().cols[+t.dataset.i].n = t.value; render(); return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'ajSel' || a === 'ajSelGrupo') S.ui.ajConfDel = false;
@@ -2366,6 +2534,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('submit', async e => {
   e.preventDefault();
   if (e.target.id === 'fAcceso') { entrar(e); return; }
+  if (e.target.id === 'fCb') { const v = $('#cbManual').value; $('#cbManual').value = ''; cbLeido(v); return; }
   if (e.target.id === 'fAj') {
     const c = Core.code($('#ajC').value), t = $('#ajT').value; let u = Core.num($('#ajU').value);
     if (!c || !u) { toast('Completá código y unidades.'); return; }
@@ -2379,7 +2548,7 @@ document.addEventListener('submit', async e => {
 });
 $('#pickFolder').addEventListener('change', e => { const fs = [...e.target.files]; if (fs.length) { S.carpeta = (fs[0].webkitRelativePath || '').split('/')[0] || 'carpeta'; leerArchivos(fs.filter(f => { const p = (f.webkitRelativePath || '').split('/'); return p.length <= 2 || (p.length === 3 && RE_CARPETA_EXCEL.test(p[1])); })); } e.target.value = ''; });
 $('#pickFiles').addEventListener('change', e => { if (e.target.files.length) leerArchivos(e.target.files); e.target.value = ''; });
-document.addEventListener('change', e => { if (e.target.id === 'pickPhoto' || e.target.id === 'pickPhoto2') { const f = e.target.files[0]; if (e.target.id === 'pickPhoto2') cerrarEscaner('usar foto'); if (f) leerFoto(f); e.target.value = ''; } });
+document.addEventListener('change', e => { if (e.target.id === 'pickPhoto' || e.target.id === 'pickPhoto2') { const f = e.target.files[0]; if (e.target.dataset.dest === 'cb') scanDestino = cbLeido; else if (e.target.id === 'pickPhoto') scanDestino = null; if (e.target.id === 'pickPhoto2') cerrarEscaner('usar foto'); if (f) leerFoto(f); e.target.value = ''; } });
 document.addEventListener('dragover', e => { if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.add('over'); });
 document.addEventListener('dragleave', e => { if (e.target.id === 'dropzone') e.target.classList.remove('over'); });
 document.addEventListener('drop', e => { if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.remove('over'); if (e.dataTransfer.files.length) leerArchivos(e.dataTransfer.files); });
