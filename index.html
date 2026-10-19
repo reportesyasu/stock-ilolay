@@ -96,6 +96,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .kpi.bad b{color:var(--bad)} .kpi.ok b{color:var(--ok)}
 /* tabla */
 .tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+/* Grillas: barras de desplazamiento siempre visibles dentro de la pantalla (la grilla no pasa del alto de la ventana) */
+.tablebox{overflow:auto;max-height:calc(100vh - var(--topH,58px) - 24px);max-height:calc(100dvh - var(--topH,58px) - 24px);scrollbar-gutter:stable;overscroll-behavior:contain}
+.sheet .tablebox{max-height:70vh}
+.tablebox thead th{position:sticky;top:0;z-index:2;background:var(--sunk)}
+.tablebox::-webkit-scrollbar,.sheet .box::-webkit-scrollbar{width:12px;height:12px}
+.tablebox::-webkit-scrollbar-track,.sheet .box::-webkit-scrollbar-track{background:var(--sunk);border-radius:6px}
+.tablebox::-webkit-scrollbar-thumb,.sheet .box::-webkit-scrollbar-thumb{background:var(--muted);border-radius:6px;border:2px solid var(--sunk);min-height:40px}
+.tablebox::-webkit-scrollbar-corner{background:var(--sunk)}
+.tablebox,.sheet .box{scrollbar-width:auto;scrollbar-color:var(--muted) var(--sunk)}
 table{border-collapse:collapse;width:100%;font-size:14px}
 th{text-align:left;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:8px 8px;border-bottom:1px solid var(--line);background:var(--sunk);position:sticky;top:0;white-space:nowrap}
 td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -206,7 +215,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb23';
+window.__VERSION = 'sb25';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -229,7 +238,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb23</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb25</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -737,7 +746,7 @@ async function refrescar(silencioso) {
     S.me = { id: e.usuario.email, name: e.usuario.nombre, canEdit: e.usuario.admin };
     S.admin = !!e.usuario.admin;
     S.maestro = e.maestro || {}; S.maestroV = true;
-    S.opciones = e.opciones || {};
+    S.opciones = S.opcPend || e.opciones || {};
     S.dia = e.dia; S.diaDoc = true;
     S.conteos = e.conteos || {}; S.ajustes = e.ajustes || []; S.codigos = e.codigos || {};
     S.remoto = e.sistema; S.cierre = e.cierre; S.cierreCargado = true;
@@ -963,6 +972,7 @@ async function publicarSistema() {
   }
   const doc = { fecha: S.dia, ts: Date.now(), por: S.me.id, archivos: { sap: S.files.sap?.name || '', yasu: S.files.yasu?.name || '' }, items };
   S.remoto = doc;
+  render();
   try { await API.call('publicarSistema', doc); } catch (e) { toast('No se pudo compartir el cruce con los otros dispositivos: ' + e.message); }
 }
 /* Fuentes para el cálculo: archivos locales si están, si no el cruce compartido del mismo día */
@@ -1190,7 +1200,7 @@ function vHoy() {
       ${chipsSector(all)}
       <div class="chips" role="group" aria-label="Filtro">${filtros.map(([k, n, c]) => `<button class="chip" data-act="filtro" data-v="${k}" aria-pressed="${S.ui.filtro === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
       <input type="search" id="qHoy" data-act="buscar" placeholder="Buscar código o descripción" value="${esc(S.ui.q)}" style="min-width:220px;flex:1;max-width:320px">
-      ${!cerrado ? `<button class="btn sm ${opt('verSisDep') ? 'ok' : ''}" data-act="verSisDep" aria-pressed="${!!opt('verSisDep')}" title="Mostrar u ocultar la existencia del sistema a depósito en Recontar y Con diferencia">Depósito ve el sistema: <b>${opt('verSisDep') ? 'Sí' : 'No (a ciegas)'}</b></button>` : ''}
+      ${!cerrado ? `<button class="btn sm ${opt('verSisDep') ? 'ok' : ''}" data-act="verSisDep" aria-pressed="${!!opt('verSisDep')}" title="Mostrar u ocultar la existencia del sistema a depósito en Recontar y Con diferencia">Depósito ve el sistema: <b>${opt('verSisDep') ? 'Sí' : 'No (a ciegas)'}</b></button>${opt('verSisDep') ? (S.remoto && S.remoto.fecha === S.dia && S.remoto.items ? `<span class="small muted">depósito ve el cruce de las ${hora(S.remoto.ts)}</span>` : `<span class="small" style="color:var(--bad)">depósito todavía no tiene cruce del ${dm(S.dia)}: cargá los archivos en esta PC</span>`) : ''}` : ''}
       ${!cerrado && sis && r.dif - r.rec > 0 ? `<button class="btn sm" data-act="recTodas">Pedir recuento de las ${r.dif} con diferencia</button>` : ''}
     </div>
     ${tablaHoy(lines, sis, cerrado)}
@@ -1387,12 +1397,14 @@ function vContar() {
       ${verSis && (S.admin || x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
       ${(x?.rec || (verSis && conDif(i.c)) || S.ui.foco === i.c) && !cerrado ? `<div class="row" style="grid-column:1/-1;gap:6px"><button class="btn sm" data-act="hart" data-c="${esc(i.c)}">Historial</button><button class="btn sm" data-act="movDia" data-c="${esc(i.c)}">Movimientos</button></div>` : ''}
       ${done ? sumarHtml(i) : ''}
+      ${done && !cerrado ? (S.ui.borrarConf === i.c ? `<div class="row small" style="grid-column:1/-1;gap:6px;color:var(--bad)">¿Eliminar el conteo? Queda sin contar. <button class="btn xs danger" data-act="dborrarOk" data-c="${esc(i.c)}">Sí, eliminar</button><button class="btn xs" data-act="dborrarNo" data-c="${esc(i.c)}">No</button></div>` : `<div class="row" style="grid-column:1/-1;justify-content:flex-end"><button class="btn xs danger" data-act="dborrar" data-c="${esc(i.c)}">Eliminar conteo</button></div>`) : ''}
       ${detalleHtml(i)}
       ${x?.rec || x?.nota ? `<label class="small muted" style="grid-column:1/-1;display:grid;gap:3px">Nota para administración (este artículo)<input type="text" id="d-n-${esc(i.c)}" data-act="dnota" data-c="${esc(i.c)}" value="${esc(DD[i.c + 'nota'] ?? x?.nota ?? '')}" placeholder="Ej.: 2 cajas rotas, estaban en otro pasillo…" style="width:100%"></label>` : ''}`}
     </div>`;
   };
   const pct = sec.length ? Math.round(hechos / sec.length * 100) : 0;
   return `<div class="stack">
+    ${!cerrado && !S.admin && opt('verSisDep') && !tieneSistema() ? `<div class="banner info"><span class="grow">Administración habilitó ver la existencia del sistema, pero todavía no cargó los archivos del ${dm(S.dia)}. Aparece apenas los cargue.</span></div>` : ''}
     ${cerrado ? `<div class="banner ok"><span class="grow">El stock del ${dm(S.dia)} ya está cerrado. No se pueden cargar más conteos para ese día.</span></div>` : ''}
     ${enMarco() ? `<div class="banner info"><span class="grow">Si la cámara no abre, es porque Google la bloquea dentro de este marco: abrí la app a pantalla completa y escaneá desde ahí.</span><button class="btn pri sm" data-act="pantallaCompleta">Abrir a pantalla completa</button></div>` : ''}
     <div class="scan">
@@ -2099,9 +2111,18 @@ document.addEventListener('click', async e => {
     case 'bdImportar': bdImportar(); break;
     case 'verSisDep': {
       const data = { ...S.opciones, verSisDep: !opt('verSisDep'), ts: Date.now() };
-      const prev = S.opciones; S.opciones = data; render();
-      try { await API.call('guardarOpciones', data); toast(data.verSisDep ? 'Depósito ahora ve la existencia del sistema en Recontar y Con diferencia.' : 'Depósito cuenta a ciegas: no ve la existencia del sistema.'); }
-      catch (er) { S.opciones = prev; render(); toast('No se pudo cambiar: ' + er.message); }
+      const prev = S.opciones; S.opciones = data; S.opcPend = data; render();
+      try { await API.call('guardarOpciones', data); S.opcPend = null; toast(data.verSisDep ? 'Depósito ahora ve la existencia del sistema en Recontar y Con diferencia.' : 'Depósito cuenta a ciegas: no ve la existencia del sistema.'); }
+      catch (er) { S.opcPend = null; S.opciones = prev; render(); toast('No se pudo cambiar: ' + er.message); }
+      break;
+    }
+    case 'dborrar': S.ui.borrarConf = c; render(); break;
+    case 'dborrarNo': S.ui.borrarConf = null; render(); break;
+    case 'dborrarOk': {
+      S.ui.borrarConf = null;
+      for (const k of ['cj', 'un', 'acj', 'aun', 'nota', '_pal', '_bas', '_bul', '_un']) delete DD[c + k];
+      const ok = await guardarConteo(c, { cj: null, un: null, rec: false, nota: '', ok: false, sisOk: null });
+      if (ok) { S.ui.yaContado = null; S.ui.okMsg = `Conteo eliminado: <b>${esc(S.maestro[c]?.d || c)}</b> queda sin contar.`; render(); }
       break;
     }
     case 'movDia': S.ui.det = c; S.ui.detVista = 'mov'; if (!movimientosLocal()) cargarMovsRemoto(); renderSheet(); break;
