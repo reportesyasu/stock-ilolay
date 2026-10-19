@@ -182,6 +182,26 @@ details.arch[open] .arch-flecha::before{content:'▾'}
 details.arch>.arch-body{margin-top:10px}
 .progreso{height:8px;border-radius:4px;background:var(--line);overflow:hidden;max-width:420px}
 .progreso>div{height:100%;background:var(--accent,#1d5f86);transition:width .2s}
+/* teclado numérico chico */
+.tecla{position:fixed;left:0;right:0;bottom:0;z-index:70;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:var(--line);box-shadow:0 -2px 10px rgba(0,0,0,.15);max-width:520px;margin:0 auto}
+.tecla[hidden]{display:none}
+.tecla button{height:38px;border:0;border-radius:7px;background:var(--surface);color:var(--text,#111);font:600 19px/1 var(--f-ui,system-ui);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.tecla button:active{filter:brightness(.88)}
+.tecla button.f{font-size:14px;font-weight:600;background:color-mix(in srgb,var(--surface) 80%,var(--line))}
+.tecla button.ok{grid-row:span 2;height:auto;background:var(--accent,#1d5f86);color:#fff;font-size:15px}
+body.con-tecla{padding-bottom:190px}
+/* aviso grande de guardado */
+.ok-grande{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:rgba(0,0,0,.28);animation:okg-in .15s ease-out}
+.ok-grande.sale{opacity:0;transition:opacity .18s}
+.okg-caja{width:min(92vw,520px);height:50vh;min-height:260px;border-radius:22px;background:var(--ok,#1e7a3c);color:#fff;display:grid;align-content:center;justify-items:center;gap:10px;padding:20px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.ok-grande.resta .okg-caja{background:#a2551a}
+.okg-icono{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-size:60px;font-weight:700;line-height:1}
+.okg-tit{font-size:34px;font-weight:700;letter-spacing:.5px}
+.okg-art{font-size:19px;font-weight:600;max-width:100%;overflow-wrap:anywhere}
+.okg-det{font-size:20px;line-height:1.35}
+.okg-pie{font-size:13px;opacity:.8;margin-top:6px}
+@keyframes okg-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.ok-grande{animation:none}}
 details.opsec{padding:0}
 details.opsec>summary{cursor:pointer;list-style:none;padding:14px 16px;display:grid;gap:2px;position:relative;padding-right:40px}
 details.opsec>summary::-webkit-details-marker{display:none}
@@ -234,7 +254,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb39';
+window.__VERSION = 'sb41';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -257,7 +277,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb39</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb41</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1695,7 +1715,7 @@ function vContar() {
     return `<div class="card ${done ? 'done' : ''} ${x?.rec ? 'rec' : ''} ${S.ui.foco === i.c ? 'focus' : ''}" id="card-${esc(i.c)}">
       <div class="t"><b>${esc(i.d)}</b><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
       <div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>
-      ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" inputmode="numeric" id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" inputmode="numeric" id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
+      ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" ${IM()} id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" ${IM()} id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
       ${verSis && (S.admin || x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
       ${(x?.rec || (verSis && conDif(i.c)) || S.ui.foco === i.c) && !cerrado ? `<div class="row" style="grid-column:1/-1;gap:6px"><button class="btn sm" data-act="hart" data-c="${esc(i.c)}">Historial</button><button class="btn sm" data-act="movDia" data-c="${esc(i.c)}">Movimientos</button></div>` : ''}
       ${done ? sumarHtml(i) : ''}
@@ -1711,7 +1731,7 @@ function vContar() {
     ${enMarco() ? `<div class="banner info"><span class="grow">Si la cámara no abre, es porque Google la bloquea dentro de este marco: abrí la app a pantalla completa y escaneá desde ahí.</span><button class="btn pri sm" data-act="pantallaCompleta">Abrir a pantalla completa</button></div>` : ''}
     <div class="scan">
       <div class="bar"><input type="search" id="scan" data-act="scan" placeholder="Escaneá el código de barras o escribí código / nombre" autocomplete="off" enterkeyhint="search" value="${esc(S.ui.q)}"><button class="btn pri" data-act="escanear" title="Escanear con la cámara en vivo">Escanear</button><label class="btn cam" title="Si la cámara en vivo no funciona: sacar una foto del código">Foto<input type="file" id="pickPhoto" accept="image/*" capture="environment"></label></div>
-      <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${S.ui.ultimaFoto ? '<span class="muted">Último código leído: <b class="mono">' + esc(S.ui.ultimaFoto) + '</b></span>' : ''}</div>
+      <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${esTactil() ? `<button class="btn xs" data-act="teclado" title="Elegir qué teclado aparece al cargar cajas y unidades">Teclado: <b>${tecladoApp() ? 'chico (de la app)' : 'del celular'}</b></button>` : ''}${S.ui.ultimaFoto ? '<span class="muted">Último código leído: <b class="mono">' + esc(S.ui.ultimaFoto) + '</b></span>' : ''}</div>
       <div class="row" style="justify-content:space-between">${chipsSector(items)}
         <div class="chips">${[['pend', 'Pendientes', sec.length - hechos + sec.filter(i => contado(i.c) && k(i.c)?.rec).length], ['cont', 'Contados', hechos], ['rec', 'Recontar', rec], ...(verSis ? [['dif', 'Con diferencia', nDif]] : []), ['todos', 'Todos', sec.length]].map(([v, n, c]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}<span class="c">${c}</span></button>`).join('')}</div></div>
       <div class="row small"><span><b class="mono">${hechos}</b> de <b class="mono">${sec.length}</b> contados</span><div class="prog" style="flex:1;min-width:120px"><i style="width:${pct}%"></i></div></div>
@@ -1782,9 +1802,64 @@ function armado(c) {
 /* ---------- Sumar o restar a un artículo ya contado ---------- */
 /* Depósito carga siempre en positivo; el botón Sumar / Restar decide el signo */
 const modoSuma = c => (S.ui.modoSuma?.[c] === 'restar' ? 'restar' : 'sumar');
+/* ---------- Teclado numérico chico de la app (en vez del teclado del celular) ---------- */
+const esTactil = () => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } };
+const tecladoApp = () => { let v = null; try { v = localStorage.getItem('teclado'); } catch { } return v === 'app' || (v !== 'cel' && esTactil()); };
+const IM = () => tecladoApp() ? 'inputmode="none"' : 'inputmode="numeric"';
+const esNum = el => !!(el && el.tagName === 'INPUT' && ['dcnt', 'dsum', 'ddet'].includes(el.dataset?.act));
+let teclaOcultarT = null;
+function teclaEl() {
+  let k = document.getElementById('tecla'); if (k) return k;
+  k = document.createElement('div'); k.id = 'tecla'; k.className = 'tecla'; k.hidden = true; k.setAttribute('aria-label', 'Teclado numérico');
+  const b = (v, txt, cls = '') => `<button type="button" data-tk="${v}" class="${cls}">${txt}</button>`;
+  k.innerHTML = b('1', '1') + b('2', '2') + b('3', '3') + b('bs', '⌫', 'f') + b('4', '4') + b('5', '5') + b('6', '6') + b('sig', 'Siguiente', 'f') + b('7', '7') + b('8', '8') + b('9', '9') + b('ok', 'Guardar', 'ok') + b('ocu', 'Ocultar', 'f') + b('0', '0') + b('cl', 'Borrar', 'f');
+  // que tocar una tecla no le saque el foco al campo
+  for (const ev of ['pointerdown', 'mousedown']) k.addEventListener(ev, e => e.preventDefault());
+  k.addEventListener('click', e => { const t = e.target.closest('[data-tk]'); if (t) teclaPulsar(t.dataset.tk); });
+  document.body.appendChild(k); return k;
+}
+function teclaMostrar(el) {
+  const k = teclaEl(); clearTimeout(teclaOcultarT);
+  if (k.hidden) { k.hidden = false; document.body.classList.add('con-tecla'); }
+  const r = el.getBoundingClientRect(), tope = window.innerHeight - k.offsetHeight - 12;
+  if (r.bottom > tope || r.top < 60) window.scrollBy({ top: r.bottom - tope + (r.top < 60 ? -80 : 0), behavior: 'auto' });
+}
+function teclaOcultar() { const k = document.getElementById('tecla'); if (k && !k.hidden) { k.hidden = true; document.body.classList.remove('con-tecla'); } }
+function teclaPulsar(v) {
+  const el = document.activeElement; if (!esNum(el)) { teclaOcultar(); return; }
+  if (navigator.vibrate) try { navigator.vibrate(8); } catch { }
+  const avisar = () => el.dispatchEvent(new Event('input', { bubbles: true }));
+  if (/^\d$/.test(v)) { el.value = (el.value === '0' ? '' : el.value) + v; el.dataset.dirty = '1'; avisar(); return; }
+  if (v === 'bs') { el.value = String(el.value).slice(0, -1); el.dataset.dirty = '1'; avisar(); return; }
+  if (v === 'cl') { el.value = ''; el.dataset.dirty = '1'; avisar(); return; }
+  if (v === 'ocu') { el.blur(); teclaOcultar(); return; }
+  const c = el.dataset.c;
+  if (v === 'sig') {
+    if (el.dataset.act === 'ddet') {
+      const campos = [...document.querySelectorAll(`#card-${CSS.escape(c)} input[data-act="ddet"]`)], i = campos.indexOf(el);
+      (campos[i + 1] || document.getElementById('d-cj-' + c))?.focus(); return;
+    }
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); return;
+  }
+  if (v === 'ok') { if (el.dataset.act === 'dsum') sumarDeposito(c); else guardarDeposito(c); }
+}
+document.addEventListener('focusin', e => { if (esNum(e.target) && tecladoApp()) teclaMostrar(e.target); else if (e.target.matches?.('input, textarea, select')) teclaOcultar(); });
+document.addEventListener('focusout', () => { clearTimeout(teclaOcultarT); teclaOcultarT = setTimeout(() => { if (!esNum(document.activeElement)) teclaOcultar(); }, 150); });
+/* Aviso grande de "Guardado" en el centro de la pantalla (depósito) */
+let okGrandeT = null;
+function avisoGuardado(titulo, articulo, detalle, resta) {
+  document.getElementById('okGrande')?.remove(); clearTimeout(okGrandeT);
+  const d = document.createElement('div'); d.id = 'okGrande'; d.className = 'ok-grande' + (resta ? ' resta' : ''); d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'assertive');
+  d.innerHTML = `<div class="okg-caja"><div class="okg-icono" aria-hidden="true">✓</div><div class="okg-tit">${esc(titulo)}</div><div class="okg-art">${esc(articulo)}</div><div class="okg-det">${detalle}</div><div class="okg-pie">Tocá para cerrar</div></div>`;
+  const cerrar = () => { clearTimeout(okGrandeT); d.classList.add('sale'); setTimeout(() => d.remove(), 180); };
+  d.addEventListener('click', cerrar);
+  document.body.appendChild(d);
+  if (navigator.vibrate) try { navigator.vibrate([60, 40, 60]); } catch { }
+  okGrandeT = setTimeout(cerrar, 1800);
+}
 function sumarHtml(i) {
   const c = i.c, resta = modoSuma(c) === 'restar';
-  const campo = (k, n) => `<label>${n}<input type="number" inputmode="numeric" min="0" id="d-${k}-${esc(c)}" data-act="dsum" data-c="${esc(c)}" data-k="${k}" value="${esc(DD[c + k] ?? '')}" placeholder="0"></label>`;
+  const campo = (k, n) => `<label>${n}<input type="number" ${IM()} min="0" id="d-${k}-${esc(c)}" data-act="dsum" data-c="${esc(c)}" data-k="${k}" value="${esc(DD[c + k] ?? '')}" placeholder="0"></label>`;
   return `<div class="in sumar" style="grid-column:1/-1"><button class="btn ${resta ? 'danger' : 'ok'} modo" data-act="dmodo" data-c="${esc(c)}" title="Tocá para cambiar entre sumar y restar" style="align-self:end;min-width:96px">${resta ? '− Restar' : '+ Sumar'}</button>${campo('acj', 'Cajas')}${campo('aun', 'Unidades')}<button class="btn" data-act="dsumar" data-c="${esc(c)}" style="align-self:end">${resta ? 'Guardar resta' : 'Guardar suma'}</button></div>
     <div class="small muted" id="ds-${esc(c)}" style="grid-column:1/-1">${textoSuma(c) || (resta ? 'Cargá en positivo lo que hay que descontar de lo ya contado.' : 'Cargá en positivo lo que encontraste de más. Tocá el botón para cambiar a Restar.')}</div>`;
 }
@@ -1828,7 +1903,7 @@ async function sumarDeposito(c) {
     delete DD[c + 'acj']; delete DD[c + 'aun']; delete DD[c + 'cj']; delete DD[c + 'un'];
     S.ui.yaContado = null; S.ui.foco = null; if (S.ui.modoSuma) delete S.ui.modoSuma[c];
     S.ui.okMsg = `✓ Actualizado <b>${esc(S.maestro[c]?.d || c)}</b>: ${s.delta >= 0 ? 'se sumaron' : 'se restaron'} ${(() => { const d = Core.split(Math.abs(s.delta), s.u); return (d.cj ? fmt(d.cj) + ' cj ' : '') + (d.un || !d.cj ? fmt(d.un) + ' u' : '') + (d.cj ? ' (' + fmt(Math.abs(s.delta)) + ' u)' : ''); })()} → total <b>${fmt(res.cj)} cj ${fmt(res.un)} u</b>.${res.antes !== undefined && res.antes !== s.antes ? ` <span class="small">(había ${fmt(res.antes)} u guardadas, no ${fmt(s.antes)}: otro celular había contado este artículo)</span>` : ''}`;
-    toast((s.delta >= 0 ? 'Sumado: ' : 'Restado: ') + (S.maestro[c]?.d || c));
+    { const d = Core.split(Math.abs(s.delta), s.u); avisoGuardado(s.delta >= 0 ? 'Sumado' : 'Restado', S.maestro[c]?.d || c, `${s.delta >= 0 ? '+' : '−'} ${d.cj ? fmt(d.cj) + ' cj ' : ''}${d.un || !d.cj ? fmt(d.un) + ' u' : ''}<br>Total: <b>${fmt(res.cj)}</b> cajas · <b>${fmt(res.un)}</b> unidades`, s.delta < 0); }
     document.querySelectorAll('[data-dirty]').forEach(el => delete el.dataset.dirty);
     const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; }
     render(); $('#scan')?.focus();
@@ -1838,7 +1913,7 @@ async function sumarDeposito(c) {
 function detalleHtml(i) {
   const a = armado(i.c);
   if (!a.uBase) return '';
-  const campo = ([k, n, por]) => `<label>${n}<span class="small muted">${por}</span><input type="number" inputmode="numeric" min="0" id="dd-${k}-${esc(i.c)}" data-act="ddet" data-c="${esc(i.c)}" data-k="${k}" value="${esc(DD[i.c + '_' + k] ?? '')}"></label>`;
+  const campo = ([k, n, por]) => `<label>${n}<span class="small muted">${por}</span><input type="number" ${IM()} min="0" id="dd-${k}-${esc(i.c)}" data-act="ddet" data-c="${esc(i.c)}" data-k="${k}" value="${esc(DD[i.c + '_' + k] ?? '')}"></label>`;
   return `<details class="det" id="det-${esc(i.c)}" style="grid-column:1/-1" ${S.ui.detAb?.[i.c] ? 'open' : ''}><summary class="small">Contar detallado (${a.uPallet ? 'pallets, ' : ''}bases, bultos y unidades)</summary>
     <div class="in det-in">${a.niveles.map(campo).join('')}</div>
     <div class="small" id="dt-${esc(i.c)}">${textoDetalle(i.c)}</div></details>`;
@@ -2846,6 +2921,7 @@ document.addEventListener('click', async e => {
     case 'dmodo': { S.ui.modoSuma ||= {}; S.ui.modoSuma[c] = modoSuma(c) === 'restar' ? 'sumar' : 'restar'; S.ui.foco = c; render(); document.getElementById('d-acj-' + c)?.focus(); break; }
 
     case 'asigOk': { const code = S.ui.asignar; try { S.codigos[code] = c; await API.call('asignarCodigo', code, c); toast('Código asociado a ' + c + '.'); } catch (er) { toast('No se pudo asociar el código: ' + er.message); } S.ui.asignar = null; S.ui.asigQ = ''; onScan(code); break; }
+    case 'teclado': { const nuevo = tecladoApp() ? 'cel' : 'app'; try { localStorage.setItem('teclado', nuevo); } catch { } teclaOcultar(); toast(nuevo === 'app' ? 'Teclado chico de la app activado.' : 'Se usa el teclado del celular.'); render(); break; }
     case 'escanear': if (S.ui.tab !== 'opciones') scanDestino = null; abrirEscaner(); break;
     case 'borrarConteos': S.ui.borrar = { ...(S.ui.borrar || {}), conf: true }; render(); break;
     case 'borrarCancel': S.ui.borrar = { ...(S.ui.borrar || {}), conf: false }; render(); break;
@@ -2925,7 +3001,7 @@ async function guardarDeposito(c) {
   if (ok) {
     delete DD[c + 'cj']; delete DD[c + 'un']; delete DD[c + 'nota']; for (const k of ['pal', 'bas', 'bul', 'un']) delete DD[c + '_' + k];
     if (S.ui.detAb) delete S.ui.detAb[c];
-    toast('Guardado: ' + (S.maestro[c]?.d || c));
+    avisoGuardado('Guardado', S.maestro[c]?.d || c, `<b>${fmt(patch.cj)}</b> cajas · <b>${fmt(patch.un)}</b> unidades`);
     S.ui.yaContado = null; delete DD[c + 'acj']; delete DD[c + 'aun'];
     S.ui.okMsg = `✓ Guardado <b>${esc(S.maestro[c]?.d || c)}</b>: ${fmt(patch.cj)} cj ${fmt(patch.un)} u. Los ya contados se ven en "Todos".`;
     S.ui.foco = null;
