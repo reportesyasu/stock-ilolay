@@ -262,7 +262,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb49';
+window.__VERSION = 'sb50';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -285,7 +285,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb49</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb50</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2336,7 +2336,7 @@ function vPdfCfg() {
       ${num('autoPct', 'Autoajuste de columnas (%)', 10, 100, 'Cada columna toma el ancho que necesita ese % de las filas; las más largas se cortan con “…”.')}
       <div class="stack" style="gap:4px"><span class="lbl">Hoja</span><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="1" ${c.apaisado !== false ? 'checked' : ''}> Apaisada</label><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="0" ${c.apaisado === false ? 'checked' : ''}> Vertical</label></div>
     </div>
-    <div class="row" style="gap:16px;flex-wrap:wrap">${chk('ajustarAncho', 'Estirar la tabla al ancho de la hoja')}${chk('totales', 'Mostrar los totales arriba')}${chk('sinContar', 'Incluir la lista de "sin contar"')}${chk('zebra', 'Filas alternadas')}</div>
+    <div class="row" style="gap:16px;flex-wrap:wrap">${chk('ajustarAncho', 'Estirar la tabla al ancho de la hoja')}${chk('totales', 'Mostrar los totales arriba')}${chk('detalle', 'Incluir el detalle de todo lo contado')}${chk('sinContar', 'Incluir la lista de "sin contar"')}${chk('zebra', 'Filas alternadas')}</div>
     <div class="row" style="gap:16px;flex-wrap:wrap">${color('cHead', 'Fondo del encabezado')}${color('cTit', 'Títulos')}${color('cNeg', 'Faltante')}${color('cPos', 'Sobrante')}${color('cZebra', 'Filas alternadas')}</div>
     <div class="tablebox" style="max-height:none"><table><thead><tr><th style="width:36px">Ver</th><th>Rótulo en el PDF</th><th>Dato</th><th>Orden</th></tr></thead><tbody>${c.cols.map(col).join('')}</tbody></table></div>
     <div class="row"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfPrueba">Descargar PDF de prueba</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
@@ -2650,7 +2650,7 @@ function pdfDiferencias() {
   if (!n) { toast('No hay diferencias pendientes.'); return; }
   try {
     const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
-    descargar('Diferencias stock Ilolay ' + c.fecha + ' ' + hh + '.pdf', pdfCierre(c, null, { titulo: 'STOCK ILOLAY · Diferencias pendientes del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), sub: 'Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR'), sinContar: false }));
+    descargar('Diferencias stock Ilolay ' + c.fecha + ' ' + hh + '.pdf', pdfCierre(c, null, { titulo: 'STOCK ILOLAY · Diferencias pendientes del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), sub: 'Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR'), sinContar: false, detalle: false }));
     toast('PDF con ' + n + ' diferencia' + (n === 1 ? '' : 's') + ' descargado.');
   } catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
 }
@@ -2843,7 +2843,7 @@ const PDF_COLS = [
   ['codigo', 'Código', 'l'], ['descripcion', 'Descripción', 'l'], ['sector', 'Sector', 'l'], ['sistema', 'Sistema', 'r'], ['contado', 'Contado', 'r'],
   ['dif', 'Dif. u', 'r'], ['valorizado', 'Valorizado', 'r'], ['motivo', 'Motivo', 'l'], ['obs', 'Obs. / nota de depósito', 'l']
 ];
-const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, sinContar: true, totales: true,
+const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, sinContar: true, totales: true, detalle: true,
   cHead: '#e6e6e6', cTit: '#000000', cNeg: '#b3261e', cPos: '#1e7a3c', cZebra: '#f5f5f5', zebra: false,
   cols: PDF_COLS.map(([k, n]) => ({ k, n, v: k !== 'sector' })) };
 function pdfCfg() {
@@ -2860,13 +2860,16 @@ function pdfCierre(c, cfgIn, opts = {}) {
   const rowH = Math.round(fs * 1.6), M = 28, ancho = P.W - 2 * M;
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(q, u || 1); return fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
   const valor = (k, l) => ({ codigo: l.c, descripcion: l.d, sector: l.s === 'FRIO' ? 'Frío' : l.s === 'SECO' ? 'Seco' : (l.s || ''), sistema: cjun(l.sis, l.u), contado: cjun(l.cont, l.u),
-    dif: fmtS(l.dif), valorizado: money(l.imp || 0), motivo: l.m || 'sin motivo', obs: [l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · ') })[k];
+    dif: l.dif ? fmtS(l.dif) : '0', valorizado: l.dif ? money(l.imp || 0) : '', motivo: l.dif ? (l.m || 'sin motivo') : '', obs: [l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · ') })[k];
   const dif = lin.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
+  // Detalle de todo lo contado (con y sin diferencia), en el orden de la lista, separado por sector
+  const conDetalle = cfg.detalle !== false && opts.detalle !== false;
+  const contados = conDetalle ? lin.map((l, i) => [l, i]).filter(([l]) => l.cont !== null && l.cont !== undefined).sort((a, b) => (a[0].s || '').localeCompare(b[0].s || '') || a[1] - b[1]).map(x => x[0]) : [];
   // Columnas visibles y autoajuste: cada columna mide lo que necesita el X % de las filas (X = cfg.autoPct)
   const vis = cfg.cols.filter(x => x.v).map(x => { const d = PDF_COLS.find(([k]) => k === x.k); return { k: x.k, n: x.n || d[1], a: d[2] }; });
   const pct = Math.max(10, Math.min(100, Number(cfg.autoPct) || 80)) / 100, pad = 8;
   for (const col of vis) {
-    const ws = dif.map(l => anchoTxt(valor(col.k, l), fs, col.k === 'dif')).sort((a, b) => a - b);
+    const ws = (contados.length ? contados : dif).map(l => anchoTxt(valor(col.k, l), fs, col.k === 'dif')).sort((a, b) => a - b);
     const p = ws.length ? ws[Math.min(ws.length - 1, Math.max(0, Math.ceil(ws.length * pct) - 1))] : 0;
     col.w = Math.max(anchoTxt(col.n, fs - 0.5, true), p) + pad;
   }
@@ -2901,20 +2904,25 @@ function pdfCierre(c, cfgIn, opts = {}) {
     const kw = ancho / kp.length;
     kp.forEach(([n, v], i) => { const x = M + i * kw; P.rect(x + 2, y, kw - 4, 34, '#f2f2f2'); P.text(x + 8, y + 12, n.toUpperCase(), 7, true, 'l', '#666666'); P.text(x + 8, y + 27, v, 12, true, 'l', i === 4 ? cfg.cNeg : i === 3 ? cfg.cPos : '#000000'); }); y += 50;
   }
-  P.text(M + 4, y, 'Artículos con diferencia (' + dif.length + ')', fs + 3, true, 'l', cfg.cTit); y += 8; cabecera();
-  let sec = null, i = 0;
-  for (const l of dif) {
-    if (y > P.H - 34) { encabezado('Artículos con diferencia (continuación)'); cabecera(); sec = null; }
-    if (l.s !== sec && !vis.some(x => x.k === 'sector')) { sec = l.s; P.text(M + 4, y, sec === 'FRIO' ? 'FRÍO' : (sec || 'SIN SECTOR'), fs - 0.5, true, 'l', '#555555'); y += rowH; }
-    if (cfg.zebra && i++ % 2) P.rect(M, y - fs - 1, anchoTabla, rowH, cfg.cZebra);
-    for (const col of vis) {
-      const v = valor(col.k, l);
-      const color = col.k === 'dif' || col.k === 'valorizado' ? (l.dif < 0 ? cfg.cNeg : cfg.cPos) : col.k === 'motivo' && !l.m ? '#888888' : col.k === 'obs' ? '#333333' : '#000000';
-      celda(col, v, y, col.k === 'dif', color);
+  const seccion = (titulo, lista, vacio) => {
+    if (y > P.H - 90) encabezado();
+    P.text(M + 4, y, titulo + ' (' + lista.length + ')', fs + 3, true, 'l', cfg.cTit); y += 8; cabecera();
+    let sec = null, i = 0;
+    for (const l of lista) {
+      if (y > P.H - 34) { encabezado(titulo + ' (continuación)'); cabecera(); sec = null; }
+      if (l.s !== sec && !vis.some(x => x.k === 'sector')) { sec = l.s; P.text(M + 4, y, sec === 'FRIO' ? 'FRÍO' : (sec || 'SIN SECTOR'), fs - 0.5, true, 'l', '#555555'); y += rowH; }
+      if (cfg.zebra && i++ % 2) P.rect(M, y - fs - 1, anchoTabla, rowH, cfg.cZebra);
+      for (const col of vis) {
+        const v = valor(col.k, l);
+        const color = (col.k === 'dif' || col.k === 'valorizado') && l.dif ? (l.dif < 0 ? cfg.cNeg : cfg.cPos) : col.k === 'dif' ? '#888888' : col.k === 'motivo' && !l.m ? '#888888' : col.k === 'obs' ? '#333333' : '#000000';
+        celda(col, v, y, col.k === 'dif' && !!l.dif, color);
+      }
+      P.line(M, y + Math.round(fs * 0.5), M + anchoTabla, y + Math.round(fs * 0.5), '#dddddd'); y += rowH;
     }
-    P.line(M, y + Math.round(fs * 0.5), M + anchoTabla, y + Math.round(fs * 0.5), '#dddddd'); y += rowH;
-  }
-  if (!dif.length) { P.text(M + 4, y, 'No hubo diferencias.', fs + 1); y += rowH; }
+    if (!lista.length) { P.text(M + 4, y, vacio, fs + 1); y += rowH; }
+  };
+  seccion('Artículos con diferencia', dif, 'No hubo diferencias.');
+  if (conDetalle) { y += 12; seccion('Detalle de todo lo contado', contados, 'No se contó ningún artículo.'); }
   const sin = lin.filter(l => l.cont === null || l.cont === undefined);
   if (sin.length && cfg.sinContar !== false && opts.sinContar !== false) {
     y += 10; if (y > P.H - 60) encabezado();
