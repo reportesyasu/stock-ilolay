@@ -62,6 +62,13 @@ h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0}
 .btn.ok{color:var(--ok);border-color:var(--ok)}
 .btn.xs{min-height:26px;padding:2px 8px;font-size:12px}
 .desc-btns{gap:4px;margin-top:4px}
+.art-menu{position:fixed;z-index:80;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:6px;display:grid;gap:2px}
+.art-menu .am-tit{padding:6px 10px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.art-menu button{display:grid;gap:1px;text-align:left;background:none;border:0;border-radius:8px;padding:9px 10px;cursor:pointer;color:inherit;font:inherit}
+.art-menu button:hover,.art-menu button:focus-visible{background:var(--sunk,#f1f3f5)}
+.card .t button.tit{display:block;font-weight:600;overflow-wrap:anywhere;text-align:left;padding:0;font-size:inherit}
+.card .ya-contado{border-top:1px dashed var(--line);padding-top:6px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.card.sumando .sumar{background:color-mix(in srgb,var(--ok) 8%,transparent);border-radius:8px;padding:6px}
 td.val{white-space:nowrap;font-family:var(--f-mono)}
 td.acc .acc-btns{display:grid;grid-template-columns:repeat(2,auto);gap:4px;justify-content:start}
 td.acc .btn{min-height:28px;padding:2px 8px;font-size:12px}
@@ -112,7 +119,8 @@ tr:last-child td{border-bottom:0}
 th.n,td.n{text-align:right;white-space:nowrap}
 tr.sec td{background:var(--sunk);font-family:var(--f-display);font-weight:700;font-size:15px;letter-spacing:.04em}
 tr.difneg td.dif{color:var(--bad);font-weight:600} tr.difpos td.dif{color:var(--ok);font-weight:600}
-tr.rec td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+tr.rec td:first-child{box-shadow:inset 4px 0 0 var(--warn)}
+tr.rec td{background:#fff3c4}
 td.desc{min-width:220px}
 td .code{font-family:var(--f-mono);font-size:13px}
 .cj{width:64px;text-align:right} .un{width:56px;text-align:right}
@@ -140,7 +148,10 @@ html,body{overflow-x:clip}
 .cards{display:grid;gap:8px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center}
 .card.done{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
-.card.rec{border-color:var(--warn);box-shadow:inset 3px 0 0 var(--warn)}
+.card.rec{border-color:var(--warn);border-width:2px;box-shadow:inset 5px 0 0 var(--warn);background:#ffe58a}
+.card.rec .meta,.card.rec .small.muted,.card.rec .val .muted{color:#5c4600}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .card.rec{background:#5a4510}:root:not([data-theme="light"]) .card.rec .meta,:root:not([data-theme="light"]) .card.rec .small.muted{color:#f3dc9a}}
+:root[data-theme="dark"] .card.rec{background:#5a4510}
 .card.focus{outline:2px solid var(--accent);outline-offset:1px}
 .card .t{min-width:0}
 .card .t b{display:block;font-weight:600;overflow-wrap:anywhere}
@@ -262,7 +273,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb51';
+window.__VERSION = 'sb53';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -285,7 +296,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb51</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb53</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1561,7 +1572,7 @@ function tablaHoy(lines, sis, cerrado) {
     const ayer = l.prevDif ? `<span class="${l.prevDif < 0 ? 'pill bad' : 'pill ok'}" title="${esc(l.prevMotivo)}">${fmtS(l.prevDif)}</span>` : '';
     rows += `<tr class="${cls}">
       <td><span class="code">${esc(l.c)}</span></td>
-      <td class="desc"><button class="link" data-act="det" data-c="${esc(l.c)}">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}<div class="row desc-btns"><button class="btn xs" data-act="hart" data-c="${esc(l.c)}" title="Últimos cierres y ajustes de este artículo">Historial</button><button class="btn xs" data-act="movDia" data-c="${esc(l.c)}" title="Lo que salió hoy de este artículo, por chofer">Movimientos</button></div></td>
+      <td class="desc"><button class="link" data-act="artMenu" data-c="${esc(l.c)}" title="Tocá para ver el detalle, el historial o los movimientos">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}</td>
       <td class="n hide-sm">${sis ? `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>` : '<span class="muted small" title="Faltan los archivos del día">sin archivos</span>'}</td>
       <td class="n"><span class="cnt">${inCj}<span>cj</span>${inUn}<span>u</span></span></td>
       <td class="n dif">${sis && l.contado ? (l.dif ? fmtS(l.dif) : '<span class="muted">0</span>') : ''}</td>
@@ -1727,15 +1738,17 @@ function vContar() {
     if (q && !(i.c.includes(q) || (i.d || '').toUpperCase().includes(q) || (i.e || []).includes(q))) return false;
     return true;
   });
+  // Los marcados para recontar van al final: arriba queda lo que todavía no se contó
+  vis.sort((a, b) => (k(a.c)?.rec ? 1 : 0) - (k(b.c)?.rec ? 1 : 0));
   const card = i => {
     const x = k(i.c), done = contado(i.c);
-    return `<div class="card ${done ? 'done' : ''} ${x?.rec ? 'rec' : ''} ${S.ui.foco === i.c ? 'focus' : ''}" id="card-${esc(i.c)}">
-      <div class="t"><b>${esc(i.d)}</b><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
-      <div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>
+    const sumando = done && !cerrado && S.ui.yaContado === i.c;
+    return `<div class="card ${done ? 'done' : ''} ${x?.rec ? 'rec' : ''} ${S.ui.foco === i.c ? 'focus' : ''} ${sumando ? 'sumando' : ''}" id="card-${esc(i.c)}">
+      <div class="t"><button class="link tit" data-act="artMenu" data-c="${esc(i.c)}" title="Tocá para ver el historial o los movimientos">${esc(i.d)}</button><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
+      ${sumando ? `<div class="val small muted" style="text-align:right">ya contado</div>${sumarHtml(i)}<div class="ya-contado" style="grid-column:1/-1"><span class="lbl">Ya contado</span> <b class="mono" style="font-size:17px">${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u</b> <span class="small muted">${esc(nom(x.by))} ${hora(x.ts)} · para corregir el total, cambiá Cajas y Unidades</span></div>` : `<div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>`}
       ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" ${IM()} id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" ${IM()} id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
       ${verSis && (S.admin || x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
-      ${(x?.rec || (verSis && conDif(i.c)) || S.ui.foco === i.c) && !cerrado ? `<div class="row" style="grid-column:1/-1;gap:6px"><button class="btn sm" data-act="hart" data-c="${esc(i.c)}">Historial</button><button class="btn sm" data-act="movDia" data-c="${esc(i.c)}">Movimientos</button></div>` : ''}
-      ${done ? sumarHtml(i) : ''}
+      ${done && !sumando ? sumarHtml(i) : ''}
       ${done && !cerrado ? (S.ui.borrarConf === i.c ? `<div class="row small" style="grid-column:1/-1;gap:6px;color:var(--bad)">¿Eliminar el conteo? Queda sin contar. <button class="btn xs danger" data-act="dborrarOk" data-c="${esc(i.c)}">Sí, eliminar</button><button class="btn xs" data-act="dborrarNo" data-c="${esc(i.c)}">No</button></div>` : `<div class="row" style="grid-column:1/-1;justify-content:flex-end"><button class="btn xs danger" data-act="dborrar" data-c="${esc(i.c)}">Eliminar conteo</button></div>`) : ''}
       ${detalleHtml(i)}
       ${x?.rec || x?.nota ? `<label class="small muted" style="grid-column:1/-1;display:grid;gap:3px">Nota para administración (este artículo)<input type="text" id="d-n-${esc(i.c)}" data-act="dnota" data-c="${esc(i.c)}" value="${esc(DD[i.c + 'nota'] ?? x?.nota ?? '')}" placeholder="Ej.: 2 cajas rotas, estaban en otro pasillo…" style="width:100%"></label>` : ''}`}
@@ -1883,6 +1896,25 @@ function avisoGuardado(titulo, articulo, detalle, resta) {
   if (navigator.vibrate) try { navigator.vibrate([60, 40, 60]); } catch { }
   okGrandeT = setTimeout(cerrar, 1800);
 }
+/* Menú del artículo (al tocar la descripción): detalle, historial y movimientos */
+function cerrarMenuArt() { document.getElementById('artMenu')?.remove(); }
+function abrirMenuArt(btn, c) {
+  cerrarMenuArt();
+  const m = document.createElement('div'); m.id = 'artMenu'; m.className = 'art-menu'; m.setAttribute('role', 'menu');
+  const op = (act, txt, sub) => `<button role="menuitem" data-act="${act}" data-c="${esc(c)}"><b>${txt}</b><span class="small muted">${sub}</span></button>`;
+  m.innerHTML = `<div class="small muted am-tit">${esc(c)} · ${esc(S.maestro[c]?.d || '')}</div>`
+    + (S.admin && S.ui.tab === 'hoy' ? op('det', 'Detalle del cálculo', 'Cómo se armó el sistema y la diferencia') : '')
+    + op('hart', 'Historial', 'Últimos cierres y ajustes del artículo')
+    + op('movDia', 'Movimientos del día', 'Lo que salió hoy, por chofer y cliente');
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect(), w = Math.min(300, window.innerWidth - 16);
+  m.style.width = w + 'px';
+  m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+  const abajo = r.bottom + 6, alto = m.offsetHeight;
+  m.style.top = (abajo + alto > window.innerHeight - 8 ? Math.max(8, r.top - alto - 6) : abajo) + 'px';
+}
+document.addEventListener('click', e => { if (!e.target.closest('#artMenu, [data-act="artMenu"]')) cerrarMenuArt(); }, true);
+window.addEventListener('scroll', cerrarMenuArt, { passive: true });
 function sumarHtml(i) {
   const c = i.c, resta = modoSuma(c) === 'restar';
   const campo = (k, n) => `<label>${n}<input type="number" ${IM()} min="0" id="d-${k}-${esc(c)}" data-act="dsum" data-c="${esc(c)}" data-k="${k}" value="${esc(DD[c + k] ?? '')}" placeholder="0"></label>`;
@@ -1974,7 +2006,7 @@ document.addEventListener('toggle', e => { const t = e.target; if (t && t.id && 
 function scanMsgHtml() {
   let h = '';
   const yc = S.ui.yaContado, kx = yc && S.conteos[yc];
-  if (kx) h += `<div class="banner warn"><span class="grow"><b>Este artículo ya fue contado:</b> ${esc(S.maestro[yc]?.d || yc)} tiene <b>${fmt(kx.cj ?? 0)} cj ${fmt(kx.un ?? 0)} u</b> (${esc(nom(kx.by))} ${hora(kx.ts)}). Si encontraste más, cargalo abajo con <b>+ Sumar</b>; si hay que descontar, tocá el botón para pasarlo a <b>− Restar</b>. Si querés corregir el total, cambiá Cajas y Unidades.</span></div>`;
+  if (kx) h += `<div class="banner warn"><span class="grow"><b>Ya fue contado</b> (${fmt(kx.cj ?? 0)} cj ${fmt(kx.un ?? 0)} u). Cargá abajo lo que querés <b>sumar</b>; para descontar, tocá <b>+ Sumar</b> y pasa a <b>− Restar</b>.</span></div>`;
   if (S.ui.okMsg) h += `<div class="banner ok"><span class="grow">${S.ui.okMsg}</span></div>`;
   if (S.ui.asignar) h += `<div class="banner warn"><span class="grow">El código <b class="mono">${esc(S.ui.asignar)}</b> no está asociado a ningún artículo. Buscá el artículo y tocá su nombre para que la próxima vez lo reconozca.</span></div>
     <div class="panel stack" style="margin-top:8px"><b>Asignar ${esc(S.ui.asignar)} a:</b><input type="search" id="asigQ" data-act="asigQ" placeholder="Tocá acá para buscar por nombre o código" value="${esc(S.ui.asigQ || '')}" autocomplete="off"><div id="asigList" class="stack" style="max-height:240px;overflow:auto">${listaAsignar(S.ui.asigQ || '')}</div><button class="btn sm" data-act="asigCancel">Cancelar</button></div>`;
@@ -3013,8 +3045,9 @@ document.addEventListener('click', async e => {
     case 'archivos': $('#pickFiles').click(); break;
     case 'quitar': S.files[t.dataset.k] = null; S.fileErr = []; recalc(); render(); toast('Archivo quitado. Cargá el correcto.'); break;
     case 'quitarTodo': S.files = { sap: null, yasu: null, vent: null, fya: null, fil: null, comp: null }; S.fileErr = []; S.marcoErr = []; recalc(); render(); toast('Archivos quitados.'); break;
-    case 'det': S.ui.det = c; S.ui.detVista = null; if (!HART[c] || HART[c].error) cargarHistArt(c); renderSheet(); break;
-    case 'hart': S.ui.det = c; S.ui.detVista = 'hist'; cargarHistArt(c); renderSheet(); break;
+    case 'artMenu': abrirMenuArt(t, c); break;
+    case 'det': cerrarMenuArt(); S.ui.det = c; S.ui.detVista = null; if (!HART[c] || HART[c].error) cargarHistArt(c); renderSheet(); break;
+    case 'hart': cerrarMenuArt(); S.ui.det = c; S.ui.detVista = 'hist'; cargarHistArt(c); renderSheet(); break;
     case 'cerrarDet': S.ui.det = null; S.ui.detVista = null; sheetUltimo = null; $('#sheet').innerHTML = ''; break;
     case 'cerrar': S.ui.confirm = 'cerrar'; render(); break;
     case 'reabrir': S.ui.confirm = 'reabrir'; render(); break;
@@ -3093,7 +3126,7 @@ document.addEventListener('click', async e => {
       if (ok) { S.ui.yaContado = null; S.ui.okMsg = `Conteo eliminado: <b>${esc(S.maestro[c]?.d || c)}</b> queda sin contar.`; render(); }
       break;
     }
-    case 'movDia': S.ui.det = c; S.ui.detVista = 'mov'; if (!movimientosLocal()) cargarMovsRemoto(); renderSheet(); break;
+    case 'movDia': cerrarMenuArt(); S.ui.det = c; S.ui.detVista = 'mov'; if (!movimientosLocal()) cargarMovsRemoto(); renderSheet(); break;
     case 'dmodo': { S.ui.modoSuma ||= {}; S.ui.modoSuma[c] = modoSuma(c) === 'restar' ? 'sumar' : 'restar'; S.ui.foco = c; render(); document.getElementById('d-acj-' + c)?.focus(); break; }
 
     case 'asigOk': { const code = S.ui.asignar; try { S.codigos[code] = c; await API.call('asignarCodigo', code, c); toast('Código asociado a ' + c + '.'); } catch (er) { toast('No se pudo asociar el código: ' + er.message); } S.ui.asignar = null; S.ui.asigQ = ''; onScan(code); break; }
