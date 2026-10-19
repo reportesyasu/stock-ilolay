@@ -227,7 +227,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb29';
+window.__VERSION = 'sb30';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -250,7 +250,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb29</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb30</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1200,9 +1200,10 @@ function vHoy() {
     ${avisos.join('')}
     <div class="row" style="justify-content:space-between;align-items:end">
       <div><h2>Stock ${cerrado ? 'cerrado' : 'del día'} · ${dm(S.dia)}</h2><div class="small muted">${cerrado ? 'Cerrado por ' + esc(nom(S.cierre.por)) + ' a las ' + hora(S.cierre.ts) : 'Sistema = SAP + Yasukawa + ajustes pendientes. Quesos: contado al cierre anterior + variación de SAP y Yasukawa desde entonces.'}${S.anteriorFecha ? ' · Cierre anterior: ' + dm(S.anteriorFecha) : ''}</div></div>
-      <div class="row">${cerrado ? `<button class="btn pri" data-act="pdfCierre">Descargar PDF</button><button class="btn" data-act="exportar">Descargar Excel</button><button class="btn" data-act="mail">Copiar resumen para el mail</button><button class="btn danger sm" data-act="reabrir">Reabrir día</button>` : `<button class="btn pri" data-act="cerrar" ${sis ? '' : 'disabled'}>Cerrar stock del día</button>`}</div>
+      <div class="row"><button class="btn ${cerrado ? 'pri' : ''}" data-act="abrir" title="Elegir el día a contar y, si hace falta, volver los conteos a cero">Abrir stock</button>${cerrado ? `<button class="btn" data-act="pdfCierre">Descargar PDF</button><button class="btn" data-act="exportar">Descargar Excel</button><button class="btn" data-act="mail">Copiar resumen para el mail</button><button class="btn danger sm" data-act="reabrir">Reabrir día</button>` : `<button class="btn pri" data-act="cerrar" ${sis ? '' : 'disabled'}>Cerrar stock del día</button>`}</div>
     </div>
     ${S.ui.confirm === 'cerrar' ? vConfirmCierre(r) : ''}
+    ${S.ui.confirm === 'abrir' ? vConfirmAbrir() : ''}
     ${S.ui.confirm === 'reabrir' ? `<div class="confirm"><b>¿Reabrir el ${dm(S.dia)}?</b><span class="small">Se borra el cierre guardado y el día vuelve a quedar abierto con los conteos que tenía. Para cerrarlo de nuevo vas a necesitar los archivos del día.</span><div class="row"><button class="btn danger" data-act="reabrirOk">Reabrir</button><button class="btn" data-act="cancel">Cancelar</button></div></div>` : ''}
     <div class="kpis">
       <div class="kpi"><span class="lbl">Contados</span><b>${r.contados}<span class="muted" style="font-size:15px"> / ${r.total}</span></b></div>
@@ -1220,6 +1221,33 @@ function vHoy() {
     </div>
     ${tablaHoy(lines, sis, cerrado)}
   </div>`;
+}
+function vConfirmAbrir() {
+  const f = S.ui.abrirF || hoyISO(), hoy = hoyISO();
+  const contados = Object.values(S.conteos || {}).filter(k => k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined).length;
+  const avisos = [];
+  if (f > hoy) avisos.push('Es una fecha futura.');
+  if (f < hoy) avisos.push('Es una fecha anterior a hoy: usala solo para corregir un día que quedó sin cerrar.');
+  if (S.cierre && f === S.dia) avisos.push('Ese día ya está cerrado: no se puede abrir de nuevo (usá "Reabrir día").');
+  return `<div class="confirm stack" id="abrirPanel"><b>Abrir stock</b>
+    <label class="stack" style="gap:4px"><span class="lbl">Día a contar</span><input type="date" id="abrirF" data-act="abrirF" value="${esc(f)}" max="9999-12-31" style="max-width:190px"><span class="small muted">Normalmente es hoy (${diaSem(hoy)} ${dm(hoy)}). Cambiala solo si hubo un error con el día.</span></label>
+    ${avisos.length ? `<span class="small" style="color:var(--bad)">${avisos.map(esc).join(' ')}</span>` : ''}
+    <span class="small">¿Volver todos los conteos a cero? ${contados ? `Hay <b>${contados} artículo${contados > 1 ? 's' : ''} contado${contados > 1 ? 's' : ''}</b> sin cerrar (del ${dm(S.dia)}).` : 'No hay conteos cargados sin cerrar.'}</span>
+    <div class="row"><button class="btn danger" data-act="abrirOk" data-v="1">Abrir y poner los conteos en cero</button><button class="btn pri" data-act="abrirOk" data-v="0">Abrir conservando lo contado</button><button class="btn" data-act="cancel">Cancelar</button></div>
+    ${S.ui.abrirConf ? `<div class="banner warn"><span class="grow">Se van a borrar <b>${contados}</b> conteos para empezar de cero el ${dm(f)}. Esto no se puede deshacer.</span><button class="btn danger sm" data-act="abrirOk" data-v="2">Sí, borrar y abrir</button></div>` : ''}
+  </div>`;
+}
+async function abrirStock(cero) {
+  const f = S.ui.abrirF || hoyISO();
+  try {
+    const r = await API.call('abrirDia', f, cero);
+    S.ui.confirm = false; S.ui.abrirConf = false; S.ui.abrirF = null; S.diaPedido = null;
+    if (cero) for (const k of Object.keys(DD)) delete DD[k];
+    toast('Stock del ' + dm(f) + ' abierto' + (cero ? ' con los conteos en cero' + (r?.borrados ? ' (' + r.borrados + ' borrados)' : '') : '') + '.');
+    await refrescar();
+  } catch (e) {
+    toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo abrir: ' + e.message);
+  }
 }
 function vConfirmCierre(r) {
   const sin = r.total - r.contados;
@@ -2337,6 +2365,12 @@ document.addEventListener('click', async e => {
     case 'cerrarDet': S.ui.det = null; S.ui.detVista = null; sheetUltimo = null; $('#sheet').innerHTML = ''; break;
     case 'cerrar': S.ui.confirm = 'cerrar'; render(); break;
     case 'reabrir': S.ui.confirm = 'reabrir'; render(); break;
+    case 'abrir': S.ui.confirm = 'abrir'; S.ui.abrirF = hoyISO(); S.ui.abrirConf = false; render(); break;
+    case 'abrirOk': {
+      const contados = Object.values(S.conteos || {}).some(k => k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined);
+      if (v === '1' && contados) { S.ui.abrirConf = true; render(); break; }
+      abrirStock(v !== '0'); break;
+    }
     case 'cancel': S.ui.confirm = false; render(); break;
     case 'cerrarOk': t.disabled = true; await cerrarDia(); break;
     case 'reabrirOk': try { await API.call('reabrirDia', S.dia); S.ui.confirm = false; toast('Día reabierto.'); await refrescar(); } catch (er) { toast('No se pudo reabrir: ' + er.message); } break;
@@ -2499,6 +2533,7 @@ document.addEventListener('change', async e => {
   if (a === 'pdfSet') { const d = pdfDraft(), k = t.dataset.k; d[k] = t.type === 'checkbox' ? t.checked : t.type === 'radio' ? t.value === '1' : t.type === 'number' ? Number(t.value) : t.value; render(); return; }
   if (a === 'pdfColV') { pdfDraft().cols[+t.dataset.i].v = t.checked; render(); return; }
   if (a === 'pdfColN') { pdfDraft().cols[+t.dataset.i].n = t.value; render(); return; }
+  if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'ajSel' || a === 'ajSelGrupo') S.ui.ajConfDel = false;
