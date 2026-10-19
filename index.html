@@ -180,6 +180,8 @@ details.arch>summary::-webkit-details-marker{display:none}
 details.arch .arch-flecha::before{content:'▸';color:var(--muted);font-size:15px}
 details.arch[open] .arch-flecha::before{content:'▾'}
 details.arch>.arch-body{margin-top:10px}
+.progreso{height:8px;border-radius:4px;background:var(--line);overflow:hidden;max-width:420px}
+.progreso>div{height:100%;background:var(--accent,#1d5f86);transition:width .2s}
 details.opsec{padding:0}
 details.opsec>summary{cursor:pointer;list-style:none;padding:14px 16px;display:grid;gap:2px;position:relative;padding-right:40px}
 details.opsec>summary::-webkit-details-marker{display:none}
@@ -232,7 +234,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb34';
+window.__VERSION = 'sb35';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -255,7 +257,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb34</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb35</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -624,8 +626,41 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = fal
 function loadScript(src) {
   return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar ' + src)); document.head.appendChild(s); });
 }
-let xlsxP = null;
-const needXLSX = () => (window.XLSX ? Promise.resolve() : (xlsxP ||= loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')));
+/* Lector de Excel (SheetJS): se baja con porcentaje y, si un sitio no responde, se prueba con otro */
+const XLSX_URLS = ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'];
+let xlsxP = null, xlsxPct = null;
+async function bajarScript(url, onPct, quieto = 15000) {
+  const ctl = new AbortController(); let t = setTimeout(() => ctl.abort(), quieto);
+  try {
+    const r = await fetch(url, { signal: ctl.signal, cache: 'force-cache' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const total = Number(r.headers.get('content-length')) || 0, partes = []; let n = 0;
+    if (r.body?.getReader) {
+      const rd = r.body.getReader();
+      for (;;) {
+        const { done, value } = await rd.read(); if (done) break;
+        partes.push(value); n += value.length; clearTimeout(t); t = setTimeout(() => ctl.abort(), quieto);
+        onPct?.(Math.min(99, (total && n <= total ? n / total : n / 900000) * 100));
+      }
+    } else partes.push(new Uint8Array(await r.arrayBuffer()));
+    clearTimeout(t);
+    const u = URL.createObjectURL(new Blob(partes, { type: 'text/javascript' }));
+    try { await loadScript(u); } finally { URL.revokeObjectURL(u); }
+    if (!window.XLSX) throw new Error('no quedó cargado');
+    onPct?.(100);
+  } finally { clearTimeout(t); }
+}
+const needXLSX = () => (window.XLSX ? Promise.resolve() : (xlsxP ||= (async () => {
+  let ult = null;
+  for (const [i, url] of XLSX_URLS.entries()) {
+    xlsxPct?.(0, i + 1);
+    try { await bajarScript(url, p => xlsxPct?.(p, i + 1)); return; } catch (e) { ult = e; }
+  }
+  // último intento a la antigua (por si el navegador no deja bajarlo con fetch)
+  try { await Promise.race([loadScript(XLSX_URLS[0]), new Promise((_, no) => setTimeout(() => no(new Error('sin respuesta')), 20000))]); if (window.XLSX) return; } catch (e) { ult = e; }
+  xlsxP = null;
+  throw new Error('no se pudo bajar el lector de Excel de internet (' + (ult?.message || 'sin respuesta') + '). Revisá la conexión y probá de nuevo');
+})()));
 
 const TIPOS_AJ = {
   egr: { n: 'Falta facturar / egresar', sign: -1, diario: false },
@@ -2123,16 +2158,32 @@ async function bdDescargar(backup) {
 async function bdLeerArchivo(file) {
   S.ui.bd = { ocupado: true, estado: 'Leyendo ' + esc(file.name) + '…' }; render();
   try {
-    const paso = async t => { S.ui.bd.estado = t; render(); await new Promise(r => setTimeout(r, 30)); };
-    await paso('Preparando el lector de Excel…');
-    await Promise.race([needXLSX(), new Promise((_, no) => setTimeout(() => no(new Error('no se pudo cargar el lector de Excel (revisá la conexión a internet y recargá la página)')), 30000))]);
-    await paso('Leyendo ' + esc(file.name) + ' (' + fmt(Math.round(file.size / 1024)) + ' KB)…');
-    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const barra = (pct, t) => `<div class="stack" style="gap:4px"><span>${t} · <b>${Math.round(pct)} %</b></span><div class="progreso"><div style="width:${Math.max(2, Math.min(100, pct)).toFixed(1)}%"></div></div></div>`;
+    const paso = async (pct, t) => { S.ui.bd.estado = barra(pct, t); render(); await new Promise(r => setTimeout(r, 30)); };
+    await paso(0, 'Preparando el lector de Excel');
+    if (!window.XLSX) {
+      let ult = { p: 0, sitio: 1, t0: Date.now() };
+      const mostrar = () => { const seg = Math.round((Date.now() - ult.t0) / 1000); S.ui.bd.estado = barra(ult.p * 0.4, 'Bajando el lector de Excel de internet' + (ult.sitio > 1 ? ' (probando el sitio alternativo ' + ult.sitio + ' de 3)' : '') + (ult.p === 0 && seg >= 2 ? ' · esperando respuesta ' + seg + ' s' : '')); render(); };
+      xlsxPct = (p, sitio) => { if (sitio !== ult.sitio) ult.t0 = Date.now(); ult = { ...ult, p, sitio }; mostrar(); };
+      const reloj = setInterval(mostrar, 1000);
+      try { await needXLSX(); } finally { xlsxPct = null; clearInterval(reloj); }
+    }
+    await paso(42, 'Abriendo ' + esc(file.name) + ' (' + fmt(Math.round(file.size / 1024)) + ' KB)');
+    const buf = await file.arrayBuffer();
+    const nombres = (XLSX.read(buf, { type: 'array', bookSheets: true }).SheetNames || []);
+    const buscadas = [...BD_HOJAS, ['CONFIG']].map(h => h[0]).filter(h => nombres.some(n => String(n).trim().toUpperCase() === h));
+    const wb = { SheetNames: nombres, Sheets: {} };
+    for (const [i, h] of buscadas.entries()) {
+      const nombre = nombres.find(n => String(n).trim().toUpperCase() === h);
+      await paso(45 + i / Math.max(buscadas.length, 1) * 55, 'Leyendo la hoja ' + esc(nombre) + ' (' + (i + 1) + ' de ' + buscadas.length + ')');
+      const uno = XLSX.read(buf, { type: 'array', cellDates: true, sheets: nombre });
+      wb.Sheets[nombre] = uno.Sheets[nombre];
+    }
+    await paso(100, 'Listo');
     const norm = s => String(s || '').trim().toUpperCase();
     const hojas = [];
     for (const [hoja, tabla, titulo, cols] of [...BD_HOJAS, ['CONFIG', 'config', 'Opciones y PIN', ['clave', 'valor']]]) {
-      const nombre = wb.SheetNames.find(n => norm(n) === hoja); if (!nombre) continue;
-      await paso('Leyendo la hoja ' + esc(nombre) + '…');
+      const nombre = wb.SheetNames.find(n => norm(n) === hoja); if (!nombre || !wb.Sheets[nombre]) continue;
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' });
       const hdr = (aoa[0] || []).map(h => String(h).trim().toLowerCase());
       const faltan = cols.filter(k => !hdr.includes(k) && ['codigo', 'fecha', 'ean', 'clave'].includes(k));
@@ -2158,7 +2209,8 @@ async function bdImportar() {
     for (const h of sel) {
       const LOTE = h.tabla === 'cierres' ? 400 : 1000;
       for (let i = 0; i < Math.max(h.filas.length, 1); i += LOTE) {
-        S.ui.bd.estado = `Reemplazando ${esc(h.titulo)}… ${fmt(Math.min(i + LOTE, h.filas.length))} de ${fmt(h.filas.length)} <span class="muted">(${Math.round(hecho / Math.max(total, 1) * 100)} % del total)</span>`; render();
+        const pc = hecho / Math.max(total, 1) * 100;
+        S.ui.bd.estado = `<div class="stack" style="gap:4px"><span>Reemplazando ${esc(h.titulo)}… ${fmt(Math.min(i + LOTE, h.filas.length))} de ${fmt(h.filas.length)} · <b>${Math.round(pc)} % del total</b></span><div class="progreso"><div style="width:${Math.max(2, pc).toFixed(1)}%"></div></div></div>`; render();
         await API.call('importarTabla', h.tabla, h.filas.slice(i, i + LOTE), i === 0 && h.tabla !== 'config');
         hecho += Math.min(LOTE, h.filas.length - i);
       }
