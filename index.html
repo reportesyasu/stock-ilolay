@@ -153,6 +153,15 @@ table.mini tr.org th{font-size:12.5px;color:var(--ink);text-transform:none;lette
 table.mini td.cli{white-space:nowrap}
 table.mini td.mono{font-family:var(--f-mono);font-size:11px;word-break:break-all}
 table.mini.g2 td{font-size:12px}
+table.mini tr.subt td{font-weight:600;background:var(--sunk);font-size:12px}
+details.movorg{border:1px solid var(--line);border-radius:var(--r);margin-top:6px;background:var(--surface)}
+details.movorg>summary{cursor:pointer;padding:8px 10px;font-size:13px;display:flex;gap:4px;align-items:baseline;flex-wrap:wrap}
+details.movorg>summary .tq{margin-left:auto;font-weight:600;font-family:var(--f-mono)}
+details.movorg>summary{list-style:none}
+details.movorg>summary::-webkit-details-marker{display:none}
+details.movorg>summary::before{content:'▸';margin-right:4px;color:var(--muted)}
+details.movorg[open]>summary::before{content:'▾'}
+details.movorg table.mini{border:0;border-top:1px solid var(--line);border-radius:0}
 table.mini.g2 td.cli{white-space:normal;word-break:break-word}
 table.mini tr.ch td .muted{font-size:11.5px;font-weight:400}
 table.mini th:nth-child(1),table.mini td:nth-child(1){width:auto}
@@ -189,7 +198,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb19';
+window.__VERSION = 'sb20';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -212,7 +221,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb19</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb20</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -878,7 +887,7 @@ async function cargarMovsRemoto() {
   S.movsCargando = true;
   try { S.movsRemoto = await API.call('getMovs'); } catch (e) { S.movsErr = e.message; }
   S.movsCargando = false;
-  const el = document.getElementById('movDiaBox'); if (el && S.ui.det) el.innerHTML = movDiaHtml(S.ui.det);
+  if (S.ui.det) renderSheet();
 }
 const movsActuales = () => movimientosLocal() || S.movsRemoto || null;
 /* Carpeta recordada (cuando el navegador lo permite) */
@@ -1207,7 +1216,7 @@ const HART = {};
 async function cargarHistArt(c) {
   HART[c] = { cargando: true };
   try { HART[c] = await API.call('historialArticulo', c, 10); } catch (e) { HART[c] = { error: e.message }; }
-  if (S.ui.det === c) { const el = document.getElementById('histArt'); if (el) el.innerHTML = histArtHtml(c); }
+  if (S.ui.det === c) renderSheet();
 }
 /* Movimientos del día de un artículo: qué salió, en qué comprobante y con qué chofer */
 const ORIGEN = { Y: 'Yasukawa', I: 'Ilolay', V: 'Ventana' };
@@ -1229,15 +1238,24 @@ function movDiaHtml(c) {
   const chs = Object.entries(porCh).sort((a, b) => b[1].q - a[1].q);
   const g1 = `<table class="mini"><thead><tr><th>Chofer</th><th class="n">Unidades</th></tr></thead><tbody>${chs.map(([k, v]) => `<tr class="ch"><td><b>${esc(k)}</b><div class="muted">${Object.entries(v.o).map(([o, q]) => `${ORIGEN[o] || o} ${fmt(q)}`).join(' · ')}</div></td><td class="n"><b>${fmt(v.q)}</b><div>${cj(v.q)}</div></td></tr>`).join('')}
     <tr class="tot"><td>Total</td><td class="n">${fmt(total)} ${cj(total)}</td></tr></tbody></table>`;
-  // Grilla 2: una por origen
+  // Grilla 2: una por origen, desplegable (cerrada por defecto), con subtotal al final de cada chofer
   const g2 = ['Y', 'I', 'V'].filter(o => fs.some(x => x.o === o)).map(o => {
     const rs = fs.filter(x => x.o === o).sort((a, b) => (a.ch || '').localeCompare(b.ch || '') || (a.comp || '').localeCompare(b.comp || ''));
     const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
     const fechas = [...new Set(rs.map(x => x.f).filter(Boolean))].map(dm).join(', ');
-    return `<table class="mini g2" style="margin-top:8px"><colgroup><col style="width:29%"><col style="width:33%"><col style="width:26%"><col style="width:12%"></colgroup><thead><tr class="org"><th colspan="3">${ORIGEN[o] || o}${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span></th><th class="n">${fmt(tq)}</th></tr>
-      <tr><th>Comprob.</th><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${rs.map(x => `<tr class="${x.ms === false ? 'muted' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`).join('')}</tbody></table>`;
+    let filas = '', chAct = null, sub = 0, subN = 0;
+    const cierreCh = () => { if (chAct !== null) filas += `<tr class="subt"><td colspan="3">Subtotal ${esc(chAct || 'Sin chofer')} <span class="muted">· ${subN} ${subN === 1 ? 'renglón' : 'renglones'}</span></td><td class="n">${fmt(sub)}</td></tr>`; };
+    for (const x of rs) {
+      if (x.ch !== chAct) { cierreCh(); chAct = x.ch; sub = 0; subN = 0; }
+      if (x.ms !== false) sub += x.q; subN++;
+      filas += `<tr class="${x.ms === false ? 'muted' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`;
+    }
+    cierreCh();
+    const ab = !!(S.ui.movAb || {})[o];
+    return `<details class="movorg" data-o="${o}" ${ab ? 'open' : ''}><summary><b>${ORIGEN[o] || o}</b>${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span><span class="tq">${fmt(tq)} u</span></summary>
+      <table class="mini g2"><colgroup><col style="width:29%"><col style="width:33%"><col style="width:26%"><col style="width:12%"></colgroup><thead><tr><th>Comprob.</th><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${filas}</tbody></table></details>`;
   }).join('');
-  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${g1}${g2}
+  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
     <div class="small muted" style="margin-top:6px">${arch}${fs.some(x => x.q < 0) ? ' · en verde: notas de crédito (vuelve al stock)' : ''}</div>`;
 }
 function histArtHtml(c) {
@@ -1255,14 +1273,30 @@ function histArtHtml(c) {
     <span class="lbl" style="margin-top:10px;display:block">Ajustes del artículo</span>
     ${aj.length ? `<div class="tablebox"><table><thead><tr><th>Desde</th><th>Motivo</th><th>Detalle</th><th class="n">Unidades</th><th>Estado</th></tr></thead><tbody>${aj.map(a => `<tr><td class="small">${a.f ? dm(a.f) : ''}</td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small">${a.estado === 'pasado' ? `<span class="muted">pasado ${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) : ''}</span>` : '<b>pendiente</b>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Sin ajustes pendientes ni pasados en los últimos 30 días.</div>'}`;
 }
+/* La ficha se vuelve a dibujar con cada actualización automática: solo se reemplaza si cambió algo,
+   y se conserva hasta dónde se había bajado (antes volvía arriba de todo). */
+const SHEET_T = { innerHTML: '' };
+let sheetUltimo = null;
 function renderSheet() {
+  const el = $('#sheet'); if (!el) return;
+  SHEET_T.innerHTML = '';
+  renderSheetInner();
+  const html = SHEET_T.innerHTML;
+  if (html === sheetUltimo && el.innerHTML) return;
+  const box = el.querySelector('.box'), mismo = sheetUltimo !== null && el.dataset.k === (S.ui.det + '|' + (S.ui.detVista || ''));
+  const st = box && mismo ? box.scrollTop : 0;
+  sheetUltimo = html; el.dataset.k = S.ui.det + '|' + (S.ui.detVista || '');
+  el.innerHTML = html;
+  if (st) { const b2 = el.querySelector('.box'); if (b2) b2.scrollTop = st; }
+}
+function renderSheetInner() {
   const c = S.ui.det;
-  if (!c) { $('#sheet').innerHTML = ''; return; }
+  if (!c) { SHEET_T.innerHTML = ''; return; }
   const vista = S.ui.detVista || (S.admin ? null : 'hist');
   if (vista) {
     const m = S.maestro[c] || {};
     const otra = vista === 'hist' ? ['movDia', 'Ver movimientos'] : ['hart', 'Ver historial'];
-    $('#sheet').innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="${vista === 'hist' ? 'Historial' : 'Movimientos'} del artículo" data-stop="1">
+    SHEET_T.innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="${vista === 'hist' ? 'Historial' : 'Movimientos'} del artículo" data-stop="1">
       <div class="row" style="justify-content:space-between;align-items:start"><div><span class="lbl">${vista === 'hist' ? 'Historial' : 'Movimientos del día'} · ${esc(c)}</span><h3>${esc(m.d || c)}</h3></div><div class="row" style="gap:6px"><button class="btn sm" data-act="${otra[0]}" data-c="${esc(c)}">${otra[1]}</button><button class="btn sm" data-act="cerrarDet">Cerrar</button></div></div>
       ${vista === 'hist' ? `<div class="small muted">Cómo cerró el stock en los últimos cierres y los ajustes del artículo (pendientes y ya pasados al sistema).</div><div id="histArt">${histArtHtml(c)}</div>` : `<div id="movDiaBox">${movDiaHtml(c)}</div>`}
     </div></div>`;
@@ -1270,7 +1304,7 @@ function renderSheet() {
   }
   const l = lineasVista().find(x => x.c === c) || LINES.find(x => x.c === c);
   const m = S.maestro[c] || {};
-  if (!l) { $('#sheet').innerHTML = ''; return; }
+  if (!l) { SHEET_T.innerHTML = ''; return; }
   const sap = S.files.sap?.data.by[c], fuera = (S.files.sap?.data.fuera || []).filter(f => f.m === c), y = S.files.yasu?.data.by[c];
   const aj = S.ajustes.filter(a => a.c === c);
   const k = S.conteos[c];
@@ -1284,7 +1318,7 @@ function renderSheet() {
         ? `Contado al cierre del ${dm(S.anteriorFecha)}: ${fmt(l.prevCont)} hormas<br>+ variación SAP: (${fmt(l.sapRaw)} kg − ${fmt(l.prevSk)} kg) ÷ ${fmt(l.peso)} kg = ${fmtS(l.varSap)}<br>+ variación Yasukawa: ${fmt(l.yasu)} − ${fmt(l.prevYa)} = ${fmtS(l.varYa)}<br>= ${fmt(l.base)}`
         : `Cierre anterior (${dm(S.anteriorFecha)}) ${fmt(l.base)} <span class="muted">(arrastre: el cierre anterior no tiene los kilos de SAP; desde el próximo cierre se usa la variación)</span>`)
       : `SAP ${fmt(l.sap)} + Yasukawa ${fmt(l.yasu)}`) + ` + ajustes ${fmt(l.aj)}<br>= <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>${l.precio ? ' × ' + money2(l.precio) + ' = ' + money(l.importe) : ''}` : ''}`;
-  $('#sheet').innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="Detalle del artículo" data-stop="1">
+  SHEET_T.innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="Detalle del artículo" data-stop="1">
     <div class="row" style="justify-content:space-between;align-items:start"><div><span class="lbl">${esc(l.s)} · ${esc(c)}</span><h3>${esc(l.d)}</h3></div><button class="btn sm" data-act="cerrarDet">Cerrar</button></div>
     <div class="calc">${calc}</div>
     ${sap || fuera.length ? `<div><span class="lbl">SAP Ilolay</span><div class="tablebox"><table><thead><tr><th>Almacén</th><th>Tipo</th><th class="n">Stock</th><th>UMB</th></tr></thead><tbody>${(sap?.filas || []).map(f => `<tr><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>${esc(f.umb)}</td></tr>`).join('')}${fuera.map(f => `<tr class="muted"><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>excluido</td></tr>`).join('')}</tbody></table></div></div>` : ''}
@@ -1477,6 +1511,7 @@ function aplicarDetalle(c) {
   if (a) { a.value = sp.cj; a.dataset.dirty = '1'; } if (b) { b.value = sp.un; b.dataset.dirty = '1'; }
 }
 document.addEventListener('toggle', e => { if (e.target && e.target.id === 'ajPasDet') S.ui.ajPasAb = e.target.open; }, true);
+document.addEventListener('toggle', e => { const t = e.target; if (t && t.classList && t.classList.contains('movorg')) { S.ui.movAb ||= {}; S.ui.movAb[t.dataset.o] = t.open; } }, true);
 document.addEventListener('toggle', e => { const t = e.target; if (t && t.id && t.id.startsWith('det-')) { S.ui.detAb ||= {}; S.ui.detAb[t.id.slice(4)] = t.open; } }, true);
 function scanMsgHtml() {
   let h = '';
@@ -1984,7 +2019,7 @@ document.addEventListener('click', async e => {
     case 'quitarTodo': S.files = { sap: null, yasu: null, vent: null, fya: null, fil: null, comp: null }; S.fileErr = []; S.marcoErr = []; recalc(); render(); toast('Archivos quitados.'); break;
     case 'det': S.ui.det = c; S.ui.detVista = null; if (!HART[c] || HART[c].error) cargarHistArt(c); renderSheet(); break;
     case 'hart': S.ui.det = c; S.ui.detVista = 'hist'; cargarHistArt(c); renderSheet(); break;
-    case 'cerrarDet': S.ui.det = null; S.ui.detVista = null; $('#sheet').innerHTML = ''; break;
+    case 'cerrarDet': S.ui.det = null; S.ui.detVista = null; sheetUltimo = null; $('#sheet').innerHTML = ''; break;
     case 'cerrar': S.ui.confirm = 'cerrar'; render(); break;
     case 'reabrir': S.ui.confirm = 'reabrir'; render(); break;
     case 'cancel': S.ui.confirm = false; render(); break;
