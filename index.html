@@ -234,7 +234,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb38';
+window.__VERSION = 'sb39';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -257,7 +257,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb38</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb39</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1801,17 +1801,38 @@ function textoSuma(c) {
   const sp = Core.split(s.total, s.u);
   return `Quedaría: ${fmt(s.antes)} u ${s.signo > 0 ? '+' : '−'} ${fmt(Math.abs(s.delta))} u = <b>${fmt(sp.cj)} cj ${fmt(sp.un)} u</b>${s.total < 0 ? ' <b style="color:var(--bad)">(negativo, revisá)</b>' : ''}`;
 }
+let sumando = false;
 async function sumarDeposito(c) {
+  if (sumando) return;
   const s = sumaDe(c);
   if (!s.hay) { toast(s.signo > 0 ? 'Cargá las cajas o unidades a sumar.' : 'Cargá las cajas o unidades a restar.'); return; }
   if (s.total < 0) { toast('El total quedaría negativo. Revisá lo que querés restar.'); return; }
-  const sp = Core.split(s.total, s.u);
-  const ok = await guardarConteo(c, { cj: sp.cj, un: sp.un, by: S.me.id, rec: false });
-  if (ok) {
+  // En modo continuo, si vino por cámara o foto, se vuelve a abrir (necesita el toque del usuario)
+  let reabrirEscaner = false;
+  if (S.ui.cont && S.ui.porFoto) { S.ui.porFoto = false; if (S.ui.porEscaner) reabrirEscaner = true; else { try { $('#pickPhoto')?.click(); } catch { } } }
+  sumando = true;
+  let res = null;
+  try {
+    // La suma la hace el servidor sobre lo que hay guardado en ese momento (no sobre lo que ve este celular)
+    res = await API.call('sumarConteo', S.dia, c, s.delta, s.u);
+    S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...(S.conteos[c] || {}), cj: res.cj, un: res.un, rec: false, ok: false, by: S.me.id, ts: Date.now() };
+    programarRefresco(400);
+  } catch (e) {
+    if (/desconocida/i.test(e.message)) {
+      // servidor sin actualizar: se calcula acá como antes
+      const sp = Core.split(s.total, s.u);
+      if (await guardarConteo(c, { cj: sp.cj, un: sp.un, by: S.me.id, rec: false })) res = { cj: sp.cj, un: sp.un, antes: s.antes, total: s.total };
+    } else toast('No se pudo guardar: ' + e.message);
+  } finally { sumando = false; }
+  if (res) {
     delete DD[c + 'acj']; delete DD[c + 'aun']; delete DD[c + 'cj']; delete DD[c + 'un'];
     S.ui.yaContado = null; S.ui.foco = null; if (S.ui.modoSuma) delete S.ui.modoSuma[c];
-    S.ui.okMsg = `✓ Actualizado <b>${esc(S.maestro[c]?.d || c)}</b>: ${s.delta >= 0 ? 'se sumaron' : 'se restaron'} ${fmt(Math.abs(s.delta))} u → total <b>${fmt(sp.cj)} cj ${fmt(sp.un)} u</b>.`;
-    render();
+    S.ui.okMsg = `✓ Actualizado <b>${esc(S.maestro[c]?.d || c)}</b>: ${s.delta >= 0 ? 'se sumaron' : 'se restaron'} ${(() => { const d = Core.split(Math.abs(s.delta), s.u); return (d.cj ? fmt(d.cj) + ' cj ' : '') + (d.un || !d.cj ? fmt(d.un) + ' u' : '') + (d.cj ? ' (' + fmt(Math.abs(s.delta)) + ' u)' : ''); })()} → total <b>${fmt(res.cj)} cj ${fmt(res.un)} u</b>.${res.antes !== undefined && res.antes !== s.antes ? ` <span class="small">(había ${fmt(res.antes)} u guardadas, no ${fmt(s.antes)}: otro celular había contado este artículo)</span>` : ''}`;
+    toast((s.delta >= 0 ? 'Sumado: ' : 'Restado: ') + (S.maestro[c]?.d || c));
+    document.querySelectorAll('[data-dirty]').forEach(el => delete el.dataset.dirty);
+    const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; }
+    render(); $('#scan')?.focus();
+    if (reabrirEscaner) setTimeout(abrirEscaner, 300);
   }
 }
 function detalleHtml(i) {
@@ -2887,6 +2908,12 @@ document.addEventListener('click', async e => {
 });
 async function guardarDeposito(c) {
   const cj = $('#d-cj-' + CSS.escape(c))?.value, un = $('#d-un-' + CSS.escape(c))?.value;
+  if (sumaDe(c).hay) {
+    // Hay cajas o unidades cargadas en "+ Sumar / − Restar": eso es lo que se quiere guardar
+    const kx = S.conteos[c] || {}, iguales = String(cj ?? '') === String(kx.cj ?? '') && String(un ?? '') === String(kx.un ?? '');
+    if (!iguales && (cj !== '' || un !== '')) { toast('Cargaste un total nuevo arriba y también una suma abajo. Dejá solo uno de los dos.'); return; }
+    return sumarDeposito(c);
+  }
   if (cj === '' && un === '') { toast('Cargá cajas o unidades.'); return; }
   // Si está en modo continuo y el último artículo vino por foto, abrir la cámara ya (necesita el toque del usuario)
   let reabrirEscaner = false;
@@ -2974,6 +3001,11 @@ document.addEventListener('keydown', e => {
     else guardarDeposito(t.dataset.c);
   }
   if (t.dataset?.act === 'dnota') { e.preventDefault(); guardarDeposito(t.dataset.c); }
+  if (t.dataset?.act === 'dsum') {
+    e.preventDefault();
+    if (t.dataset.k === 'acj') document.getElementById('d-aun-' + t.dataset.c)?.focus();
+    else sumarDeposito(t.dataset.c);
+  }
   if (t.dataset?.act === 'cnt') { e.preventDefault(); t.blur(); }
 });
 document.addEventListener('submit', async e => {
