@@ -234,7 +234,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb35';
+window.__VERSION = 'sb36';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -257,7 +257,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb35</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb36</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -812,7 +812,8 @@ async function refrescar(silencioso) {
     if (!e.movs) { S.movsMeta = null; if (!movimientosLocal()) S.movsRemoto = null; }
     if (!S.ui.tab) S.ui.tab = S.admin ? 'hoy' : 'contar';
     nombres();
-    recalc(); render();
+    renderSuave = !!silencioso;
+    try { recalc(); render(); } finally { renderSuave = false; }
   } catch (err) {
     S.errorServidor = err.message || String(err);
     if (!S.maestroV && err.codigo !== 'pin') { S.errorAcceso = S.errorServidor; pedirAcceso(); return; }
@@ -1130,17 +1131,43 @@ function renderAhora() {
   renderTop();
   const t = S.ui.tab;
   const main = $('#main');
-  if (!S.maestroV) main.innerHTML = S.errorServidor ? '<div class="panel empty">No se pudo conectar con la planilla.<br><span class="small muted">' + esc(S.errorServidor) + '</span><br><br><button class="btn" data-act="reintentar">Reintentar</button></div>'
+  let html = '';
+  if (!S.maestroV) html = S.errorServidor ? '<div class="panel empty">No se pudo conectar con la planilla.<br><span class="small muted">' + esc(S.errorServidor) + '</span><br><br><button class="btn" data-act="reintentar">Reintentar</button></div>'
     : '<div class="panel empty" id="cargando">Cargando datos de la planilla… <span class="mono" id="cargSeg">0</span> s' + (S.cargaLenta ? '<br><span class="small muted">Está tardando más de lo normal. ' + esc(S.diag || 'Esperando respuesta de Google…') + '</span><br><br><button class="btn sm" data-act="reintentar">Reintentar</button>' : '') + '</div>';
-  else if (t === 'hoy') main.innerHTML = vHoy();
-  else if (t === 'contar') main.innerHTML = vContar();
-  else if (t === 'maestro') main.innerHTML = vMaestro();
-  else if (t === 'ajustes') main.innerHTML = vAjustes();
-  else if (t === 'historial') main.innerHTML = vHistorial();
-  else if (t === 'opciones') main.innerHTML = vOpciones();
+  else if (t === 'hoy') html = vHoy();
+  else if (t === 'contar') html = vContar();
+  else if (t === 'maestro') html = vMaestro();
+  else if (t === 'ajustes') html = vAjustes();
+  else if (t === 'historial') html = vHistorial();
+  else if (t === 'opciones') html = vOpciones();
+  ponerMain(main, html);
   renderSheet();
   restoreFocus(keep);
   document.documentElement.style.setProperty('--topH', $('#top').offsetHeight + 'px');
+}
+/* Reemplaza la pantalla sin perder dónde estaba cada barra de desplazamiento.
+   En la actualización automática (cada 15 s), si no cambió nada no se toca la pantalla. */
+let ultimoMain = null, ultimoTab = null, renderSuave = false;
+function claveScroll(el, raiz) {
+  if (el.id) return '#' + el.id;
+  const sel = el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+  let lista; try { lista = raiz.querySelectorAll(sel); } catch { return null; }
+  return sel + '@' + Array.prototype.indexOf.call(lista, el);
+}
+function buscarScroll(clave, raiz) {
+  if (clave[0] === '#') return document.getElementById(clave.slice(1));
+  const i = clave.lastIndexOf('@'); let lista; try { lista = raiz.querySelectorAll(clave.slice(0, i)); } catch { return null; }
+  return lista[+clave.slice(i + 1)] || null;
+}
+function ponerMain(main, html) {
+  const mismaPantalla = ultimoTab === S.ui.tab; ultimoTab = S.ui.tab;
+  if (renderSuave && mismaPantalla && html === ultimoMain && main.childElementCount) return;
+  const pos = [];
+  if (mismaPantalla) for (const el of main.querySelectorAll('*')) if (el.scrollTop > 0 || el.scrollLeft > 0) { const k = claveScroll(el, main); if (k) pos.push([k, el.scrollTop, el.scrollLeft]); }
+  const wy = window.scrollY, wx = window.scrollX;
+  main.innerHTML = html; ultimoMain = html;
+  for (const [k, top, left] of pos) { const el = buscarScroll(k, main); if (el) { el.scrollTop = top; el.scrollLeft = left; } }
+  if (Math.abs(window.scrollY - wy) > 1 || Math.abs(window.scrollX - wx) > 1) window.scrollTo(wx, wy);
 }
 function snapshotFocus() {
   const a = document.activeElement;
