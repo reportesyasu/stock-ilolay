@@ -234,7 +234,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb37';
+window.__VERSION = 'sb38';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -257,7 +257,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb37</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb38</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -662,6 +662,165 @@ const needXLSX = () => (window.XLSX ? Promise.resolve() : (xlsxP ||= (async () =
   throw new Error('no se pudo bajar el lector de Excel de internet (' + (ult?.message || 'sin respuesta') + '). Revisá la conexión y probá de nuevo');
 })()));
 
+/* ---------- Excel propio: lee y escribe .xlsx sin bajar nada de internet ----------
+   (el lector de internet queda solo para los .xls viejos de Excel 97-2003) */
+const XL = (() => {
+  const td = new TextDecoder('utf-8'), te = new TextEncoder();
+  const els = (n, tag) => Array.from(n.getElementsByTagNameNS('*', tag));
+  const xml = s => new DOMParser().parseFromString(s, 'application/xml');
+  async function inflar(u8) {
+    const ds = new DecompressionStream('deflate-raw');
+    return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer());
+  }
+  function zipLeer(buf) {
+    const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    let eocd = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 70000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('el archivo no es un Excel .xlsx válido');
+    const n = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true);
+    const files = {};
+    for (let k = 0; k < n && dv.getUint32(p, true) === 0x02014b50; k++) {
+      const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+      files[td.decode(u8.subarray(p + 46, p + 46 + nlen)).replace(/^\//, '')] = { metodo: dv.getUint16(p + 10, true), csize: dv.getUint32(p + 20, true), off: dv.getUint32(p + 42, true) };
+      p += 46 + nlen + xlen + clen;
+    }
+    return async nombre => {
+      const k = files[nombre] ? nombre : Object.keys(files).find(x => x.toLowerCase() === nombre.toLowerCase()); if (!k) return null;
+      const f = files[k], ini = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(ini, ini + f.csize);
+      if (f.metodo === 0) return td.decode(data);
+      if (f.metodo === 8) return td.decode(await inflar(data));
+      throw new Error('el Excel usa una compresión que no se puede leer');
+    };
+  }
+  const colN = ref => { let n = 0; for (const ch of ref) { const c = ch.charCodeAt(0); if (c < 65 || c > 90) break; n = n * 26 + c - 64; } return n - 1; };
+  const esFecha = (id, code) => {
+    if ((id >= 14 && id <= 22) || (id >= 27 && id <= 36) || (id >= 45 && id <= 47) || (id >= 50 && id <= 58)) return true;
+    if (!code) return false;
+    const c = code.replace(/"[^"]*"|\[[^\]]*\]|\\./g, '');
+    return /[dy]/i.test(c) || (/[hms]/i.test(c) && !/[0#?]/.test(c));
+  };
+  // Devuelve { SheetNames, aoa(nombre) → Promise<filas> } (mismo resultado que sheet_to_json con header:1, defval:'')
+  async function leer(buf) {
+    const z = zipLeer(buf);
+    const wbx = xml(await z('xl/workbook.xml') || ''), relx = xml(await z('xl/_rels/workbook.xml.rels') || '<r/>');
+    const rels = {}; for (const r of els(relx, 'Relationship')) rels[r.getAttribute('Id')] = r.getAttribute('Target');
+    const hojas = els(wbx, 'sheet').map(s => {
+      const rid = s.getAttribute('r:id') || s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+      let t = rels[rid] || ''; t = t.startsWith('/') ? t.slice(1) : 'xl/' + t.replace(/^\.\//, '');
+      return { nombre: s.getAttribute('name'), ruta: t };
+    });
+    if (!hojas.length) throw new Error('el archivo no tiene hojas');
+    let compartidos = null, fechas = null;
+    const prep = async () => {
+      if (compartidos) return;
+      const ss = await z('xl/sharedStrings.xml');
+      compartidos = ss ? els(xml(ss), 'si').map(si => els(si, 't').filter(t => t.parentNode.localName !== 'rPh').map(t => t.textContent).join('')) : [];
+      fechas = new Set();
+      const st = await z('xl/styles.xml');
+      if (st) {
+        const d = xml(st), fm = {};
+        for (const f of els(d, 'numFmt')) fm[+f.getAttribute('numFmtId')] = f.getAttribute('formatCode');
+        const cx = els(d, 'cellXfs')[0];
+        if (cx) els(cx, 'xf').filter(x => x.parentNode === cx).forEach((x, i) => { const id = +(x.getAttribute('numFmtId') || 0); if (esFecha(id, fm[id])) fechas.add(i); });
+      }
+    };
+    return {
+      SheetNames: hojas.map(h => h.nombre),
+      async aoa(nombre) {
+        const h = hojas.find(x => x.nombre === nombre); if (!h) return null;
+        await prep();
+        const txt = await z(h.ruta); if (!txt) return [];
+        const filas = []; let ultimaFila = -1;
+        for (const row of els(xml(txt), 'row')) {
+          const ri = row.getAttribute('r') ? +row.getAttribute('r') - 1 : ultimaFila + 1; ultimaFila = ri;
+          const fila = []; let ultCol = -1;
+          for (const c of els(row, 'c')) {
+            const ref = c.getAttribute('r'); const ci = ref ? colN(ref) : ultCol + 1; ultCol = ci;
+            const t = c.getAttribute('t'), vEl = els(c, 'v')[0], v = vEl ? vEl.textContent : '';
+            let val;
+            if (t === 's') val = compartidos[+v] ?? '';
+            else if (t === 'inlineStr') val = els(c, 't').map(x => x.textContent).join('');
+            else if (t === 'b') val = v === '1';
+            else if (t === 'str' || t === 'e' || t === 'd') val = v;
+            else if (v === '') val = '';
+            else { const n = Number(v); val = Number.isFinite(n) ? n : v; if (typeof val === 'number' && fechas.has(+(c.getAttribute('s') || 0))) val = new Date(Math.round((val - 25569) * 864e5) + new Date().getTimezoneOffset() * 6e4); }
+            fila[ci] = val;
+          }
+          for (let i = 0; i < fila.length; i++) if (fila[i] === undefined) fila[i] = '';
+          filas[ri] = fila;
+        }
+        for (let i = 0; i < filas.length; i++) if (!filas[i]) filas[i] = [];
+        return filas;
+      }
+    };
+  }
+  /* --- escritura (zip sin comprimir; Excel lo abre normal) --- */
+  const crcT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = crcT[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  function zip(archivos) {
+    const partes = [], central = []; let off = 0;
+    for (const [nombre, texto] of archivos) {
+      const nm = te.encode(nombre), data = te.encode(texto), crc = crc32(data), sz = data.length;
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(12, 0x21, true);
+      h.setUint32(14, crc, true); h.setUint32(18, sz, true); h.setUint32(22, sz, true); h.setUint16(26, nm.length, true);
+      partes.push(new Uint8Array(h.buffer), nm, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(14, 0x21, true);
+      c.setUint32(16, crc, true); c.setUint32(20, sz, true); c.setUint32(24, sz, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), nm);
+      off += 30 + nm.length + sz;
+    }
+    const cd = central.reduce((s, a) => s + a.length, 0), e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, archivos.length, true); e.setUint16(10, archivos.length, true); e.setUint32(12, cd, true); e.setUint32(16, off, true);
+    const todo = [...partes, ...central, new Uint8Array(e.buffer)], out = new Uint8Array(todo.reduce((s, a) => s + a.length, 0));
+    let p = 0; for (const a of todo) { out.set(a, p); p += a.length; }
+    return out;
+  }
+  const escX = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  const colL = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const hojaXml = aoa => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+    + aoa.map((r, ri) => `<row r="${ri + 1}">` + (r || []).map((v, ci) => {
+      if (v === '' || v === null || v === undefined) return '';
+      const ref = colL(ci) + (ri + 1);
+      if (typeof v === 'number' && Number.isFinite(v)) return `<c r="${ref}"><v>${v}</v></c>`;
+      if (typeof v === 'boolean') return `<c r="${ref}" t="b"><v>${v ? 1 : 0}</v></c>`;
+      if (v instanceof Date) v = Core.fISO(v);
+      return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escX(v)}</t></is></c>`;
+    }).join('') + '</row>').join('') + '</sheetData></worksheet>';
+  const W = {
+    book_new: () => ({ SheetNames: [], Sheets: {} }),
+    aoa_to_sheet: a => ({ aoa: a }),
+    json_to_sheet: j => { const k = j.length ? Object.keys(j[0]) : []; return { aoa: [k, ...j.map(o => k.map(x => o[x]))] }; },
+    book_append_sheet: (wb, ws, n) => { const nom = String(n).replace(/[\[\]:*?/\\]/g, ' ').slice(0, 31); wb.SheetNames.push(nom); wb.Sheets[nom] = ws; },
+    write(wb) {
+      const n = wb.SheetNames.length, R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', M = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+      const cab = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+      const arch = [
+        ['[Content_Types].xml', cab + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+          + wb.SheetNames.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>'],
+        ['_rels/.rels', cab + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+        ['xl/workbook.xml', cab + `<workbook xmlns="${M}" xmlns:r="${R}"><sheets>` + wb.SheetNames.map((s, i) => `<sheet name="${escX(s)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>'],
+        ['xl/_rels/workbook.xml.rels', cab + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + wb.SheetNames.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${R}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') + `<Relationship Id="rId${n + 1}" Type="${R}/styles" Target="styles.xml"/></Relationships>`],
+        ['xl/styles.xml', cab + `<styleSheet xmlns="${M}"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+        ...wb.SheetNames.map((s, i) => [`xl/worksheets/sheet${i + 1}.xml`, hojaXml(wb.Sheets[s].aoa || [])])
+      ];
+      return zip(arch);
+    }
+  };
+  return { leer, utils: W, write: W.write, puede: typeof DecompressionStream === 'function' };
+})();
+/* Abre un Excel: .xlsx con el lector propio; .xls viejo (o si falla) con el lector de internet */
+async function libroExcel(buf) {
+  const u = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
+  if (u[0] === 0x50 && u[1] === 0x4b && XL.puede) {
+    try { return await XL.leer(buf); } catch (e) { console.warn('Lector propio de Excel:', e); }
+  }
+  await needXLSX();
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  return { SheetNames: wb.SheetNames, aoa: async n => wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }) : null };
+}
+
 const TIPOS_AJ = {
   egr: { n: 'Falta facturar / egresar', sign: -1, diario: false },
   dec: { n: 'Decomiso', sign: -1, diario: false },
@@ -883,16 +1042,15 @@ async function fileRows(file) {
   const u8 = new Uint8Array(buf.slice(0, 4));
   const isZip = u8[0] === 0x50 && u8[1] === 0x4b, isOle = u8[0] === 0xd0 && u8[1] === 0xcf;
   if (isZip || isOle) {
-    await needXLSX();
-    const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+    const lib = await libroExcel(buf);
     let best = null;
-    for (const n of wb.SheetNames) {
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' });
+    for (const n of lib.SheetNames) {
+      const rows = await lib.aoa(n) || [];
       const info = Core.detect(rows);
       if (info.kind !== 'desconocido') { if (!best || (best.info.kind === 'mov' && info.kind !== 'mov')) best = { rows, info }; }
     }
     if (best) return best;
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+    const rows = await lib.aoa(lib.SheetNames[0]) || [];
     return { rows, info: Core.detect(rows) };
   }
   const txt = decodeText(buf);
@@ -2185,13 +2343,12 @@ function vArmado() {
 async function armPlantilla() {
   S.ui.arm = { ocupado: true, estado: 'Armando la planilla…' }; render();
   try {
-    await needXLSX();
     const filas = Object.entries(S.maestro).filter(([, m]) => !m.baja).sort((a, b) => (a[1].s || '').localeCompare(b[1].s || '') || (a[1].o || 0) - (b[1].o || 0) || a[0].localeCompare(b[0]))
       .map(([c, m]) => [c, m.d || '', m.s || '', m.u || 1, m.bpp || '', m.bpb || '', m.upb || '']);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['codigo', 'descripcion', 'sector', 'uxc', 'bases_pallet', 'bultos_base', 'u_bulto'], ...filas]), 'ARMADO');
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['codigo', 'descripcion', 'sector', 'uxc', 'bases_pallet', 'bultos_base', 'u_bulto'], ...filas]), 'ARMADO');
     const nombre = 'Stock Ilolay - armado articulos ' + hoyISO() + '.xlsx';
-    descargar(nombre, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    descargar(nombre, new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     S.ui.arm = { estado: `Descargada <b>${esc(nombre)}</b> con ${filas.length} artículos. Completá las columnas <b>bases_pallet</b>, <b>bultos_base</b> y <b>u_bulto</b> y cargala acá. Las otras columnas son de referencia y no se importan.` };
   } catch (e) { S.ui.arm = { estado: '<span style="color:var(--bad)">No se pudo armar la planilla: ' + esc(e.message) + '</span>' }; }
   render();
@@ -2199,16 +2356,15 @@ async function armPlantilla() {
 async function armLeer(file) {
   S.ui.arm = { ocupado: true, estado: 'Leyendo ' + esc(file.name) + '…' }; render();
   try {
-    await needXLSX();
     const buf = await file.arrayBuffer();
-    const nombres = XLSX.read(buf, { type: 'array', bookSheets: true }).SheetNames || [];
+    const lib = await libroExcel(buf);
+    const nombres = lib.SheetNames || [];
     const N = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const COLS = { c: ['codigo', 'cod', 'articulo', 'material'], bpp: ['basespallet', 'basesporpallet', 'basespale', 'basesporpale', 'bpp'], bpb: ['bultosbase', 'bultosporbase', 'bultoscamada', 'bultosporcamada', 'bpb'], upb: ['ubulto', 'unbulto', 'unidadesbulto', 'unidadesporbulto', 'unidbulto', 'upb'] };
     const orden = [...nombres].sort((a, b) => (N(b) === 'armado') - (N(a) === 'armado') || (N(b) === 'articulos') - (N(a) === 'articulos'));
     let hoja = null, aoa = null, idx = null;
     for (const n of orden) {
-      const ws = XLSX.read(buf, { type: 'array', sheets: n }).Sheets[n]; if (!ws) continue;
-      const a = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      const a = await lib.aoa(n); if (!a) continue;
       const hdr = (a[0] || []).map(N), ix = {};
       for (const [k, al] of Object.entries(COLS)) ix[k] = hdr.findIndex(h => al.includes(h));
       if (ix.c >= 0 && (ix.bpp >= 0 || ix.bpb >= 0 || ix.upb >= 0)) { hoja = n; aoa = a; idx = ix; break; }
@@ -2247,15 +2403,14 @@ async function bdDescargar(backup) {
   S.ui.bd = { ...(S.ui.bd || {}), ocupado: true, estado: 'Leyendo la base…' }; render();
   try {
     const d = await API.call('exportarTodo');
-    await needXLSX();
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(BD_LEEME), 'LEEME');
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(BD_LEEME), 'LEEME');
     for (const [hoja, tabla, , cols] of BD_HOJAS) {
       const filas = (d[tabla] || []).map(r => cols.map(k => { const v = r[k]; if (v === null || v === undefined) return ''; if (typeof v === 'boolean') return v ? 1 : 0; if (typeof v === 'object') return JSON.stringify(v); return v; }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cols, ...filas]), hoja);
+      XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([cols, ...filas]), hoja);
     }
-    if (backup) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['clave', 'valor'], ...(d.config || []).map(r => [r.clave, r.valor])]), 'CONFIG');
-    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    if (backup) XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['clave', 'valor'], ...(d.config || []).map(r => [r.clave, r.valor])]), 'CONFIG');
+    const out = XL.write(wb);
     const nombre = (backup ? 'Stock Ilolay - backup ' : 'Stock Ilolay - plantilla bases ') + hoyISO() + '.xlsx';
     descargar(nombre, new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     S.ui.bd = { ocupado: false, estado: `Descargado <b>${esc(nombre)}</b>: ${BD_HOJAS.map(([h, t]) => h + ' ' + fmt((d[t] || []).length)).join(' · ')}.` };
@@ -2267,31 +2422,32 @@ async function bdLeerArchivo(file) {
   try {
     const barra = (pct, t) => `<div class="stack" style="gap:4px"><span>${t} · <b>${Math.round(pct)} %</b></span><div class="progreso"><div style="width:${Math.max(2, Math.min(100, pct)).toFixed(1)}%"></div></div></div>`;
     const paso = async (pct, t) => { S.ui.bd.estado = barra(pct, t); render(); await new Promise(r => setTimeout(r, 30)); };
-    await paso(0, 'Preparando el lector de Excel');
-    if (!window.XLSX) {
+    await paso(5, 'Abriendo ' + esc(file.name) + ' (' + fmt(Math.round(file.size / 1024)) + ' KB)');
+    const buf = await file.arrayBuffer();
+    const u4 = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
+    if (!(u4[0] === 0x50 && u4[1] === 0x4b && XL.puede) && !window.XLSX) {
+      // Excel viejo (.xls): hace falta bajar el lector de internet
       let ult = { p: 0, sitio: 1, t0: Date.now() };
-      const mostrar = () => { const seg = Math.round((Date.now() - ult.t0) / 1000); S.ui.bd.estado = barra(ult.p * 0.4, 'Bajando el lector de Excel de internet' + (ult.sitio > 1 ? ' (probando el sitio alternativo ' + ult.sitio + ' de 3)' : '') + (ult.p === 0 && seg >= 2 ? ' · esperando respuesta ' + seg + ' s' : '')); render(); };
+      const mostrar = () => { const seg = Math.round((Date.now() - ult.t0) / 1000); S.ui.bd.estado = barra(5 + ult.p * 0.3, 'Bajando el lector de Excel de internet' + (ult.sitio > 1 ? ' (probando el sitio alternativo ' + ult.sitio + ' de 3)' : '') + (ult.p === 0 && seg >= 2 ? ' · esperando respuesta ' + seg + ' s' : '')); render(); };
       xlsxPct = (p, sitio) => { if (sitio !== ult.sitio) ult.t0 = Date.now(); ult = { ...ult, p, sitio }; mostrar(); };
       const reloj = setInterval(mostrar, 1000);
       try { await needXLSX(); } finally { xlsxPct = null; clearInterval(reloj); }
     }
-    await paso(42, 'Abriendo ' + esc(file.name) + ' (' + fmt(Math.round(file.size / 1024)) + ' KB)');
-    const buf = await file.arrayBuffer();
-    const nombres = (XLSX.read(buf, { type: 'array', bookSheets: true }).SheetNames || []);
+    const lib = await libroExcel(buf);
+    const nombres = lib.SheetNames || [];
     const buscadas = [...BD_HOJAS, ['CONFIG']].map(h => h[0]).filter(h => nombres.some(n => String(n).trim().toUpperCase() === h));
-    const wb = { SheetNames: nombres, Sheets: {} };
+    const wb = { SheetNames: nombres, aoa: {} };
     for (const [i, h] of buscadas.entries()) {
       const nombre = nombres.find(n => String(n).trim().toUpperCase() === h);
-      await paso(45 + i / Math.max(buscadas.length, 1) * 55, 'Leyendo la hoja ' + esc(nombre) + ' (' + (i + 1) + ' de ' + buscadas.length + ')');
-      const uno = XLSX.read(buf, { type: 'array', cellDates: true, sheets: nombre });
-      wb.Sheets[nombre] = uno.Sheets[nombre];
+      await paso(40 + i / Math.max(buscadas.length, 1) * 60, 'Leyendo la hoja ' + esc(nombre) + ' (' + (i + 1) + ' de ' + buscadas.length + ')');
+      wb.aoa[nombre] = await lib.aoa(nombre);
     }
     await paso(100, 'Listo');
     const norm = s => String(s || '').trim().toUpperCase();
     const hojas = [];
     for (const [hoja, tabla, titulo, cols] of [...BD_HOJAS, ['CONFIG', 'config', 'Opciones y PIN', ['clave', 'valor']]]) {
-      const nombre = wb.SheetNames.find(n => norm(n) === hoja); if (!nombre || !wb.Sheets[nombre]) continue;
-      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: true, defval: '' });
+      const nombre = wb.SheetNames.find(n => norm(n) === hoja); if (!nombre || !wb.aoa[nombre]) continue;
+      const aoa = wb.aoa[nombre];
       const hdr = (aoa[0] || []).map(h => String(h).trim().toLowerCase());
       const faltan = cols.filter(k => !hdr.includes(k) && ['codigo', 'fecha', 'ean', 'clave'].includes(k));
       if (faltan.length) { hojas.push({ hoja, tabla, titulo, filas: [], err: 'faltan columnas: ' + faltan.join(', ') }); continue; }
@@ -2543,10 +2699,9 @@ function descargar(nombre, blob) {
 async function exportar(cierre) {
   const nombre = 'STOCK ILOLAY ' + dm(cierre.fecha).replace('/', ' ');
   try {
-    await needXLSX();
-    const wb = XLSX.utils.book_new();
-    for (const sec of ['FRIO', 'SECO']) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasExport((cierre.lineas || []).filter(l => l.s === sec))), sec);
-    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const wb = XL.utils.book_new();
+    for (const sec of ['FRIO', 'SECO']) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(filasExport((cierre.lineas || []).filter(l => l.s === sec))), sec);
+    const out = XL.write(wb);
     descargar(nombre + '.xlsx', new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   } catch (e) {
     const rows = filasExport(cierre.lineas || []);
