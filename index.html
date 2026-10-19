@@ -198,7 +198,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb20';
+window.__VERSION = 'sb21';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -221,7 +221,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb20</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb21</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1342,7 +1342,7 @@ function vContar() {
   const contado = c => { const x = k(c); return x && (x.cj !== null && x.cj !== undefined || x.un !== null && x.un !== undefined); };
   const sec = items.filter(i => S.ui.sector === 'TODOS' || i.s === S.ui.sector);
   const hechos = sec.filter(i => contado(i.c)).length, rec = sec.filter(i => k(i.c)?.rec).length;
-  const verSis = !!opt('verSisDep') && tieneSistema() && !cerrado;
+  const verSis = (S.admin || !!opt('verSisDep')) && tieneSistema() && !cerrado;
   const lin = c => LINES.find(x => x.c === c);
   const conDif = c => { const l = lin(c); return !!(l && l.contado && l.dif); };
   const nDif = verSis ? sec.filter(i => conDif(i.c)).length : 0;
@@ -1362,7 +1362,7 @@ function vContar() {
       <div class="t"><b>${esc(i.d)}</b><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
       <div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>
       ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" inputmode="numeric" id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" inputmode="numeric" id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
-      ${verSis && (x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
+      ${verSis && (S.admin || x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
       ${(x?.rec || (verSis && conDif(i.c)) || S.ui.foco === i.c) && !cerrado ? `<div class="row" style="grid-column:1/-1;gap:6px"><button class="btn sm" data-act="hart" data-c="${esc(i.c)}">Historial</button><button class="btn sm" data-act="movDia" data-c="${esc(i.c)}">Movimientos</button></div>` : ''}
       ${done ? sumarHtml(i) : ''}
       ${detalleHtml(i)}
@@ -1713,6 +1713,7 @@ function vMaestro() {
     <td><input type="text" id="m-d-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="d" value="${esc(i.d)}" style="width:100%;min-width:240px"></td>
     <td><select id="m-s-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="s"><option ${i.s === 'FRIO' ? 'selected' : ''}>FRIO</option><option ${i.s === 'SECO' ? 'selected' : ''}>SECO</option></select></td>
     <td class="n"><input type="number" id="m-o-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="o" value="${i.o ?? ''}" style="width:64px"></td>
+ <td class="n mono small" style="white-space:nowrap">${sisTxt(i.c)}</td>
     <td class="n"><input type="number" id="m-u-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="u" value="${i.u ?? ''}" style="width:64px"></td>
     <td class="n"><input type="number" id="m-bpp-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="bpp" value="${i.bpp || ''}" style="width:70px" placeholder="—" title="Bases por pallet"></td>
     <td class="n"><input type="number" id="m-bpb-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="bpb" value="${i.bpb || ''}" style="width:70px" placeholder="—" title="Bultos por base"></td>
@@ -1725,7 +1726,7 @@ function vMaestro() {
     <div class="row">${tieneSistema() || S.files.yasu ? '<button class="btn" data-act="mdesdeYasu">Completar desde Yasukawa</button>' : ''}<button class="btn pri" data-act="mguardar" ${draft ? '' : 'disabled'}>Guardar cambios</button>${draft ? '<button class="btn" data-act="mdescartar">Descartar</button>' : ''}</div></div>
     ${hu.length ? `<div class="panel stack"><h3>Con stock en los archivos pero fuera de la lista</h3><div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">SAP</th><th class="n">Yasukawa</th><th></th></tr></thead><tbody>${hu.map(h => `<tr><td class="code">${esc(h.c)}</td><td>${esc(h.d)}</td><td class="n">${fmt(h.sap)}</td><td class="n">${fmt(h.yasu)}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="FRIO">+ Frío</button><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="SECO">+ Seco</button></div></td></tr>`).join('')}</tbody></table></div></div>` : ''}
     <div class="panel row"><b>Agregar artículo</b><input type="text" id="nuevoCod" placeholder="Código (ej. 1031)" style="width:140px" class="mono"><select id="nuevoSec"><option>FRIO</option><option>SECO</option></select><button class="btn" data-act="mnuevo">Agregar</button></div>
-    <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th>Sector</th><th class="n">Orden</th><th class="n">Un/caja</th><th class="n" title="Bases por pallet">Bases/pallet</th><th class="n" title="Bultos por base">Bultos/base</th><th class="n" title="Unidades por bulto">Un/bulto</th><th>Códigos de barras</th><th>Cálculo</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="11" class="empty">Sin artículos.</td></tr>'}</tbody></table></div>
+    <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th>Sector</th><th class="n">Orden</th><th class="n">Sistema</th><th class="n">Un/caja</th><th class="n" title="Bases por pallet">Bases/pallet</th><th class="n" title="Bultos por base">Bultos/base</th><th class="n" title="Unidades por bulto">Un/bulto</th><th>Códigos de barras</th><th>Cálculo</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="12" class="empty">Sin artículos.</td></tr>'}</tbody></table></div>
   </div>`;
 }
 function editarMaestro(c, k, v) {
@@ -1756,13 +1757,13 @@ function vAjustes() {
   const grupos = {};
   for (const a of list) (grupos[grupoAj(a)] ||= []).push(a);
   const claves = Object.keys(grupos).sort(porDet ? ((x, y) => (x === '' ? 1 : y === '' ? -1 : 0) || grupos[y].length - grupos[x].length || x.localeCompare(y)) : ((x, y) => (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99)));
-  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${porDet ? esc(TIPOS_AJ[a.t]?.n || a.t) : esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
+  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td class="n mono small">${sisTxt(a.c)}</td><td>${porDet ? esc(TIPOS_AJ[a.t]?.n || a.t) : esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
   const bloques = claves.map(k => {
     const g = grupos[k].sort((a, b) => (a.c || '').localeCompare(b.c || ''));
     const todos = g.every(a => sel.has(a.id));
     const suma = g.reduce((s, a) => s + Core.num(a.u), 0);
     const nombre = porDet ? (k || 'Sin detalle') : (TIPOS_AJ[k]?.n || k);
-    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="7">${esc(nombre)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
+    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="8">${esc(nombre)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
   }).join('');
   const P = S.ui.ajPasados;
   return `<div class="stack">
@@ -1778,13 +1779,18 @@ function vAjustes() {
     </form>
     <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Detalle'], ['tipo', 'Motivo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
       <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
-    <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>${porDet ? 'Motivo' : 'Detalle'}</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
-    ${bloques || '<tr><td colspan="8" class="empty">No hay ajustes pendientes.</td></tr>'}
+    <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th class="n">Sistema</th><th>${porDet ? 'Motivo' : 'Detalle'}</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
+    ${bloques || '<tr><td colspan="9" class="empty">No hay ajustes pendientes.</td></tr>'}
     </tbody></table></div>
     <details class="panel" id="ajPasDet" ${S.ui.ajPasAb ? 'open' : ''}><summary><b>Ajustes ya pasados al sistema</b> <span class="small muted">(últimos 90 días; ya no cuentan en el stock)</span></summary>
       ${!P ? '<div class="small muted" style="margin-top:8px">Cargando…</div>' : !P.length ? '<div class="small muted" style="margin-top:8px">Todavía no hay ajustes marcados como pasados.</div>' : `<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Pasado</th><th>Motivo</th><th>Código</th><th>Artículo</th><th>Detalle</th><th class="n">Unidades</th><th>Desde</th><th></th></tr></thead><tbody>${P.map(a => `<tr><td class="small">${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) + ' ' + hora(a.pts) : ''}<div class="small muted">${esc(a.ppor || '')}</div></td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajVolver" data-id="${esc(a.id)}" title="Volver a pendiente: vuelve a contar en el sistema">Volver a pendiente</button></td></tr>`).join('')}</tbody></table></div>`}
     </details>
   </div>`;
+}
+function sisTxt(c) {
+  if (!tieneSistema()) return '<span class="muted small">sin archivos</span>';
+  const l = LINES.find(x => x.c === c); if (!l) return '<span class="muted">—</span>';
+  return `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>`;
 }
 function grupoAj(a) { return (S.ui.ajAgr || 'det') === 'det' ? String(a.m || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : a.t; }
 async function cargarAjPasados() {
