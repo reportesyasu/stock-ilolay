@@ -1881,10 +1881,21 @@ function teclaPulsar(v) {
   }
   if (v === 'ok') { if (el.dataset.act === 'dsum') sumarDeposito(c); else guardarDeposito(c); }
 }
-// Al cargar cajas (contar o sumar): si pasan 1,5 s sin escribir, el cursor pasa solo a Unidades
+// Al cargar cajas (contar o sumar): si pasan 1,5 s sin escribir, el cursor pasa solo a Unidades.
+// En "Contar detallado" pasa al campo siguiente (pallets → bases → bultos → unidades); del último no se mueve.
 let pasaUnT = null;
 function pasarAUnidades(el) {
   clearTimeout(pasaUnT);
+  if (el?.dataset?.act === 'ddet') {
+    if (String(el.value).trim() === '') return;
+    const id = el.id, c = el.dataset.c;
+    pasaUnT = setTimeout(() => {
+      const ac = document.activeElement; if (!ac || ac.id !== id || String(ac.value).trim() === '') return;
+      const campos = [...document.querySelectorAll(`#card-${CSS.escape(c)} input[data-act="ddet"]`)], sig = campos[campos.findIndex(x => x.id === id) + 1];
+      if (sig) { sig.focus(); try { if (!sig.readOnly) sig.select(); } catch { } }
+    }, 1500);
+    return;
+  }
   const k = el?.dataset?.k; if (!el || !['cj', 'acj'].includes(k) || !['dcnt', 'dsum'].includes(el.dataset.act) || String(el.value).trim() === '') return;
   const id = el.id, act = el.dataset.act, c = el.dataset.c, kUn = k === 'acj' ? 'aun' : 'un';
   pasaUnT = setTimeout(() => {
@@ -3409,7 +3420,7 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'cbQ' && S.ui.cb) { S.ui.cb.q = t.value; const l = $('#cbList'); if (l) l.innerHTML = cbLista(t.value); }
   if (t.dataset.act === 'asigQ') { S.ui.asigQ = t.value; const l = $('#asigList'); if (l) l.innerHTML = listaAsignar(t.value); }
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
-  if (t.dataset.act === 'dcnt' || t.dataset.act === 'dsum') pasarAUnidades(t);
+  if (t.dataset.act === 'dcnt' || t.dataset.act === 'dsum' || t.dataset.act === 'ddet') pasarAUnidades(t);
   if (t.dataset.act === 'dnota') DD[t.dataset.c + 'nota'] = t.value;
   if (t.dataset.act === 'dsum') { if (/^-/.test(t.value)) t.value = t.value.replace(/^-+/, ''); DD[t.dataset.c + t.dataset.k] = t.value; const el = document.getElementById('ds-' + t.dataset.c); if (el) el.innerHTML = textoSuma(t.dataset.c); }
   if (t.dataset.act === 'ddet') { DD[t.dataset.c + '_' + t.dataset.k] = t.value; aplicarDetalle(t.dataset.c); }
