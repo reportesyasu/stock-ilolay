@@ -197,6 +197,8 @@ table.mini.g2 td{font-size:12px}
 table.mini tr.subt td{font-weight:600;background:var(--sunk);font-size:12px}
 table.mini tr.hl td{background:#fff3b0 !important;color:#3a3000}
 table.mini tr.hl td .muted{color:#6b5c00}
+table.mini tr[data-mk]{cursor:pointer}
+table.mini tr.okr td{background:#cdeed6 !important;color:#0f3d1f}table.mini tr.okr td .muted{color:#2f6b43}table.mini tr.okr td:first-child::before{content:'✓ ';color:#1e7a3c;font-weight:700}
 .hlbox{display:inline-block;background:#fff3b0;border:1px solid #e3cf5a;border-radius:3px;vertical-align:middle}
 .pill.hlp{background:#fff3b0;color:#5a4a00;margin-left:6px}
 details.arch>summary,details.resdia>summary{list-style:none;cursor:pointer}
@@ -284,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb63';
+window.__VERSION = 'sb67';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -307,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb63</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb67</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1644,6 +1646,10 @@ async function cargarHistArt(c) {
 }
 /* Movimientos del día de un artículo: qué salió, en qué comprobante y con qué chofer */
 const ORIGEN = { Y: 'Yasukawa', I: 'Ilolay', V: 'Ventana' };
+// Renglones de movimientos marcados como "controlados" (verde): se guardan en este dispositivo, por día
+const MOV_OK = (() => { try { const o = JSON.parse(localStorage.getItem('movOk') || '{}'); return o; } catch { return {}; } })();
+const movOkSet = () => (MOV_OK.dia === S.dia ? MOV_OK.k ||= {} : (MOV_OK.dia = S.dia, MOV_OK.k = {}));
+function movOkToggle(k) { const s = movOkSet(); if (s[k]) delete s[k]; else s[k] = 1; try { localStorage.setItem('movOk', JSON.stringify(MOV_OK)); } catch { } }
 function movDiaHtml(c) {
   const M = movsActuales();
   const titulo = '<span class="lbl">Movimientos del día</span>';
@@ -1660,11 +1666,12 @@ function movDiaHtml(c) {
   const tol = tolMov();
   const lx = LINES.find(x => x.c === c); const dif = lx && lx.contado && lx.dif ? Math.abs(lx.dif) : 0;
   const hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
+  const OK = movOkSet();
   // Grilla 1: por chofer, con el desglose por origen debajo
   const porCh = {};
   for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { q: 0, n: 0, o: {} }); g.q += x.q; g.n++; g.o[x.o] = (g.o[x.o] || 0) + x.q; }
   const chs = Object.entries(porCh).sort((a, b) => b[1].q - a[1].q);
-  const g1 = `<table class="mini"><thead><tr><th>Chofer</th><th class="n">Unidades</th></tr></thead><tbody>${chs.map(([k, v]) => `<tr class="ch ${hl(v.q) ? 'hl' : ''}"><td><b>${esc(k)}</b><div class="muted">${Object.entries(v.o).map(([o, q]) => `${ORIGEN[o] || o} ${fmt(q)}`).join(' · ')}</div></td><td class="n"><b>${fmt(v.q)}</b><div>${cj(v.q)}</div></td></tr>`).join('')}
+  const g1 = `<table class="mini"><thead><tr><th>Chofer</th><th class="n">Unidades</th></tr></thead><tbody>${chs.map(([k, v]) => `<tr data-mk="${esc(c + '|ch|' + k)}" class="ch ${hl(v.q) ? 'hl' : ''} ${OK[c + '|ch|' + k] ? 'okr' : ''}"><td><b>${esc(k)}</b><div class="muted">${Object.entries(v.o).map(([o, q]) => `${ORIGEN[o] || o} ${fmt(q)}`).join(' · ')}</div></td><td class="n"><b>${fmt(v.q)}</b><div>${cj(v.q)}</div></td></tr>`).join('')}
     <tr class="tot"><td>Total</td><td class="n">${fmt(total)} ${cj(total)}</td></tr></tbody></table>`;
   // Grilla 2: una por origen, desplegable (cerrada por defecto), con subtotal al final de cada chofer
   const g2 = ['Y', 'I', 'V'].filter(o => fs.some(x => x.o === o)).map(o => {
@@ -1672,11 +1679,13 @@ function movDiaHtml(c) {
     const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
     const fechas = [...new Set(rs.map(x => x.f).filter(Boolean))].map(dm).join(', ');
     let filas = '', chAct = null, sub = 0, subN = 0;
-    const cierreCh = () => { if (chAct !== null) filas += `<tr class="subt ${hl(sub) ? 'hl' : ''}"><td colspan="3">Subtotal ${esc(chAct || 'Sin chofer')} <span class="muted">· ${subN} ${subN === 1 ? 'renglón' : 'renglones'}</span></td><td class="n">${fmt(sub)}</td></tr>`; };
+    const cierreCh = () => { if (chAct !== null) filas += `<tr data-mk="${esc(c + '|sub|' + o + '|' + chAct)}" class="subt ${hl(sub) ? 'hl' : ''} ${OK[c + '|sub|' + o + '|' + chAct] ? 'okr' : ''}"><td colspan="3">Subtotal ${esc(chAct || 'Sin chofer')} <span class="muted">· ${subN} ${subN === 1 ? 'renglón' : 'renglones'}</span></td><td class="n">${fmt(sub)}</td></tr>`; };
+    let ri = 0;
     for (const x of rs) {
       if (x.ch !== chAct) { cierreCh(); chAct = x.ch; sub = 0; subN = 0; }
       if (x.ms !== false) sub += x.q; subN++;
-      filas += `<tr class="${x.ms === false ? 'muted' : ''} ${hl(x.q) ? 'hl' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`;
+      const key = c + '|' + o + '|' + (x.comp || '') + '|' + (x.cli || '') + '|' + (x.ch || '') + '|' + x.q + '|' + (ri++);
+      filas += `<tr data-mk="${esc(key)}" class="${x.ms === false ? 'muted' : ''} ${hl(x.q) ? 'hl' : ''} ${OK[key] ? 'okr' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`;
     }
     cierreCh();
     const ab = !!(S.ui.movAb || {})[o];
@@ -1684,7 +1693,7 @@ function movDiaHtml(c) {
     return `<details class="movorg" data-o="${o}" ${ab ? 'open' : ''}><summary><b>${ORIGEN[o] || o}</b>${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span>${nHl ? `<span class="pill hlp">${nHl} coincide${nHl > 1 ? 'n' : ''}</span>` : ''}<span class="tq">${fmt(tq)} u</span></summary>
       <table class="mini g2"><colgroup><col style="width:29%"><col style="width:33%"><col style="width:26%"><col style="width:12%"></colgroup><thead><tr><th>Comprob.</th><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${filas}</tbody></table></details>`;
   }).join('');
-  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div>${dif ? `<div class="small" style="margin:0 0 6px"><span class="hlbox">&nbsp;&nbsp;&nbsp;</span> En amarillo: lo que coincide (±${fmt(tol)} %) con la diferencia de <b>${fmt(dif)} u</b> entre contado y sistema.</div>` : ''}${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
+  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div><div class="small muted" style="margin:0 0 6px">Tocá un renglón para marcarlo en <span style="color:var(--ok);font-weight:600">verde</span> (ya controlado); tocalo de nuevo para desmarcar.</div>${dif ? `<div class="small" style="margin:0 0 6px"><span class="hlbox">&nbsp;&nbsp;&nbsp;</span> En amarillo: lo que coincide (±${fmt(tol)} %) con la diferencia de <b>${fmt(dif)} u</b> entre contado y sistema.</div>` : ''}${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
     <div class="small muted" style="margin-top:6px">${arch}${fs.some(x => x.q < 0) ? ' · en verde: notas de crédito (vuelve al stock)' : ''}</div>`;
 }
 function histArtHtml(c) {
@@ -1778,8 +1787,9 @@ function vContar() {
   const conDif = c => { const l = lin(c); return !!(l && l.contado && l.dif); };
   const nDif = verSis ? sec.filter(i => conDif(i.c)).length : 0;
   if (!verSis && S.ui.solo === 'dif') S.ui.solo = 'pend';
+  // Después de escanear se muestra solo ese artículo, para no cargar la cantidad en otro por error
   const vis = sec.filter(i => {
-    if (S.ui.foco === i.c) return true;
+    if (S.ui.foco) return S.ui.foco === i.c;
     if (S.ui.solo === 'dif' && !conDif(i.c)) return false;
     if (S.ui.solo === 'pend' && contado(i.c) && !k(i.c)?.rec) return false;
     if (S.ui.solo === 'rec' && !k(i.c)?.rec) return false;
@@ -1809,7 +1819,8 @@ function vContar() {
     ${cerrado ? `<div class="banner ok"><span class="grow">El stock del ${dm(S.dia)} ya está cerrado. No se pueden cargar más conteos para ese día.</span></div>` : ''}
     ${enMarco() ? `<div class="banner info"><span class="grow">Si la cámara no abre, es porque Google la bloquea dentro de este marco: abrí la app a pantalla completa y escaneá desde ahí.</span><button class="btn pri sm" data-act="pantallaCompleta">Abrir a pantalla completa</button></div>` : ''}
     <div class="scan">
-      <div class="bar"><input type="search" id="scan" data-act="scan" placeholder="Escaneá el código de barras o escribí código / nombre" autocomplete="off" enterkeyhint="search" value="${esc(S.ui.q)}"><button class="btn pri" data-act="escanear" title="Escanear con la cámara en vivo">Escanear</button><label class="btn cam" title="Si la cámara en vivo no funciona: sacar una foto del código">Foto<input type="file" id="pickPhoto" accept="image/*" capture="environment"></label></div>
+      <div class="bar"><input type="search" id="scan" data-act="scan" placeholder="Escaneá el código de barras o escribí código / nombre" autocomplete="off" enterkeyhint="search" value="${esc(S.ui.q)}"><button class="btn pri" data-act="escanear" title="Escanear con la cámara en vivo">Escanear</button><button class="btn" data-act="recargar" title="Volver a cargar la página (trae la última versión y los datos al día)">↻ Actualizar</button></div>
+      ${S.ui.confRecarga ? `<div class="banner warn"><span class="grow">Hay cantidades escritas que todavía no se guardaron. Si actualizás, se pierden.</span><button class="btn sm danger" data-act="recargarOk">Actualizar igual</button><button class="btn sm" data-act="recargarNo">Cancelar</button></div>` : ''}
       <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${esTactil() ? `<button class="btn xs" data-act="teclado" title="Elegir qué teclado aparece al cargar cajas y unidades">Teclado: <b>${tecladoApp() ? 'chico (de la app)' : 'del celular'}</b></button>` : ''}${S.ui.ultimaFoto ? '<span class="muted">Último código leído: <b class="mono">' + esc(S.ui.ultimaFoto) + '</b></span>' : ''}</div>
       <div class="row" style="justify-content:space-between">${chipsSector(items)}
         <div class="chips">${[['pend', 'Pendientes', sec.length - hechos + sec.filter(i => contado(i.c) && k(i.c)?.rec).length], ['cont', 'Contados', hechos], ['rec', 'Recontar', rec], ...(verSis ? [['dif', 'Con diferencia', nDif]] : []), ['todos', 'Todos', sec.length]].map(([v, n, c]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}<span class="c">${c}</span></button>`).join('')}</div></div>
@@ -1817,6 +1828,7 @@ function vContar() {
     </div>
     <div id="scanMsg">${scanMsgHtml()}</div>
     ${S.scanLog.length ? `<details class="panel small" id="scanLogDet" ${S.ui.logAbierto ? 'open' : ''}><summary class="muted">Registro de la cámara (solo si hay un problema)</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
+    ${S.ui.foco && vis.length ? `<div class="row small" style="justify-content:space-between;align-items:center;margin:2px 0"><span class="muted">Mostrando solo el artículo escaneado.</span><button class="btn sm" data-act="verTodos">Ver todos</button></div>` : ''}
     <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : S.ui.solo === 'cont' ? 'Todavía no se contó ningún artículo en este sector.' : 'No hay artículos con este filtro.'}</div>`}</div>
   </div>`;
 }
@@ -1955,6 +1967,7 @@ function pasarAUnidades(el) {
     if (un) { un.focus(); try { if (!un.readOnly) un.select(); } catch { } }
   }, 1500);
 }
+document.addEventListener('click', e => { const tr = e.target.closest?.('tr[data-mk]'); if (tr && !e.target.closest('button, a, input, select')) { movOkToggle(tr.dataset.mk); tr.classList.toggle('okr'); } });
 document.addEventListener('click', e => { const el = e.target; if (esNum(el) && el.readOnly && tecladoApp()) { if (document.activeElement !== el) el.focus(); teclaMostrar(el); } });
 document.addEventListener('focusin', e => { if (esNum(e.target) && tecladoApp()) teclaMostrar(e.target); else if (e.target.matches?.('input, textarea, select')) teclaOcultar(); });
 document.addEventListener('focusout', () => { clearTimeout(teclaOcultarT); teclaOcultarT = setTimeout(() => { if (!esNum(document.activeElement)) teclaOcultar(); }, 150); });
@@ -3127,15 +3140,12 @@ function armarPdfDif(c, t) {
     { k: 'd', n: 'DESCRIPCIÓN', v: l => l.d || '' },
     { k: 'sis', n: 'SISTEMA', a: 'r', v: l => CU(l.sis, l.u) },
     { k: 'cont', n: 'CONTADO', a: 'r', v: l => CU(l.cont, l.u) },
-    { k: 'dif', n: 'DIFERENCIA', a: 'r', v: l => fmtS(l.dif) + ' U', b: true },
-    { k: 'm', n: 'MOTIVO', v: () => '' }
+    { k: 'dif', n: 'DIFERENCIA', a: 'r', v: l => fmtS(l.dif) + ' U', b: true }
   ];
-  // Anchos: lo que necesita cada columna + aire; la descripción se achica si hace falta y el motivo se queda con el resto (mínimo 170 pt)
+  // Anchos: las columnas de números toman lo que necesitan + aire; la descripción se queda con todo el resto (sin columna de motivo)
   for (const cl of cols) cl.w = Math.max(anchoTxt(cl.n, fs - 0.5, true), ...L.map(l => anchoTxt(cl.v(l), fs, !!cl.b))) + pad;
-  const mot = cols[5], desc = cols[1], minMot = Math.min(260, Math.max(170, ancho * 0.24));
-  const fijo = cols.filter(cl => cl !== mot && cl !== desc).reduce((s, cl) => s + cl.w, 0);
-  desc.w = Math.max(120, Math.min(desc.w, ancho - fijo - minMot));
-  mot.w = ancho - fijo - desc.w;
+  const desc = cols[1], fijo = cols.filter(cl => cl !== desc).reduce((s, cl) => s + cl.w, 0);
+  desc.w = Math.max(120, ancho - fijo);
   let x = M; cols.forEach(cl => { cl.x = x; x += cl.w; });
   const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
   let y = 0;
@@ -3613,9 +3623,13 @@ document.addEventListener('click', async e => {
     case 'probarConexion': probarConexion(); break;
     case 'salir': CFG.olvidar(); S.maestroV = false; S.admin = false; S.ui.tab = null; pedirAcceso(); break;
     case 'reintentar': S.errorServidor = null; refrescando = false; refrescar(); break;
+    case 'recargar': if (document.querySelector('input[data-dirty]')) { S.ui.confRecarga = true; render(); } else { toast('Actualizando…'); location.reload(); } break;
+    case 'recargarOk': location.reload(); break;
+    case 'recargarNo': S.ui.confRecarga = false; render(); break;
     case 'sector': S.ui.sector = v; render(); break;
     case 'filtro': S.ui.filtro = v; render(); break;
     case 'solo': S.ui.solo = v; S.ui.foco = null; render(); break;
+    case 'verTodos': S.ui.foco = null; S.ui.yaContado = null; render(); focoBusqueda(); break;
     case 'actualizar': actualizar(); break;
     case 'carpeta': elegirCarpeta(); break;
     case 'archivos': $('#pickFiles').click(); break;
