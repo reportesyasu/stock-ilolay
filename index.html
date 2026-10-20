@@ -273,7 +273,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb59';
+window.__VERSION = 'sb60';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -296,7 +296,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb59</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb60</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2169,18 +2169,46 @@ async function abrirEscaner() {
     $('#scanEstado').textContent = 'La cámara no se pudo abrir';
     return;
   }
+  // iPhone: con "environment" a veces abre la cámara gran angular o el conjunto de cámaras, que no enfoca de cerca y no lee códigos.
+  // Si hay una "Back Camera" (la principal), se cambia a esa.
+  try {
+    const esIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (esIOS && navigator.mediaDevices.enumerateDevices) {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+      scanLog('cámaras: ' + cams.map(d => d.label || '?').join(' | '));
+      const actual = scanStream.getVideoTracks()[0]?.getSettings?.().deviceId;
+      const mejor = cams.find(d => /^back camera$/i.test(d.label) || /cámara trasera$/i.test(d.label)) || cams.find(d => /back|trasera|rear/i.test(d.label) && !/ultra|wide|tele|dual|triple|gran/i.test(d.label));
+      if (mejor && mejor.deviceId && mejor.deviceId !== actual) {
+        const nuevo = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: mejor.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+        try { scanStream.getTracks().forEach(t => t.stop()); } catch { }
+        scanStream = nuevo; scanLog('cambiada a: ' + mejor.label);
+      }
+    }
+  } catch (e) { scanLog('no se pudo elegir cámara: ' + (e?.message || e)); }
+  try { await scanStream.getVideoTracks()[0]?.applyConstraints?.({ advanced: [{ focusMode: 'continuous' }] }); } catch { }
   video.srcObject = scanStream; scanTrack = scanStream.getVideoTracks()[0];
   try { await video.play(); } catch { }
   let detector = null;
   scanLog('video en marcha ' + video.videoWidth + 'x' + video.videoHeight);
   if ('BarcodeDetector' in window) { try { detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'itf', 'code_128', 'upc_a', 'upc_e', 'code_39'] }); } catch { } }
   if (!detector) {
+    // iPhone (Safari y cualquier navegador de iOS) no trae lector de códigos propio: se usa ZXing, que se baja de internet la primera vez
+    const est = $('#scanEstado'); if (est) est.textContent = 'Preparando el lector…';
     try {
-      if (!window.ZXing) { try { await loadScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'); } catch { await loadScript('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js'); } }
+      if (!window.ZXing) {
+        scanLog('bajando ZXing…');
+        try { await loadScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'); } catch { await loadScript('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js'); }
+        scanLog('ZXing listo');
+      }
       const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
       hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.UPC_A]);
       zxReader = new ZXing.BrowserMultiFormatReader(hints, 300);
-    } catch (e) { const el = $('#scanEstado'); if (el) el.textContent = 'No se pudo cargar el lector. Usá "Foto".'; return; }
+      if (est) est.textContent = 'Apuntá al código de barras';
+    } catch (e) {
+      scanLog('ZXing FALLÓ: ' + (e?.message || e));
+      if (est) est.innerHTML = '<b>No se pudo bajar el lector de códigos</b> (este celular no tiene lector propio y no llegó a internet para bajarlo). Revisá la conexión y reintentá, o usá "Foto".';
+      return;
+    }
   }
   let ultimo = '', repeticiones = 0, ocupado = false;
   const aceptar = code => {
@@ -2204,6 +2232,18 @@ async function abrirEscaner() {
         if (r[0]?.rawValue) aceptar(r[0].rawValue);
       } catch { } finally { ocupado = false; }
     }, 180);
+  } else if (typeof zxReader.decodeFromCanvas === 'function') {
+    // Igual que con el lector propio: se analiza solo la franja del medio (donde está el marco), ampliada, que lee mejor códigos chicos
+    const cv = document.createElement('canvas'); let tick = 0;
+    scanLoop = setInterval(() => {
+      if (ocupado || !video.videoWidth) return; ocupado = true;
+      try {
+        const w = video.videoWidth, h = video.videoHeight, k = w < 1000 ? 2 : 1;
+        cv.width = Math.round(w * 0.8 * k); cv.height = Math.round(h * 0.26 * k);
+        cv.getContext('2d').drawImage(video, w * 0.1, h * 0.33, w * 0.8, h * 0.26, 0, 0, cv.width, cv.height);
+        const r = zxReader.decodeFromCanvas(cv); if (r?.getText()) aceptar(r.getText());
+      } catch (e) { if (++tick % 40 === 0) scanLog('buscando… (' + (e?.name || 'sin código') + ')'); } finally { ocupado = false; }
+    }, 220);
   } else {
     zxReader.decodeFromVideoElement(video, (res) => { if (res) aceptar(res.getText()); });
   }
