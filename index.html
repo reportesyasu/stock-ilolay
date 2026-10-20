@@ -107,6 +107,17 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .tablebox{overflow:auto;max-height:calc(100vh - var(--topH,58px) - 24px);max-height:calc(100dvh - var(--topH,58px) - 24px);scrollbar-gutter:stable;overscroll-behavior:contain}
 .sheet .tablebox{max-height:70vh}
 .tablebox thead th{position:sticky;top:0;z-index:2;background:var(--sunk)}
+.tablebox tfoot td{position:sticky;bottom:0;z-index:2;background:var(--sunk);font-weight:700;border-top:2px solid var(--line)}
+#qGrid td.q-d{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#qGrid input.q-in{width:64px}
+.q-movil{display:none}
+.q-cel #qGrid{max-height:none;overflow:visible}
+.q-cel #qGrid thead th{top:calc(var(--topH,58px))}
+.q-cel #qGrid td.q-d{max-width:96px;font-size:12px}.q-cel #qGrid td,.q-cel #qGrid th{padding:6px 4px;font-size:12.5px}.q-cel #qGrid th{font-size:10px;letter-spacing:0}.q-cel #qGrid input.q-in{width:46px;padding:6px 3px;font-size:14px}.q-cel #qGrid td.code{font-size:12px}
+.q-cel #qGrid tfoot{display:none}
+.q-cel .q-movil{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--surface);border-top:2px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));font-size:12px;box-shadow:0 -6px 10px -8px rgba(0,0,0,.3)}
+.q-cel .q-movil b{display:block;font-size:16px}
+.q-cel .q-fin{height:124px}
 .tablebox::-webkit-scrollbar,.sheet .box::-webkit-scrollbar{width:12px;height:12px}
 .tablebox::-webkit-scrollbar-track,.sheet .box::-webkit-scrollbar-track{background:var(--sunk);border-radius:6px}
 .tablebox::-webkit-scrollbar-thumb,.sheet .box::-webkit-scrollbar-thumb{background:var(--muted);border-radius:6px;border:2px solid var(--sunk);min-height:40px}
@@ -273,7 +284,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb61';
+window.__VERSION = 'sb62';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -296,7 +307,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb61</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb62</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2420,7 +2431,7 @@ function excelEgreso() {
 }
 /* ---------- Quesos: facturación Ilolay del día cargada a mano (modo híbrido) + ventana del archivo ---------- */
 function quesosLista() {
-  return Object.entries(S.maestro).filter(([, m]) => m.q && !m.baja).sort((a, b) => (a[1].s || '').localeCompare(b[1].s || '') || (a[1].o ?? 999) - (b[1].o ?? 999) || a[0].localeCompare(b[0], 'es', { numeric: true })).map(([c]) => c);
+  return Object.entries(S.maestro).filter(([, m]) => m.q && !m.baja).sort((a, b) => a[0].localeCompare(b[0], 'es', { numeric: true })).map(([c]) => c);
 }
 // Ventana: lo que salió hoy por ventana según el archivo cargado en "Archivos del día"; se publica para todos los dispositivos
 async function publicarQuesosVentana() {
@@ -2440,25 +2451,30 @@ function vQuesos() {
   const hib = opt('quesoSap') === 'hibrido', cerrado = !!S.cierre, L = quesosLista(), D = S.ui.qDraft ||= {}, QD = S.quesosDia || {};
   const vent = S.files.vent ? 'archivo ' + esc(S.files.vent.name) : Object.values(QD).some(x => x.v) ? 'archivo de ventanas cargado en otra PC' : '';
   const sumI = L.reduce((s, c) => s + (Number(D[c] ?? QD[c]?.i) || 0), 0), sumV = L.reduce((s, c) => s + (QD[c]?.v || 0), 0);
+  const sumY = L.reduce((s, c) => { const l = LINES.find(x => x.c === c); return s + (l && l.metodo !== 'arrastre' ? l.varYa : 0); }, 0), sumS = L.reduce((s, c) => s + (LINES.find(x => x.c === c)?.sis || 0), 0);
   const hayDraft = L.some(c => D[c] !== undefined && String(D[c]) !== String(QD[c]?.i || ''));
   const filas = L.map(c => {
     const l = LINES.find(x => x.c === c), m = S.maestro[c], val = D[c] ?? (QD[c]?.i || '');
-    return `<tr><td class="code">${esc(c)}</td><td>${esc(m.d || l?.d || '')}${l?.q && l.metodo !== 'hibrido' && hib ? ' <span class="pill seco" title="Falta el cierre anterior o el archivo de Yasukawa">arrastre</span>' : ''}</td>
-      <td class="n muted">${l && l.prevCont !== null && l.prevCont !== undefined ? fmt(l.prevCont) : '—'}</td>
+    return `<tr><td class="code">${esc(c)}</td><td class="q-d" title="${esc(m.d || l?.d || '')}">${esc(m.d || l?.d || '')}${l?.q && l.metodo !== 'hibrido' && hib ? ' <span class="pill seco" title="Falta el cierre anterior o el archivo de Yasukawa">arrastre</span>' : ''}</td>
+      <td class="n muted hide-sm">${l && l.prevCont !== null && l.prevCont !== undefined ? fmt(l.prevCont) : '—'}</td>
       <td class="n">${l && l.metodo !== 'arrastre' ? `<span style="color:${l.varYa < 0 ? 'var(--bad)' : l.varYa > 0 ? 'var(--ok)' : 'inherit'}">${fmtS(l.varYa)}</span>` : '<span class="muted">—</span>'}</td>
       <td class="n">${QD[c]?.v ? '-' + fmt(QD[c].v) : '<span class="muted">0</span>'}</td>
-      <td class="n"><input type="number" inputmode="numeric" min="0" step="1" class="cj" id="q-i-${esc(c)}" data-act="qIlo" data-c="${esc(c)}" value="${esc(val)}" placeholder="0" ${cerrado ? 'disabled' : ''} aria-label="Hormas facturadas por Ilolay ${esc(c)}"></td>
+      <td class="n"><input type="number" inputmode="numeric" min="0" step="1" class="cj q-in" id="q-i-${esc(c)}" data-act="qIlo" data-c="${esc(c)}" value="${esc(val)}" placeholder="0" ${cerrado ? 'disabled' : ''} aria-label="Hormas facturadas por Ilolay ${esc(c)}"></td>
       <td class="n"><b>${l ? fmt(l.sis) : '—'}</b></td>
-      <td class="n">${l?.contado ? fmt(l.cont) + (l.dif ? ` <span style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">(${fmtS(l.dif)})</span>` : '') : '<span class="muted">sin contar</span>'}</td></tr>`;
+      <td class="n hide-sm">${l?.contado ? fmt(l.cont) + (l.dif ? ` <span style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">(${fmtS(l.dif)})</span>` : '') : '<span class="muted">sin contar</span>'}</td></tr>`;
   }).join('');
-  return `<div class="stack">
+  const cel = esTactil() || window.innerWidth < 720;
+  return `<div class="stack ${cel ? 'q-cel' : ''}">
     <div class="row" style="justify-content:space-between"><div><h2>Quesos · ${diaSem(S.dia)} ${dm(S.dia)}</h2><div class="small muted">Hormas que salieron hoy. <b>Yasukawa</b> se calcula solo (variación del stock de Yasukawa desde el cierre anterior), <b>Ventana</b> sale del archivo de ventanas y <b>Ilolay</b> lo cargás acá. Al cerrar el stock queda guardado y al día siguiente arranca en cero.</div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
     ${!hib ? `<div class="banner warn"><span class="grow">El cálculo de quesos está en modo <b>${opt('quesoSap') === 'manual' ? 'manual' : 'automático'}</b>: lo que cargues acá se guarda pero <b>no descuenta del sistema</b> hasta pasar al modo híbrido.</span><button class="btn pri sm" data-act="qHibrido">Activar modo híbrido</button></div>` : ''}
     ${hib && !vent ? `<div class="banner info"><span class="grow">Todavía no hay archivo de <b>ventanas</b> del día: lo que salió por ventana figura en 0. Cargalo en Administración → Archivos del día.</span></div>` : ''}
     ${!L.length ? '<div class="panel empty">No hay artículos marcados como queso. Se marcan en <button class="link" data-act="tab" data-v="maestro">Artículos</button> (columna Cálculo).</div>' : `
-    <div class="row" style="justify-content:space-between"><span class="small muted">${L.length} quesos · Ilolay <b>${fmt(sumI)}</b> hormas · Ventana <b>${fmt(sumV)}</b> hormas${vent ? ' (' + vent + ')' : ''}</span>
+    <div class="row" style="justify-content:space-between"><span class="small muted">${L.length} quesos, por código${vent ? ' · ventana: ' + vent : ''}</span>
       <div class="row">${cerrado ? '<span class="small muted">Día cerrado: solo lectura.</span>' : `<button class="btn" data-act="qBorrar" ${Object.values(QD).some(x => x.i) || hayDraft ? '' : 'disabled'} title="Deja en cero lo cargado hoy por Ilolay">Borrar lo cargado hoy</button><button class="btn pri" data-act="qGuardar" ${hayDraft ? '' : 'disabled'}>Guardar</button>${hayDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}`}</div></div>
-    <div class="tablebox"><table><thead><tr><th>Código</th><th>Artículo</th><th class="n" title="Hormas contadas al cierre anterior">Cierre ant.</th><th class="n" title="Variación del stock de Yasukawa desde el cierre anterior (se calcula sola)">Yasukawa</th><th class="n" title="Salieron por ventana (archivo de ventanas)">Ventana</th><th class="n" title="Hormas facturadas por Ilolay hoy: cargalas acá">Ilolay (cargar)</th><th class="n">Sistema hoy</th><th class="n">Contado</th></tr></thead><tbody>${filas}</tbody></table></div>`}
+    <div class="tablebox" id="qGrid"><table><thead><tr><th>Código</th><th>Artículo</th><th class="n hide-sm" title="Hormas contadas al cierre anterior">Cierre ant.</th><th class="n" title="Variación del stock de Yasukawa desde el cierre anterior (se calcula sola)">Yasu.</th><th class="n" title="Salieron por ventana (archivo de ventanas)">Vent.</th><th class="n" title="Hormas facturadas por Ilolay hoy: cargalas acá">Ilolay</th><th class="n" title="Existencia del sistema hoy">Sist.</th><th class="n hide-sm">Contado</th></tr></thead><tbody>${filas}</tbody>
+      <tfoot><tr><td></td><td class="q-d">TOTAL</td><td class="n hide-sm"></td><td class="n" style="color:${sumY < 0 ? 'var(--bad)' : sumY > 0 ? 'var(--ok)' : 'inherit'}">${fmtS(sumY)}</td><td class="n">${sumV ? '-' + fmt(sumV) : '0'}</td><td class="n">${sumI ? '-' + fmt(sumI) : '0'}</td><td class="n">${fmt(sumS)}</td><td class="n hide-sm"></td></tr></tfoot></table></div>
+    <div class="q-fin"></div>
+    <div class="q-movil" aria-label="Totales"><span>Yasukawa<b style="color:${sumY < 0 ? 'var(--bad)' : sumY > 0 ? 'var(--ok)' : 'inherit'}">${fmtS(sumY)}</b></span><span>Ventana<b>${sumV ? '-' + fmt(sumV) : '0'}</b></span><span>Ilolay<b>${sumI ? '-' + fmt(sumI) : '0'}</b></span><span>Sistema<b>${fmt(sumS)}</b></span>${cerrado ? '' : `<div class="row" style="grid-column:1/-1;justify-content:flex-end;gap:8px"><button class="btn sm" data-act="qBorrar" ${Object.values(QD).some(x => x.i) || hayDraft ? '' : 'disabled'}>Borrar lo cargado</button><button class="btn pri sm" data-act="qGuardar" ${hayDraft ? '' : 'disabled'}>Guardar${hayDraft ? ' ●' : ''}</button></div>`}</div>`}
   </div>`;
 }
 async function guardarQuesos(todoCero) {
