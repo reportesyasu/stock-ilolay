@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb69';
+window.__VERSION = 'sb70';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb69</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb70</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -452,9 +452,12 @@ const Core = (() => {
     for (let i = 0; i < Math.min(rows.length, 40); i++) {
       const hdr = rows[i].map(U);
       const ix = n => hdr.indexOf(n), ixp = p => hdr.findIndex(h => h.startsWith(p));
+      // Base de clientes (sucu_x_emisor de Yasukawa): número de cliente por emisor, con sucursal y domicilio
+      if (hdr.includes('NRO_CLIENTE') && hdr.includes('DOMICILIO') && hdr.includes('EMISOR')) return { kind: 'cli', h: i, col: {
+        em: ix('EMISOR'), nro: ix('NRO_CLIENTE'), cli: ix('CLIENTE'), suc: ix('SUCURSAL'), dom: ix('DOMICILIO'), est: ix('ESTADO') } };
       // Facturación Yasukawa (ventas por vendedor / cliente / artículo, con chofer)
       if (hdr.includes('CHOFER') && hdr.includes('COD.FAB.') && ixp('UN.F') >= 0) return { kind: 'fya', h: i, col: {
-        cod: ix('COD.FAB.'), desc: ix('DESCRIPCION'), q: ixp('UN.F'), cred: ixp('UN.CRED'), ch: ix('CHOFER'), comp: ix('COMPROBANTE'), cli: ix('CLIENTE'),
+        cod: ix('COD.FAB.'), desc: ix('DESCRIPCION'), q: ixp('UN.F'), cred: ixp('UN.CRED'), ch: ix('CHOFER'), comp: ix('COMPROBANTE'), cli: ix('CLIENTE'), nc: ix('NRO.CLIE'),
         loc: ix('LOCALIDAD'), viaje: ix('VIAJE'), f: ix('FECHA'), hora: ix('HORA'), ms: ix('MOD.STOCK'), est: ix('ESTADO') } };
       // Comprobantes cargados (relaciona la factura de Ilolay con viaje y chofer)
       if (hdr.includes('DESP_NRO') && hdr.includes('CHOFER')) return { kind: 'comp', h: i, col: {
@@ -463,7 +466,7 @@ const Core = (() => {
       // Facturación Ilolay (SAP)
       if (hdr.includes('DOC.FACTURACION') && hdr.includes('MATERIAL')) return { kind: 'fil', h: i, col: {
         mat: ix('MATERIAL'), desc: ix('DENOMIN.POSICION'), doc: ix('DOC.FACTURACION'), ref: ix('REFERENCIA'), f: ix('FECHA FACTURA'),
-        cli: ix('NOMBRE DESTINATARIO'), cli2: ix('NOMBRE'), q: ix('CTD.FACTURA UME'), qv: ix('CANTIDAD FACTURADA'), umb: ix('UNIDAD MEDIDA BASE'),
+        cli: ix('NOMBRE DESTINATARIO'), cli2: ix('NOMBRE'), dest: ix('DESTINATARIO DE MERCADERIA'), q: ix('CTD.FACTURA UME'), qv: ix('CANTIDAD FACTURADA'), umb: ix('UNIDAD MEDIDA BASE'),
         umv: ix('UN.MEDIDA VENTA'), kg: ix('PESO NETO') } };
       // Ventanas (remitos de mostrador)
       if (hdr.includes('REMITO') && hdr.includes('CODIGO') && hdr.includes('CANTIDAD')) return { kind: 'vent', h: i, col: {
@@ -550,7 +553,7 @@ const Core = (() => {
       const cod = codPre(cel(r, c.cod), prefijo); if (!cod) continue;
       const est = U(cel(r, c.est)); if (est && est !== 'ACTIVO') continue;
       const cred = num(cel(r, c.cred));
-      filas.push({ o: 'Y', c: cod, comp: clean(cel(r, c.comp)), cli: clean(cel(r, c.cli)), loc: clean(cel(r, c.loc)), ch: clean(cel(r, c.ch)) || 'Sin chofer',
+      filas.push({ o: 'Y', c: cod, comp: clean(cel(r, c.comp)), cli: clean(cel(r, c.cli)), nc: clean(cel(r, c.nc)), loc: clean(cel(r, c.loc)), ch: clean(cel(r, c.ch)) || 'Sin chofer',
         viaje: clean(cel(r, c.viaje)), f: fISO(cel(r, c.f)), h: clean(cel(r, c.hora)), q: num(cel(r, c.q)) - cred, cred, ms: U(cel(r, c.ms)) !== 'NO' });
     }
     return { filas, n };
@@ -566,12 +569,25 @@ const Core = (() => {
     }
     return { by, porN1, n };
   }
+  // Base de clientes: Ilolay = emisor Sucesores de Alfredo Williner; Yasukawa = emisor Yasukawa
+  function buildCli(rows, info) {
+    const c = info.col, by = new Map(); let n = 0;
+    for (let i = info.h + 1; i < rows.length; i++) {
+      const r = rows[i]; if (!r) continue;
+      const em = U(cel(r, c.em)), o = /WILLINER|ILOLAY/.test(em) ? 'I' : /YASUKAWA/.test(em) ? 'Y' : ''; if (!o) continue;
+      const nro = clean(cel(r, c.nro)).replace(/^'+/, '').replace(/^0+(?=\d)/, ''); if (!nro) continue; n++;
+      const activo = !/BAJA|INACT/.test(U(cel(r, c.est))), k = o + '|' + nro;
+      if (by.has(k) && by.get(k).activo && !activo) continue;
+      by.set(k, { activo, v: [o, nro, clean(cel(r, c.cli)).replace(/^'+/, ''), clean(cel(r, c.suc)).replace(/^'+/, ''), clean(cel(r, c.dom)).replace(/^'+/, '')] });
+    }
+    return { lista: [...by.values()].map(x => x.v), n };
+  }
   function buildFil(rows, info) {
     const c = info.col, filas = []; let n = 0;
     for (let i = info.h + 1; i < rows.length; i++) {
       const r = rows[i]; if (!r) continue;
       const mat = code(cel(r, c.mat)); if (!mat) continue; n++;
-      filas.push({ o: 'I', c: mat, doc: clean(cel(r, c.doc)).replace(/\D/g, ''), ref: clean(cel(r, c.ref)), cli: clean(cel(r, c.cli)) || clean(cel(r, c.cli2)), cliN: clean(cel(r, c.cli2)), suc: clean(cel(r, c.cli)),
+      filas.push({ o: 'I', c: mat, doc: clean(cel(r, c.doc)).replace(/\D/g, ''), ref: clean(cel(r, c.ref)), cli: clean(cel(r, c.cli)) || clean(cel(r, c.cli2)), cliN: clean(cel(r, c.cli2)), suc: clean(cel(r, c.cli)), nc: clean(cel(r, c.dest)),
         f: fISO(cel(r, c.f)), q: num(cel(r, c.q >= 0 ? c.q : c.qv)), um: U(cel(r, c.umb >= 0 ? c.umb : c.umv)), kg: num(cel(r, c.kg)) });
     }
     return { filas, n };
@@ -681,7 +697,7 @@ const Core = (() => {
     return b + ((10 - (s % 10)) % 10);
   }
 
-  return { num, code, clean, rowsFromText, rowsFromHtml, rowsFromDelimited, detect, buildSap, buildYasu, buildMov, movFor, buildFya, buildComp, buildFil, buildVent, claveComp, fISO, compute, huerfanos, split, ean13FromDun };
+  return { num, code, clean, rowsFromText, rowsFromHtml, rowsFromDelimited, detect, buildSap, buildYasu, buildMov, movFor, buildFya, buildComp, buildFil, buildVent, buildCli, claveComp, fISO, compute, huerfanos, split, ean13FromDun };
 })();
 
 
@@ -1049,7 +1065,7 @@ async function refrescar(silencioso) {
     S.dia = e.dia; S.diaDoc = true;
     S.conteos = e.conteos || {}; S.ajustes = e.ajustes || []; S.codigos = e.codigos || {}; S.codigosDet = e.codigosDet || [];
     S.remoto = e.sistema; S.cierre = e.cierre; S.cierreCargado = true; S.apertura = e.apertura || null;
-    S.anterior = e.anterior || {}; S.anteriorFecha = e.anteriorFecha; S.quesosDia = e.quesosDia || {};
+    S.anterior = e.anterior || {}; S.anteriorFecha = e.anteriorFecha; S.quesosDia = e.quesosDia || {}; S.clientesMeta = e.clientesMeta || null;
     S.online = true; S.errorServidor = null; S.appUrl = e.appUrl || null;
     if (e.movs && (!S.movsRemoto || S.movsRemoto.ts !== e.movs.ts)) { S.movsRemoto = null; if (e.movs.fecha === e.dia) S.movsMeta = e.movs; }
     if (!e.movs) { S.movsMeta = null; if (!movimientosLocal()) S.movsRemoto = null; }
@@ -1177,6 +1193,7 @@ async function leerArchivos(list) {
       if (info.kind === 'fil') found.fil = { ...meta, data: Core.buildFil(rows, info) };
       if (info.kind === 'comp') found.comp = { ...meta, data: Core.buildComp(rows, info) };
       if (info.kind === 'vent') found.vent = { ...meta, data: Core.buildVent(rows, info, opt('prefijo')) };
+      if (info.kind === 'cli') { if (S.admin) subirClientes(f); continue; }
     } catch (e) { err.push(f.name + ' (' + (e.message || 'no se pudo leer') + ')'); }
   }
   for (const k of ARCH_KEYS) if (found[k]) S.files[k] = found[k];
@@ -1203,7 +1220,7 @@ function movimientosLocal() {
     const cp = F.comp ? (F.comp.data.by[x.doc] || F.comp.data.porN1[Core.claveComp(x.ref)]) : null;
     let q = x.q, nota = '';
     if (x.um === 'KG') { const p = peso(x.c); if (p > 0) { q = Math.round(x.q / p * 100) / 100; nota = fmt(x.q) + ' kg ÷ ' + fmt(p) + ' kg'; } else nota = 'cantidad en kg'; }
-    filas.push({ o: 'I', c: x.c, comp: cp ? (cp.n1 || cp.n) : (x.ref || x.doc), doc: x.doc, cli: x.cli, cliN: x.cliN || cp?.cliN || '', suc: x.suc || cp?.suc || '', f: x.f, q, nota,
+    filas.push({ o: 'I', c: x.c, comp: cp ? (cp.n1 || cp.n) : (x.ref || x.doc), doc: x.doc, cli: x.cli, cliN: x.cliN || cp?.cliN || '', suc: x.suc || cp?.suc || '', nc: x.nc || '', f: x.f, q, nota,
       ch: cp ? (cp.ch || 'Sin chofer') : (F.comp ? 'Sin chofer (no figura en comprobantes)' : 'Sin chofer (falta el archivo de comprobantes)'), viaje: cp?.viaje || '' });
   }
   return { fecha: S.dia, ts: Date.now(), archivos: { fya: F.fya?.name || '', fil: F.fil?.name || '', comp: F.comp?.name || '', vent: F.vent?.name || '' }, filas };
@@ -3101,6 +3118,7 @@ function vOpciones() {
     </div></details>
     ${secOp('compartir', 'Cómo compartir con depósito', 'Dirección de la página y PIN.')}<span class="small">Pasales la dirección de esta página y su <b>PIN de depósito</b>. Los PIN se ven y se editan en Supabase: Table Editor → tabla <span class="mono">config</span>, clave <span class="mono">pins</span> (podés agregar uno por persona, con su nombre, para saber quién contó). Con PIN de depósito solo se ve la pestaña Depósito.</span><span class="muted">Conectado como ${esc(S.me.id || '')}${S.admin ? ' (administración)' : ' (depósito)'} · servidor: ${esc(CFG.url)}</span></div></details>
   </form>
+  ${vClientes()}
   ${vPdfCfg()}
   ${vBaseDatos()}</div>`;
 }
@@ -3180,20 +3198,61 @@ async function pdfDifMovs() {
   if (!difs.length) { toast('No hay diferencias pendientes.'); return; }
   try {
     const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
+    await cargarClientesSiHace();
     descargar('Diferencias por chofer y proveedor ' + c.fecha + ' ' + hh + '.pdf', armarPdfDifMovs(c, difs, M, t));
     toast('PDF por chofer y proveedor descargado (' + difs.length + ' artículo' + (difs.length === 1 ? '' : 's') + ').');
   } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
 }
+/* ---------- Base de clientes (sucu_x_emisor): cliente, sucursal y domicilio por número de cliente ---------- */
+let CLIENTES = new Map(), clientesTs = null;
+const nroCli = s => String(s ?? '').replace(/^'+/, '').trim().replace(/^0+(?=\d)/, '');
+async function cargarClientesSiHace() {
+  const meta = S.clientesMeta;
+  if (!meta?.n) { CLIENTES = new Map(); return; }
+  if (clientesTs === meta.ts && CLIENTES.size) return;
+  try { const L = await API.call('getClientes'); CLIENTES = new Map(L.map(r => [r[0] + '|' + r[1], { cli: r[2], suc: r[3], dom: r[4] }])); clientesTs = meta.ts; }
+  catch (e) { /* sin base de clientes: el informe sale con lo que traen los archivos */ }
+}
+// Texto de la "boca": cliente y domicilio (base de clientes); si no está, lo que traen los archivos
+function bocaDe(x) {
+  const r = x.nc ? CLIENTES.get(x.o + '|' + nroCli(x.nc)) : null;
+  if (r) {
+    const cli = r.cli || r.suc || '', suc = r.suc && r.suc.toUpperCase() !== cli.toUpperCase() ? r.suc : '';
+    return [cli, suc && !cli.toUpperCase().includes(suc.toUpperCase()) ? '(' + suc + ')' : '', r.dom ? '- ' + r.dom : ''].filter(Boolean).join(' ');
+  }
+  const cli = String(x.cliN || x.cli || 'Sin cliente').trim();
+  const det = x.o === 'Y' ? (x.loc || '') : String(x.suc || (x.cliN && x.cli !== x.cliN ? x.cli : '') || '').trim();
+  return det && det.toUpperCase() !== cli.toUpperCase() ? cli + ' - ' + det : cli;
+}
+async function subirClientes(file) {
+  try {
+    toast('Leyendo ' + file.name + '…');
+    const { rows, info } = await fileRows(file);
+    if (info.kind !== 'cli') { toast('Ese archivo no parece la base de clientes (faltan las columnas EMISOR, NRO_CLIENTE y DOMICILIO).'); return; }
+    const d = Core.buildCli(rows, info);
+    if (!d.lista.length) { toast('No encontré clientes de Ilolay (Williner) ni de Yasukawa en el archivo.'); return; }
+    const n = await API.call('cargarClientes', d.lista, { archivo: file.name });
+    S.clientesMeta = { n, ts: Date.now(), archivo: file.name }; clientesTs = null; await cargarClientesSiHace();
+    toast('Base de clientes cargada: ' + n + ' clientes (Ilolay y Yasukawa).'); render();
+  } catch (e) { toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo cargar: ' + e.message); }
+}
+function vClientes() {
+  if (!S.admin) return '';
+  const m = S.clientesMeta;
+  return `<div style="max-width:760px" id="cliPanel">${secOp('cli', 'Base de clientes', 'Cliente, sucursal y domicilio de cada boca, para el PDF por chofer.')}
+    <span class="small">${m?.n ? `Cargada: <b>${fmt(m.n)} clientes</b> de Ilolay y Yasukawa${m.archivo ? ' · archivo ' + esc(m.archivo) : ''}${m.ts ? ' · ' + new Date(m.ts).toLocaleString('es-AR') : ''}.` : '<b>Todavía no se cargó.</b> Sin la base, el PDF por chofer muestra solo el nombre que traen los archivos (sin domicilio).'}</span>
+    <label class="stack" style="gap:4px"><span class="lbl">Subir la base de clientes (sucu_x_emisor de Yasukawa)</span><input type="file" id="cliFile" accept=".xls,.xlsx,.csv,.htm,.html"><span class="small muted">Reemplaza la anterior. Se toman los clientes de Sucesores de Alfredo Williner (Ilolay) y de Yasukawa, y se cruzan por número de cliente con la facturación de cada uno. También se reconoce si lo cargás junto con los archivos del día.</span></label>
+  </div></details></div>`;
+}
 function armarPdfDifMovs(c, difs, M, t) {
-  // Orden: chofer → artículo (código de fábrica) → cliente (nombre + sucursal / localidad, completos) → unidades
+  // Una grilla por chofer: CÓDIGO · DESCRIPCIÓN · BOCA (cliente y domicilio, de la base de clientes) · FAC (unidades)
   const cfg = pdfCfg();
   const P = pdfDoc(false); // siempre vertical
   const fs = Math.max(7, Math.min(12, (Number(cfg.letra) || 8) + 0.5)), ft = Math.max(9, Math.min(22, Number(cfg.titulo) || 15) - 1);
-  const lh = Math.round(fs * 1.3), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov(), Sg = Mg + 22, pad = 5;
-  const NOM = { Y: 'Yasukawa', I: 'Ilolay', V: 'Ventana' };
+  const lh = Math.round(fs * 1.3), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov(), pad = 5;
   const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
+  const ORI = { Y: 'Yasu.', I: 'Ilolay', V: 'Vent.' };
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
-  // Parte un texto en renglones que entren en el ancho (para que el cliente y la sucursal salgan enteros)
   const partir = (s, w, size, bold) => {
     const out = []; let cur = '';
     for (const pal of String(s || '').split(/\s+/).filter(Boolean)) {
@@ -3205,39 +3264,32 @@ function armarPdfDifMovs(c, difs, M, t) {
     if (cur) out.push(cur);
     return out.length ? out : [''];
   };
-  // Columnas de la grilla (con sangría): cliente / sucursal, origen, unidades
-  const wU = 78, wO = 62, xC = Sg, wC = ancho - 22 - wO - wU, xO = xC + wC, xU = xO + wO, anG = ancho - 22;
-  let y = 0, chAct = '', artAct = null;
+  // Columnas
+  const W = { c: 46, d: Math.round(ancho * 0.33), o: 40, f: 46 }; W.b = ancho - W.c - W.d - W.o - W.f;
+  const X = { c: Mg }; X.d = X.c + W.c; X.b = X.d + W.d; X.o = X.b + W.b; X.f = X.o + W.o;
+  let y = 0;
   const pagina = () => {
     P.nueva(); y = 24 + ft;
     P.text(Mg, y, cortar('Diferencias por chofer · ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ancho, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
     P.text(Mg, y, cortar('STOCK ILOLAY · Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · Movimientos: ' + Object.entries({ fya: 'Fact. Yasukawa', fil: 'Fact. Ilolay', comp: 'Comprobantes', vent: 'Ventanas' }).map(([k, n]) => n + (M.archivos?.[k] ? '' : ' (falta)')).join(', '), ancho, Math.max(6, fs - 2), false), Math.max(6, fs - 2), false, 'l', '#666666'); y += Math.round(fs * 1.2);
-    P.text(Mg, y, 'Ordenado por chofer, artículo y cliente. En amarillo: lo que coincide (±' + fmt(tol) + ' %) con la diferencia del artículo.', Math.max(6, fs - 2), false, 'l', '#666666'); y += 12;
+    P.text(Mg, y, 'Solo artículos con diferencia. En amarillo: lo que coincide (±' + fmt(tol) + ' %) con la diferencia del artículo.' + (CLIENTES.size ? '' : ' Sin base de clientes: el domicilio no está disponible.'), Math.max(6, fs - 2), false, 'l', '#666666'); y += 10;
   };
   const lugar = h => { if (y + h > P.H - 30) { pagina(); return true; } return false; };
-  const bandaChofer = (ch, extra) => {
-    P.rect(Mg, y, ancho, lh + 8, '#dde7f0');
-    P.text(Mg + 6, y + lh, cortar(ch + (extra || ''), ancho - 12, fs + 1.5, true), fs + 1.5, true, 'l', cfg.cTit); y += lh + 12;
+  const cab = (ch, cont) => {
+    P.rect(Mg, y, ancho, lh + 6, '#dde7f0'); P.text(Mg + pad, y + lh + 1, cortar(ch + (cont ? ' (continuación)' : ''), ancho - 2 * pad, fs + 1.5, true), fs + 1.5, true, 'l', cfg.cTit); y += lh + 6;
+    P.rect(Mg, y, ancho, lh + 2, cfg.cHead);
+    const hy = y + lh - 1, hs = fs - 1.5;
+    P.text(X.c + pad, hy, 'COD', hs, true, 'l', '#333333'); P.text(X.d + pad, hy, 'DESCRIPCIÓN', hs, true, 'l', '#333333'); P.text(X.b + pad, hy, 'BOCA', hs, true, 'l', '#333333');
+    P.text(X.o + pad, hy, 'ORIG.', hs, true, 'l', '#333333'); P.text(X.f + W.f - pad, hy, 'FAC', hs, true, 'r', '#333333'); y += lh + 2;
   };
-  const cabArt = (l, cont) => {
-    const u = l.u || 1;
-    P.text(Mg + 6, y + fs, cortar(l.c + '  ' + (l.d || '') + (cont ? ' (continuación)' : ''), ancho - 150, fs + 0.5, true), fs + 0.5, true);
-    P.text(Mg + ancho - 4, y + fs, `Dif. ${fmtS(l.dif)} U (${cjun(l.dif, u)})`, fs, true, 'r', l.dif < 0 ? cfg.cNeg : cfg.cPos); y += lh;
-    P.text(Mg + 6, y + fs - 1, cortar(`Sistema ${cjun(l.sis, u)} · Contado ${cjun(l.cont, u)}${l.m ? ' · ' + l.m : ''}`, ancho - 12, fs - 1, false), fs - 1, false, 'l', '#555555'); y += lh;
-    P.rect(xC, y, anG, lh + 2, cfg.cHead);
-    P.text(xC + pad, y + lh - 2, 'CLIENTE / SUCURSAL', fs - 1.5, true, 'l', '#333333'); P.text(xO + pad, y + lh - 2, 'ORIGEN', fs - 1.5, true, 'l', '#333333'); P.text(xU + wU - pad, y + lh - 2, 'UNID.', fs - 1.5, true, 'r', '#333333'); y += lh + 2;
-  };
-  // Datos: solo artículos con diferencia y renglones que mueven stock
+  // Datos: chofer → artículo → boca
   const D = new Map(difs.map(l => [l.c, l]));
   const porCh = new Map();
   for (const x of M.filas) {
     if (!D.has(x.c) || x.ms === false) continue;
     const ch = x.ch || 'Sin chofer', A = porCh.get(ch) || new Map(); porCh.set(ch, A);
     const g = A.get(x.c) || new Map(); A.set(x.c, g);
-    const cli = String(x.cliN || x.cli || 'Sin cliente').trim();
-    let det = x.o === 'Y' ? (x.loc ? 'Localidad: ' + x.loc : '') : String(x.suc || (x.cliN && x.cli !== x.cliN ? x.cli : '') || '').trim();
-    if (det && det.toUpperCase() === cli.toUpperCase()) det = '';
-    const k = x.o + '|' + cli + '|' + det, r = g.get(k) || { o: x.o, cli, det, q: 0 }; r.q += x.q; g.set(k, r);
+    const b = bocaDe(x), k = x.o + '|' + b, r = g.get(k) || { o: x.o, boca: b, q: 0 }; r.q += x.q; g.set(k, r);
   }
   const ultimo = ch => /^(ventana|sin chofer)/i.test(ch) ? 1 : 0;
   const choferes = [...porCh.keys()].sort((a, b) => ultimo(a) - ultimo(b) || a.localeCompare(b, 'es'));
@@ -3245,35 +3297,35 @@ function armarPdfDifMovs(c, difs, M, t) {
   if (!choferes.length) P.text(Mg, y + fs, 'Los artículos con diferencia no tienen movimientos en los archivos cargados.', fs, false, 'l', '#666666');
   for (const ch of choferes) {
     const A = porCh.get(ch), arts = [...A.keys()].sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
-    lugar(lh * 9); chAct = ch;
-    bandaChofer(ch, ' · ' + arts.length + ' artículo' + (arts.length === 1 ? '' : 's'));
+    lugar(lh * 6); cab(ch);
     for (const code of arts) {
       const l = D.get(code), dif = Math.abs(l.dif), hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
-      const rows = [...A.get(code).values()].sort((a, b) => a.cli.localeCompare(b.cli, 'es') || a.det.localeCompare(b.det, 'es'));
+      const rows = [...A.get(code).values()].sort((a, b) => a.boca.localeCompare(b.boca, 'es'));
       const sub = rows.reduce((s, r) => s + r.q, 0);
-      if (lugar(lh * 6)) bandaChofer(ch, ' (continuación)');
-      artAct = l; cabArt(l);
-      for (const r of rows) {
-        const l1 = partir(r.cli, wC - 2 * pad, fs, true), l2 = r.det ? partir(r.det, wC - 2 * pad, fs - 1, false) : [];
-        const h = l1.length * lh + l2.length * (lh - 1) + 4;
-        if (lugar(h)) { bandaChofer(ch, ' (continuación)'); cabArt(l, true); }
-        if (hl(r.q)) P.rect(xC, y, anG, h, '#fff3a6');
-        let yy = y + fs + 1;
-        for (const s of l1) { P.text(xC + pad, yy, s, fs, true); yy += lh; }
-        for (const s of l2) { P.text(xC + pad, yy - 1, s, fs - 1, false, 'l', '#444444'); yy += lh - 1; }
-        P.text(xO + pad, y + fs + 1, NOM[r.o] || r.o, fs - 1, false, 'l', '#555555');
-        P.text(xU + wU - pad, y + fs + 1, r.q < 0 ? '+' + fmt(-r.q) + ' (NC)' : fmt(r.q), fs, true, 'r', r.q < 0 ? cfg.cPos : '#000000');
-        y += h; if (cfg.sep !== false) P.line(xC, y, xC + anG, y, cS, gS);
-      }
+      const dLin = partir(l.d || '', W.d - 2 * pad, fs, true), dDif = `Dif. ${fmtS(l.dif)} U · ${cjun(l.dif, l.u || 1)}`;
+      rows.forEach((r, i) => {
+        const bl = partir(r.boca, W.b - 2 * pad, fs, false);
+        const izq = i === 0 ? dLin.length * lh + (lh - 2) : 0, h = Math.max(bl.length * lh, izq) + 4;
+        if (lugar(h)) cab(ch, true);
+        if (hl(r.q)) P.rect(Mg, y, ancho, h, '#fff3a6');
+        if (i === 0) {
+          P.text(X.c + pad, y + fs + 1, l.c, fs, true);
+          let yy = y + fs + 1; for (const s of dLin) { P.text(X.d + pad, yy, s, fs, true); yy += lh; }
+          P.text(X.d + pad, yy - 1, dDif, fs - 1.5, false, 'l', l.dif < 0 ? cfg.cNeg : cfg.cPos);
+        }
+        let yb = y + fs + 1; for (const s of bl) { P.text(X.b + pad, yb, s, fs); yb += lh; }
+        P.text(X.o + pad, y + fs + 1, ORI[r.o] || r.o, fs - 1.5, false, 'l', '#666666');
+        P.text(X.f + W.f - pad, y + fs + 1, r.q < 0 ? '+' + fmt(-r.q) + ' NC' : fmt(r.q), fs, true, 'r', r.q < 0 ? cfg.cPos : '#000000');
+        y += h; if (cfg.sep !== false) P.line(i === rows.length - 1 ? Mg : X.b, y, Mg + ancho, y, cS, gS);
+      });
       if (rows.length > 1) {
-        if (lugar(lh + 4)) { bandaChofer(ch, ' (continuación)'); cabArt(l, true); }
-        P.rect(xC, y, anG, lh + 4, hl(sub) ? '#fff3a6' : '#eeeeee');
-        P.text(xC + pad, y + fs + 2, 'Total ' + code + ' · ' + ch, fs - 0.5, true); P.text(xU + wU - pad, y + fs + 2, fmt(sub) + ' (' + cjun(sub, l.u || 1) + ')', fs - 0.5, true, 'r');
-        y += lh + 4;
+        if (lugar(lh + 2)) cab(ch, true);
+        if (hl(sub)) P.rect(X.b, y, ancho - (X.b - Mg), lh + 2, '#fff3a6');
+        P.text(X.b + pad, y + fs + 1, 'Total ' + l.c + ' · ' + cjun(sub, l.u || 1), fs - 1, true, 'l', '#333333'); P.text(X.f + W.f - pad, y + fs + 1, fmt(sub), fs, true, 'r');
+        y += lh + 2; if (cfg.sep !== false) P.line(Mg, y, Mg + ancho, y, cS, gS);
       }
-      y += 8;
     }
-    y += 6;
+    y += 12;
   }
   // Resumen por chofer al final (solo artículos con diferencia)
   const res = choferes.map(ch => { const A = porCh.get(ch), o = { Y: 0, I: 0, V: 0 }; for (const g of A.values()) for (const r of g.values()) o[r.o] = (o[r.o] || 0) + r.q; return [ch, A.size, o]; });
@@ -3281,8 +3333,8 @@ function armarPdfDifMovs(c, difs, M, t) {
     lugar(lh * (res.length + 4));
     y += 4; P.text(Mg, y + fs + 2, 'Resumen por chofer (solo artículos con diferencia)', fs + 2, true, 'l', cfg.cTit); y += lh + 8;
     const cols = [['CHOFER', 0.34, 'l'], ['ARTÍCULOS', 0.12, 'r'], ['YASUKAWA', 0.14, 'r'], ['ILOLAY', 0.14, 'r'], ['VENTANA', 0.12, 'r'], ['TOTAL U', 0.14, 'r']];
-    const an = Math.min(anG, 440); let xx = Sg; const xs = cols.map(([, w]) => { const v = xx; xx += w * an; return v; });
-    const fila = (vals, b, fondo) => { if (fondo) P.rect(Sg, y, an, lh + 2, fondo); vals.forEach((v, i) => { const w = cols[i][1] * an; if (cols[i][2] === 'r') P.text(xs[i] + w - pad, y + lh - 2, String(v), fs - 0.5, b, 'r'); else P.text(xs[i] + pad, y + lh - 2, cortar(v, w - 2 * pad, fs - 0.5, b), fs - 0.5, b); }); y += lh + 2; if (cfg.sep !== false) P.line(Sg, y, Sg + an, y, cS, gS); };
+    const an = Math.min(ancho, 460); let xx = Mg; const xs = cols.map(([, w]) => { const v = xx; xx += w * an; return v; });
+    const fila = (vals, b, fondo) => { if (fondo) P.rect(Mg, y, an, lh + 2, fondo); vals.forEach((v, i) => { const w = cols[i][1] * an; if (cols[i][2] === 'r') P.text(xs[i] + w - pad, y + lh - 2, String(v), fs - 0.5, b, 'r'); else P.text(xs[i] + pad, y + lh - 2, cortar(v, w - 2 * pad, fs - 0.5, b), fs - 0.5, b); }); y += lh + 2; if (cfg.sep !== false) P.line(Mg, y, Mg + an, y, cS, gS); };
     fila(cols.map(x => x[0]), true, cfg.cHead);
     for (const [ch, n, o] of res) { if (lugar(lh + 2)) fila(cols.map(x => x[0]), true, cfg.cHead); fila([ch, fmt(n), o.Y ? fmt(o.Y) : '', o.I ? fmt(o.I) : '', o.V ? fmt(o.V) : '', fmt(o.Y + o.I + o.V)], false); }
   }
@@ -3861,6 +3913,7 @@ document.addEventListener('change', async e => {
   if (a === 'borrarCierre') { S.ui.borrar = { cierre: t.checked, conf: false }; render(); return; }
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
   if (t.id === 'armFile' && t.files?.[0]) { armLeer(t.files[0]); t.value = ''; return; }
+  if (t.id === 'cliFile' && t.files?.[0]) { subirClientes(t.files[0]); t.value = ''; return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'valF') { const V = S.ui.val ||= valPeriodo('sem'); V[t.dataset.k] = t.value; V.per = ''; render(); return; }
