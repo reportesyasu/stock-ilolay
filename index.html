@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb68';
+window.__VERSION = 'sb69';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb68</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb69</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -561,7 +561,7 @@ const Core = (() => {
       const r = rows[i]; if (!r) continue;
       const d = clean(cel(r, c.desp)).replace(/\D/g, ''); if (!d) continue; n++;
       const o = { ch: clean(cel(r, c.ch)), viaje: clean(cel(r, c.viaje)), n: clean(cel(r, c.n)), n1: clean(cel(r, c.n1)), f: fISO(cel(r, c.f)),
-        cli: clean(cel(r, c.suc)) || clean(cel(r, c.cli)), est: clean(cel(r, c.est)) };
+        cli: clean(cel(r, c.suc)) || clean(cel(r, c.cli)), cliN: clean(cel(r, c.cli)), suc: clean(cel(r, c.suc)), est: clean(cel(r, c.est)) };
       by[d] = o; const k = claveComp(o.n1); if (k) porN1[k] = o;
     }
     return { by, porN1, n };
@@ -571,7 +571,7 @@ const Core = (() => {
     for (let i = info.h + 1; i < rows.length; i++) {
       const r = rows[i]; if (!r) continue;
       const mat = code(cel(r, c.mat)); if (!mat) continue; n++;
-      filas.push({ o: 'I', c: mat, doc: clean(cel(r, c.doc)).replace(/\D/g, ''), ref: clean(cel(r, c.ref)), cli: clean(cel(r, c.cli)) || clean(cel(r, c.cli2)),
+      filas.push({ o: 'I', c: mat, doc: clean(cel(r, c.doc)).replace(/\D/g, ''), ref: clean(cel(r, c.ref)), cli: clean(cel(r, c.cli)) || clean(cel(r, c.cli2)), cliN: clean(cel(r, c.cli2)), suc: clean(cel(r, c.cli)),
         f: fISO(cel(r, c.f)), q: num(cel(r, c.q >= 0 ? c.q : c.qv)), um: U(cel(r, c.umb >= 0 ? c.umb : c.umv)), kg: num(cel(r, c.kg)) });
     }
     return { filas, n };
@@ -1203,7 +1203,7 @@ function movimientosLocal() {
     const cp = F.comp ? (F.comp.data.by[x.doc] || F.comp.data.porN1[Core.claveComp(x.ref)]) : null;
     let q = x.q, nota = '';
     if (x.um === 'KG') { const p = peso(x.c); if (p > 0) { q = Math.round(x.q / p * 100) / 100; nota = fmt(x.q) + ' kg ÷ ' + fmt(p) + ' kg'; } else nota = 'cantidad en kg'; }
-    filas.push({ o: 'I', c: x.c, comp: cp ? (cp.n1 || cp.n) : (x.ref || x.doc), doc: x.doc, cli: x.cli, f: x.f, q, nota,
+    filas.push({ o: 'I', c: x.c, comp: cp ? (cp.n1 || cp.n) : (x.ref || x.doc), doc: x.doc, cli: x.cli, cliN: x.cliN || cp?.cliN || '', suc: x.suc || cp?.suc || '', f: x.f, q, nota,
       ch: cp ? (cp.ch || 'Sin chofer') : (F.comp ? 'Sin chofer (no figura en comprobantes)' : 'Sin chofer (falta el archivo de comprobantes)'), viaje: cp?.viaje || '' });
   }
   return { fecha: S.dia, ts: Date.now(), archivos: { fya: F.fya?.name || '', fil: F.fil?.name || '', comp: F.comp?.name || '', vent: F.vent?.name || '' }, filas };
@@ -3185,96 +3185,106 @@ async function pdfDifMovs() {
   } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
 }
 function armarPdfDifMovs(c, difs, M, t) {
+  // Orden: chofer → artículo (código de fábrica) → cliente (nombre + sucursal / localidad, completos) → unidades
   const cfg = pdfCfg();
   const P = pdfDoc(false); // siempre vertical
-  const fs = Math.max(6, Math.min(12, Number(cfg.letra) || 8)), ft = Math.max(9, Math.min(22, Number(cfg.titulo) || 15) - 1);
-  const rowH = Math.round(fs * 1.55), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov();
-  const Sg = Mg + 22; // sangría de las grillas: el título del artículo va desde el margen, las tablas más a la derecha y sin llegar al final
-  const ORI = ['Y', 'I', 'V'], NOM = { Y: 'Yasukawa', I: 'Ilolay', V: 'Ventana' };
+  const fs = Math.max(7, Math.min(12, (Number(cfg.letra) || 8) + 0.5)), ft = Math.max(9, Math.min(22, Number(cfg.titulo) || 15) - 1);
+  const lh = Math.round(fs * 1.3), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov(), Sg = Mg + 22, pad = 5;
+  const NOM = { Y: 'Yasukawa', I: 'Ilolay', V: 'Ventana' };
+  const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
-  const comp = s => String(s || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2');
-  let y = 0;
+  // Parte un texto en renglones que entren en el ancho (para que el cliente y la sucursal salgan enteros)
+  const partir = (s, w, size, bold) => {
+    const out = []; let cur = '';
+    for (const pal of String(s || '').split(/\s+/).filter(Boolean)) {
+      const prueba = cur ? cur + ' ' + pal : pal;
+      if (anchoTxt(prueba, size, bold) <= w) { cur = prueba; continue; }
+      if (cur) out.push(cur);
+      cur = pal; while (anchoTxt(cur, size, bold) > w && cur.length > 1) { let k = cur.length - 1; while (k > 1 && anchoTxt(cur.slice(0, k), size, bold) > w) k--; out.push(cur.slice(0, k)); cur = cur.slice(k); }
+    }
+    if (cur) out.push(cur);
+    return out.length ? out : [''];
+  };
+  // Columnas de la grilla (con sangría): cliente / sucursal, origen, unidades
+  const wU = 78, wO = 62, xC = Sg, wC = ancho - 22 - wO - wU, xO = xC + wC, xU = xO + wO, anG = ancho - 22;
+  let y = 0, chAct = '', artAct = null;
   const pagina = () => {
     P.nueva(); y = 24 + ft;
-    P.text(Mg, y, cortar('Diferencias por chofer y proveedor · ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ancho, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
-    P.text(Mg, y, cortar('STOCK ILOLAY · Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · Movimientos: ' + Object.entries({ fya: 'Fact. Yasukawa', fil: 'Fact. Ilolay', comp: 'Comprobantes', vent: 'Ventanas' }).map(([k, n]) => n + (M.archivos?.[k] ? '' : ' (falta)')).join(', ') + '', ancho, Math.max(6, fs - 1.5), false), Math.max(6, fs - 1.5), false, 'l', '#666666'); y += Math.round(fs * 1.3);
-    P.text(Mg, y, 'En amarillo: lo que coincide (±' + fmt(tol) + ' %) con la diferencia del artículo.', Math.max(6, fs - 1.5), false, 'l', '#666666'); y += 14;
+    P.text(Mg, y, cortar('Diferencias por chofer · ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ancho, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(Mg, y, cortar('STOCK ILOLAY · Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · Movimientos: ' + Object.entries({ fya: 'Fact. Yasukawa', fil: 'Fact. Ilolay', comp: 'Comprobantes', vent: 'Ventanas' }).map(([k, n]) => n + (M.archivos?.[k] ? '' : ' (falta)')).join(', '), ancho, Math.max(6, fs - 2), false), Math.max(6, fs - 2), false, 'l', '#666666'); y += Math.round(fs * 1.2);
+    P.text(Mg, y, 'Ordenado por chofer, artículo y cliente. En amarillo: lo que coincide (±' + fmt(tol) + ' %) con la diferencia del artículo.', Math.max(6, fs - 2), false, 'l', '#666666'); y += 12;
   };
   const lugar = h => { if (y + h > P.H - 30) { pagina(); return true; } return false; };
-  // Tabla genérica: cols = [{n, w (fracción), a}], filas = [{v:[...], b:bold, hl:amarillo, gris, fondo}]
-  const tabla = (cols, filas, x0 = Mg, an = ancho) => {
-    const xs = []; let acc = x0; const ws = cols.map(cl => cl.w * an); ws.forEach(w => { xs.push(acc); acc += w; });
-    const cab = () => { P.rect(x0, y - fs - 2, an, rowH, cfg.cHead); cols.forEach((cl, i) => celda(cl, i, cl.n, true, '#000000')); y += rowH; };
-    const celda = (cl, i, v, b, color) => { const s = cortar(v, ws[i] - 6, fs, b); if (cl.a === 'r') P.text(xs[i] + ws[i] - 3, y, s, fs, b, 'r', color); else P.text(xs[i] + 3, y, s, fs, b, 'l', color); };
-    lugar(rowH * 2); cab();
-    for (const f of filas) {
-      if (lugar(rowH)) cab();
-      if (f.hl) P.rect(x0, y - fs - 2, an, rowH, '#fff3a6'); else if (f.fondo) P.rect(x0, y - fs - 2, an, rowH, f.fondo);
-      cols.forEach((cl, i) => celda(cl, i, f.v[i] ?? '', !!f.b, f.color?.[i] || (f.gris ? '#666666' : '#000000')));
-      if (cfg.sep !== false) P.line(x0, y + rowH - fs - 2, x0 + an, y + rowH - fs - 2, cfg.cSep || '#b4b4b4', Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)));
-      if (cfg.sepV) xs.slice(1).forEach(x => P.line(x, y - fs - 2, x, y + rowH - fs - 2, cfg.cSep || '#b4b4b4', Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5))));
-      y += rowH;
-    }
-    y += 4;
+  const bandaChofer = (ch, extra) => {
+    P.rect(Mg, y, ancho, lh + 8, '#dde7f0');
+    P.text(Mg + 6, y + lh, cortar(ch + (extra || ''), ancho - 12, fs + 1.5, true), fs + 1.5, true, 'l', cfg.cTit); y += lh + 12;
   };
+  const cabArt = (l, cont) => {
+    const u = l.u || 1;
+    P.text(Mg + 6, y + fs, cortar(l.c + '  ' + (l.d || '') + (cont ? ' (continuación)' : ''), ancho - 150, fs + 0.5, true), fs + 0.5, true);
+    P.text(Mg + ancho - 4, y + fs, `Dif. ${fmtS(l.dif)} U (${cjun(l.dif, u)})`, fs, true, 'r', l.dif < 0 ? cfg.cNeg : cfg.cPos); y += lh;
+    P.text(Mg + 6, y + fs - 1, cortar(`Sistema ${cjun(l.sis, u)} · Contado ${cjun(l.cont, u)}${l.m ? ' · ' + l.m : ''}`, ancho - 12, fs - 1, false), fs - 1, false, 'l', '#555555'); y += lh;
+    P.rect(xC, y, anG, lh + 2, cfg.cHead);
+    P.text(xC + pad, y + lh - 2, 'CLIENTE / SUCURSAL', fs - 1.5, true, 'l', '#333333'); P.text(xO + pad, y + lh - 2, 'ORIGEN', fs - 1.5, true, 'l', '#333333'); P.text(xU + wU - pad, y + lh - 2, 'UNID.', fs - 1.5, true, 'r', '#333333'); y += lh + 2;
+  };
+  // Datos: solo artículos con diferencia y renglones que mueven stock
+  const D = new Map(difs.map(l => [l.c, l]));
+  const porCh = new Map();
+  for (const x of M.filas) {
+    if (!D.has(x.c) || x.ms === false) continue;
+    const ch = x.ch || 'Sin chofer', A = porCh.get(ch) || new Map(); porCh.set(ch, A);
+    const g = A.get(x.c) || new Map(); A.set(x.c, g);
+    const cli = String(x.cliN || x.cli || 'Sin cliente').trim();
+    let det = x.o === 'Y' ? (x.loc ? 'Localidad: ' + x.loc : '') : String(x.suc || (x.cliN && x.cli !== x.cliN ? x.cli : '') || '').trim();
+    if (det && det.toUpperCase() === cli.toUpperCase()) det = '';
+    const k = x.o + '|' + cli + '|' + det, r = g.get(k) || { o: x.o, cli, det, q: 0 }; r.q += x.q; g.set(k, r);
+  }
+  const ultimo = ch => /^(ventana|sin chofer)/i.test(ch) ? 1 : 0;
+  const choferes = [...porCh.keys()].sort((a, b) => ultimo(a) - ultimo(b) || a.localeCompare(b, 'es'));
   pagina();
-  // Resumen arriba
-  const r = c.resumen || {};
-  const conMov = difs.filter(l => M.filas.some(x => x.c === l.c)).length;
-  const resumenCh = {}; // chofer → {o: {Y,I,V}, arts:Set}
-  for (const l of difs) {
-    const u = l.u || 1, dif = Math.abs(l.dif), hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
-    const fsMov = M.filas.filter(x => x.c === l.c), cuenta = fsMov.filter(x => x.ms !== false);
-    lugar(rowH * 4);
-    // Encabezado del artículo
-    P.rect(Mg, y - fs - 4, ancho, rowH * 2 + 4, '#eef2f6');
-    P.text(Mg + 4, y, cortar(l.c + '  ' + (l.d || ''), ancho - 8, fs + 1, true), fs + 1, true); y += rowH;
-    P.text(Mg + 4, y, cortar(`Sistema ${cjun(l.sis, u)} · Contado ${cjun(l.cont, u)} · Dif. ${fmtS(l.dif)} U${l.m ? ' · ' + l.m : ''}`, ancho - 8, fs, true), fs, true, 'l', l.dif < 0 ? cfg.cNeg : cfg.cPos);
-    y += rowH + 6;
-    if (!fsMov.length) { P.text(Mg + 4, y, 'Sin movimientos en los archivos cargados.', fs, false, 'l', '#666666'); y += rowH + 6; continue; }
-    const total = cuenta.reduce((s, x) => s + x.q, 0);
-    for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const rc = (resumenCh[k] ||= { Y: 0, I: 0, V: 0, arts: new Set() }); rc[x.o] = (rc[x.o] || 0) + x.q; rc.arts.add(l.c); }
-    P.text(Sg, y, `Salieron ${fmt(total)} U (${cjun(total, u)})`, fs, false, 'l', '#555555'); y += rowH;
-    // Ilolay: detallado por chofer → cliente → comprobante, con subtotal por chofer.
-    // Yasukawa y Ventana: un renglón por chofer con su total.
-    for (const o of ORI) {
-      const rs = fsMov.filter(x => x.o === o).sort((a, b) => (a.ch || '').localeCompare(b.ch || '') || (a.cli || '').localeCompare(b.cli || '') || (a.comp || '').localeCompare(b.comp || ''));
-      if (!rs.length) continue;
-      const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
-      lugar(rowH * 3);
-      if (o === 'I') {
-        P.text(Sg, y, `${NOM[o]} · por chofer y cliente · ${fmt(tq)} U`, fs, true, 'l', cfg.cTit); y += rowH;
-        // se juntan los comprobantes del mismo cliente
-        const grupos = new Map();
-        for (const x of rs) { if (x.ms === false) continue; const k = (x.ch || 'Sin chofer') + '|' + (x.cli || ''); const g = grupos.get(k) || { ch: x.ch || 'Sin chofer', cli: x.cli || '', q: 0 }; g.q += x.q; grupos.set(k, g); }
-        const filas = []; let chAct, sub = 0, n = 0;
-        const cerrar = () => { if (chAct !== undefined && n > 1) filas.push({ v: ['', 'Subtotal ' + chAct, fmt(sub)], b: true, fondo: '#f6f6f6', hl: hl(sub) }); };
-        for (const g of grupos.values()) {
-          if (g.ch !== chAct) { cerrar(); chAct = g.ch; sub = 0; n = 0; }
-          sub += g.q; n++;
-          filas.push({ v: [n === 1 ? g.ch : '', g.cli, g.q < 0 ? '+' + fmt(-g.q) + ' (NC)' : fmt(g.q)], hl: hl(g.q), color: g.q < 0 ? [null, null, cfg.cPos] : null, b: false });
-        }
-        cerrar();
-        filas.push({ v: ['Total ' + NOM[o], '', fmt(tq)], b: true, fondo: '#eeeeee', hl: hl(tq) });
-        tabla([{ n: 'Chofer', w: 0.36 }, { n: 'Cliente', w: 0.46 }, { n: 'UNID.', w: 0.18, a: 'r' }], filas, Sg, Math.min(ancho - 22, 400));
-      } else {
-        P.text(Sg, y, `${NOM[o]} · total por chofer · ${fmt(tq)} U`, fs, true, 'l', cfg.cTit); y += rowH;
-        const porCh = {};
-        for (const x of rs) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { q: 0 }); if (x.ms !== false) g.q += x.q; }
-        const filas = Object.entries(porCh).sort((a, b) => b[1].q - a[1].q).map(([k, g]) => ({ v: [k, fmt(g.q)], hl: hl(g.q) }));
-        filas.push({ v: ['Total ' + NOM[o], fmt(tq)], b: true, fondo: '#eeeeee', hl: hl(tq) });
-        tabla([{ n: 'Chofer', w: 0.75 }, { n: 'UNID.', w: 0.25, a: 'r' }], filas, Sg, Math.min(ancho - 22, 260));
+  if (!choferes.length) P.text(Mg, y + fs, 'Los artículos con diferencia no tienen movimientos en los archivos cargados.', fs, false, 'l', '#666666');
+  for (const ch of choferes) {
+    const A = porCh.get(ch), arts = [...A.keys()].sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+    lugar(lh * 9); chAct = ch;
+    bandaChofer(ch, ' · ' + arts.length + ' artículo' + (arts.length === 1 ? '' : 's'));
+    for (const code of arts) {
+      const l = D.get(code), dif = Math.abs(l.dif), hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
+      const rows = [...A.get(code).values()].sort((a, b) => a.cli.localeCompare(b.cli, 'es') || a.det.localeCompare(b.det, 'es'));
+      const sub = rows.reduce((s, r) => s + r.q, 0);
+      if (lugar(lh * 6)) bandaChofer(ch, ' (continuación)');
+      artAct = l; cabArt(l);
+      for (const r of rows) {
+        const l1 = partir(r.cli, wC - 2 * pad, fs, true), l2 = r.det ? partir(r.det, wC - 2 * pad, fs - 1, false) : [];
+        const h = l1.length * lh + l2.length * (lh - 1) + 4;
+        if (lugar(h)) { bandaChofer(ch, ' (continuación)'); cabArt(l, true); }
+        if (hl(r.q)) P.rect(xC, y, anG, h, '#fff3a6');
+        let yy = y + fs + 1;
+        for (const s of l1) { P.text(xC + pad, yy, s, fs, true); yy += lh; }
+        for (const s of l2) { P.text(xC + pad, yy - 1, s, fs - 1, false, 'l', '#444444'); yy += lh - 1; }
+        P.text(xO + pad, y + fs + 1, NOM[r.o] || r.o, fs - 1, false, 'l', '#555555');
+        P.text(xU + wU - pad, y + fs + 1, r.q < 0 ? '+' + fmt(-r.q) + ' (NC)' : fmt(r.q), fs, true, 'r', r.q < 0 ? cfg.cPos : '#000000');
+        y += h; if (cfg.sep !== false) P.line(xC, y, xC + anG, y, cS, gS);
       }
+      if (rows.length > 1) {
+        if (lugar(lh + 4)) { bandaChofer(ch, ' (continuación)'); cabArt(l, true); }
+        P.rect(xC, y, anG, lh + 4, hl(sub) ? '#fff3a6' : '#eeeeee');
+        P.text(xC + pad, y + fs + 2, 'Total ' + code + ' · ' + ch, fs - 0.5, true); P.text(xU + wU - pad, y + fs + 2, fmt(sub) + ' (' + cjun(sub, l.u || 1) + ')', fs - 0.5, true, 'r');
+        y += lh + 4;
+      }
+      y += 8;
     }
     y += 6;
   }
-  // Resumen general por chofer y proveedor (solo artículos con diferencia)
-  const chs = Object.entries(resumenCh);
-  if (chs.length) {
-    if (!lugar(rowH * 6)) { y += 4; }
-    P.text(Sg, y, 'Resumen por chofer (solo artículos con diferencia)', fs + 2, true, 'l', cfg.cTit); y += rowH + 2;
-    tabla([{ n: 'Chofer', w: 0.34 }, { n: 'Artículos', w: 0.12, a: 'r' }, { n: 'Yasukawa', w: 0.14, a: 'r' }, { n: 'Ilolay', w: 0.14, a: 'r' }, { n: 'Ventana', w: 0.12, a: 'r' }, { n: 'TOTAL U', w: 0.14, a: 'r' }],
-      chs.sort((a, b) => (b[1].Y + b[1].I + b[1].V) - (a[1].Y + a[1].I + a[1].V)).map(([k, g]) => ({ v: [k, fmt(g.arts.size), g.Y ? fmt(g.Y) : '', g.I ? fmt(g.I) : '', g.V ? fmt(g.V) : '', fmt(g.Y + g.I + g.V)] })), Sg, Math.min(ancho - 22, 440));
+  // Resumen por chofer al final (solo artículos con diferencia)
+  const res = choferes.map(ch => { const A = porCh.get(ch), o = { Y: 0, I: 0, V: 0 }; for (const g of A.values()) for (const r of g.values()) o[r.o] = (o[r.o] || 0) + r.q; return [ch, A.size, o]; });
+  if (res.length) {
+    lugar(lh * (res.length + 4));
+    y += 4; P.text(Mg, y + fs + 2, 'Resumen por chofer (solo artículos con diferencia)', fs + 2, true, 'l', cfg.cTit); y += lh + 8;
+    const cols = [['CHOFER', 0.34, 'l'], ['ARTÍCULOS', 0.12, 'r'], ['YASUKAWA', 0.14, 'r'], ['ILOLAY', 0.14, 'r'], ['VENTANA', 0.12, 'r'], ['TOTAL U', 0.14, 'r']];
+    const an = Math.min(anG, 440); let xx = Sg; const xs = cols.map(([, w]) => { const v = xx; xx += w * an; return v; });
+    const fila = (vals, b, fondo) => { if (fondo) P.rect(Sg, y, an, lh + 2, fondo); vals.forEach((v, i) => { const w = cols[i][1] * an; if (cols[i][2] === 'r') P.text(xs[i] + w - pad, y + lh - 2, String(v), fs - 0.5, b, 'r'); else P.text(xs[i] + pad, y + lh - 2, cortar(v, w - 2 * pad, fs - 0.5, b), fs - 0.5, b); }); y += lh + 2; if (cfg.sep !== false) P.line(Sg, y, Sg + an, y, cS, gS); };
+    fila(cols.map(x => x[0]), true, cfg.cHead);
+    for (const [ch, n, o] of res) { if (lugar(lh + 2)) fila(cols.map(x => x[0]), true, cfg.cHead); fila([ch, fmt(n), o.Y ? fmt(o.Y) : '', o.I ? fmt(o.I) : '', o.V ? fmt(o.V) : '', fmt(o.Y + o.I + o.V)], false); }
   }
   return P.blob();
 }
