@@ -273,7 +273,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb56';
+window.__VERSION = 'sb57';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -296,7 +296,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb56</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb57</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -565,7 +565,7 @@ const Core = (() => {
   const tr = x => (x < 0 ? Math.ceil(x) : Math.floor(x));
   function split(units, uxc) { const cj = tr(units / uxc); return { cj, un: units - cj * uxc }; }
 
-  function compute({ maestro, sap, yasu, ajustes, conteos, anterior, quesoSap }) {
+  function compute({ maestro, sap, yasu, ajustes, conteos, anterior, quesoSap, quesos }) {
     const aj = {};
     for (const a of ajustes || []) aj[a.c] = (aj[a.c] || 0) + num(a.u);
     const lines = [];
@@ -583,15 +583,19 @@ const Core = (() => {
       const peso = y && y.peso > 0 ? y.peso : (m.p > 0 ? m.p : 0);
       // Quesos: se parte de lo contado en el cierre anterior y se suma la variación de los sistemas desde ese cierre
       // (SAP en kg convertido a hormas por el peso nominal; Yasukawa ya en hormas). Sin datos del cierre anterior, arrastre simple.
-      let base = qSap + qY, varSap = 0, varYa = 0, metodo = 'suma';
+      let base = qSap + qY, varSap = 0, varYa = 0, metodo = 'suma', qVent = 0, qIlo = 0;
       if (m.q) {
         const prevCont = prev && prev.cont !== null && prev.cont !== undefined ? num(prev.cont) : 0;
-        if (prev && typeof prev.sk === 'number' && typeof prev.ya === 'number' && sap && y) {
+        const hib = quesoSap === 'hibrido', qd = hib ? (quesos?.[c] || {}) : {};
+        // Híbrido: Yasukawa por variación de stock, ventana por el archivo de ventanas y facturación Ilolay cargada en la pestaña Quesos
+        qVent = num(qd.v); qIlo = num(qd.i);
+        const okYa = !!(prev && typeof prev.ya === 'number' && y), okSap = !!(prev && typeof prev.sk === 'number' && sap);
+        if (hib ? okYa : (okYa && okSap)) {
           // quesoSap 'manual': la facturación por Ilolay se carga a mano como ajuste del día (como la hoja QUESOS de la planilla)
-          varSap = quesoSap === 'manual' ? 0 : (peso > 0 ? Math.round((sapRaw - prev.sk) / peso) : 0);
+          varSap = quesoSap === 'manual' || hib ? 0 : (peso > 0 ? Math.round((sapRaw - prev.sk) / peso) : 0);
           varYa = qY - prev.ya;
-          base = prevCont + varSap + varYa; metodo = quesoSap === 'manual' ? 'manual' : 'variacion';
-        } else { base = prevCont; metodo = 'arrastre'; }
+          base = prevCont + varSap + varYa - qVent - qIlo; metodo = hib ? 'hibrido' : quesoSap === 'manual' ? 'manual' : 'variacion';
+        } else { base = prevCont - qVent - qIlo; metodo = 'arrastre'; }
       }
       const sisVivo = base + qA;
       const k = conteos?.[c];
@@ -604,7 +608,7 @@ const Core = (() => {
       const dif = contado ? cont - sis : null;
       const precio = y ? y.precio : 0;
       lines.push({
-        c, d: m.d || y?.desc || '', s: m.s, o: m.o, uxc, q: !!m.q, base, metodo, varSap, varYa, sapRaw, peso, prevCont: prev?.cont ?? null, prevSk: prev?.sk ?? null, prevYa: prev?.ya ?? null,
+        c, d: m.d || y?.desc || '', s: m.s, o: m.o, uxc, q: !!m.q, base, metodo, varSap, varYa, qVent, qIlo, sapRaw, peso, prevCont: prev?.cont ?? null, prevSk: prev?.sk ?? null, prevYa: prev?.ya ?? null,
         sap: qSap, yasu: qY, aj: qA, sis, sisCj: s.cj, sisUn: s.un, ok, okTs: ok ? k.okTs : null, sisVivo, cambio: ok ? sisVivo - sis : 0,
         contado, cont, contCj: contado ? num(k.cj) : null, contUn: contado ? num(k.un) : null,
         dif, precio, importe: dif ? Math.round(dif * precio * 100) / 100 : 0,
@@ -1005,7 +1009,7 @@ async function refrescar(silencioso) {
     S.dia = e.dia; S.diaDoc = true;
     S.conteos = e.conteos || {}; S.ajustes = e.ajustes || []; S.codigos = e.codigos || {};
     S.remoto = e.sistema; S.cierre = e.cierre; S.cierreCargado = true; S.apertura = e.apertura || null;
-    S.anterior = e.anterior || {}; S.anteriorFecha = e.anteriorFecha;
+    S.anterior = e.anterior || {}; S.anteriorFecha = e.anteriorFecha; S.quesosDia = e.quesosDia || {};
     S.online = true; S.errorServidor = null; S.appUrl = e.appUrl || null;
     if (e.movs && (!S.movsRemoto || S.movsRemoto.ts !== e.movs.ts)) { S.movsRemoto = null; if (e.movs.fecha === e.dia) S.movsMeta = e.movs; }
     if (!e.movs) { S.movsMeta = null; if (!movimientosLocal()) S.movsRemoto = null; }
@@ -1142,6 +1146,7 @@ async function leerArchivos(list) {
   recalc(); render();
   publicarSistema();
   if (MOV_KEYS.some(k => found[k])) publicarMovs();
+  if (found.vent) publicarQuesosVentana();
   const n = ARCH_KEYS.filter(k => found[k]).length;
   toast(n ? 'Archivos actualizados (' + n + ' reconocidos).' : 'Ningún archivo coincide con stock, facturación, comprobantes o ventanas.');
 }
@@ -1260,7 +1265,7 @@ let autoRecT = null, okT = null;
 function recalc() {
   const maestro = S.maestro;
   const f = fuentes();
-  LINES = Core.compute({ maestro, sap: f.sap, yasu: f.yasu, ajustes: S.ajustes, conteos: S.conteos, anterior: S.anterior || {}, quesoSap: opt('quesoSap') });
+  LINES = Core.compute({ maestro, sap: f.sap, yasu: f.yasu, ajustes: S.ajustes, conteos: S.conteos, anterior: S.anterior || {}, quesoSap: opt('quesoSap'), quesos: S.quesosDia || {} });
   // Verificación automática: contado igual al sistema → se congela ese sistema (solo desde administración con cruce disponible)
   if (S.admin && !S.cierre && tieneSistema() && S.online) {
     clearTimeout(okT);
@@ -1336,6 +1341,8 @@ function renderAhora() {
   else if (t === 'contar') html = vContar();
   else if (t === 'maestro') html = vMaestro();
   else if (t === 'ajustes') html = vAjustes();
+  else if (t === 'quesos') html = vQuesos();
+  else if (t === 'correos') html = vCorreos();
   else if (t === 'historial') html = vHistorial();
   else if (t === 'opciones') html = vOpciones();
   ponerMain(main, html);
@@ -1381,7 +1388,7 @@ function restoreFocus(k) {
 }
 function renderTop() {
   const tabs = S.admin
-    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Opciones']]
+    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['quesos', 'Quesos'], ['correos', 'Correos'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Opciones']]
     : [['contar', 'Depósito']];
   $('#tabs').hidden = false;
   $('#tabs').innerHTML = (tabs.length < 2 ? [] : tabs).map(([k, n]) => `<button data-act="tab" data-v="${k}" ${S.ui.tab === k ? 'aria-current="page"' : ''}>${n}</button>`).join('') + '<button data-act="salir" title="Cambiar de PIN o de servidor">Salir</button>';
@@ -1573,7 +1580,7 @@ function tablaHoy(lines, sis, cerrado) {
     const ayer = l.prevDif ? `<span class="${l.prevDif < 0 ? 'pill bad' : 'pill ok'}" title="${esc(l.prevMotivo)}">${fmtS(l.prevDif)}</span>` : '';
     rows += `<tr class="${cls}">
       <td><span class="code">${esc(l.c)}</span></td>
-      <td class="desc"><button class="link" data-act="artMenu" data-c="${esc(l.c)}" title="Tocá para ver el detalle, el historial o los movimientos">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}</td>
+      <td class="desc"><button class="link" data-act="artMenu" data-c="${esc(l.c)}" title="Tocá para ver el detalle, el historial o los movimientos">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : l.metodo === 'hibrido' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa, menos ventana (archivo) y menos facturación Ilolay (pestaña Quesos)">queso · híbrido</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}</td>
       <td class="n hide-sm">${sis ? `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>` : '<span class="muted small" title="Faltan los archivos del día">sin archivos</span>'}</td>
       <td class="n"><span class="cnt">${inCj}<span>cj</span>${inUn}<span>u</span></span></td>
       <td class="n dif">${sis && l.contado ? (l.dif ? fmtS(l.dif) : '<span class="muted">0</span>') : ''}</td>
@@ -1697,6 +1704,8 @@ function renderSheetInner() {
     : fuentes().origen === 'remoto' && !l.q ? `SAP ${fmt(l.sap)} + Yasukawa ${fmt(l.yasu)} + ajustes ${fmt(l.aj)} = <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>` : ''}<br><span class="muted">Cruce cargado en otra PC a las ${hora(S.remoto.ts)}.</span>`
     : (l.q ? (l.metodo === 'manual'
         ? `Contado al cierre del ${dm(S.anteriorFecha)}: ${fmt(l.prevCont)} hormas<br>+ variación Yasukawa: ${fmt(l.yasu)} − ${fmt(l.prevYa)} = ${fmtS(l.varYa)}<br>+ facturación Ilolay cargada a mano (ajustes del día): ver abajo<br>= ${fmt(l.base)}`
+        : l.metodo === 'hibrido'
+        ? `Contado al cierre del ${dm(S.anteriorFecha)}: ${fmt(l.prevCont)} hormas<br>+ variación Yasukawa: ${fmt(l.yasu)} − ${fmt(l.prevYa)} = ${fmtS(l.varYa)}<br>− ventana (archivo): ${fmt(l.qVent)}<br>− facturación Ilolay (pestaña Quesos): ${fmt(l.qIlo)}<br>= ${fmt(l.base)}`
         : l.metodo === 'variacion'
         ? `Contado al cierre del ${dm(S.anteriorFecha)}: ${fmt(l.prevCont)} hormas<br>+ variación SAP: (${fmt(l.sapRaw)} kg − ${fmt(l.prevSk)} kg) ÷ ${fmt(l.peso)} kg = ${fmtS(l.varSap)}<br>+ variación Yasukawa: ${fmt(l.yasu)} − ${fmt(l.prevYa)} = ${fmtS(l.varYa)}<br>= ${fmt(l.base)}`
         : `Cierre anterior (${dm(S.anteriorFecha)}) ${fmt(l.base)} <span class="muted">(arrastre: el cierre anterior no tiene los kilos de SAP; desde el próximo cierre se usa la variación)</span>`)
@@ -2333,6 +2342,74 @@ function excelEgreso() {
     toast('Excel descargado: ' + filas.length + ' artículo' + (filas.length === 1 ? '' : 's') + ' (' + sel.length + ' ajustes).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
 }
+/* ---------- Quesos: facturación Ilolay del día cargada a mano (modo híbrido) + ventana del archivo ---------- */
+function quesosLista() {
+  return Object.entries(S.maestro).filter(([, m]) => m.q && !m.baja).sort((a, b) => (a[1].s || '').localeCompare(b[1].s || '') || (a[1].o ?? 999) - (b[1].o ?? 999) || a[0].localeCompare(b[0], 'es', { numeric: true })).map(([c]) => c);
+}
+// Ventana: lo que salió hoy por ventana según el archivo cargado en "Archivos del día"; se publica para todos los dispositivos
+async function publicarQuesosVentana() {
+  if (!S.admin || !S.files.vent) return;
+  const Q = new Set(quesosLista()), v = {};
+  for (const x of S.files.vent.data.filas || []) if (Q.has(x.c) && x.ms !== false) v[x.c] = (v[x.c] || 0) + (Number(x.q) || 0);
+  for (const c of Object.keys(S.quesosDia || {})) if (Q.has(c) && !(c in v)) v[c] = 0;
+  const cambia = Object.entries(v).some(([c, u]) => (S.quesosDia?.[c]?.v || 0) !== u);
+  if (!cambia) return;
+  S.quesosDia ||= {};
+  for (const [c, u] of Object.entries(v)) (S.quesosDia[c] ||= { i: 0, v: 0 }).v = u;
+  recalc(); render();
+  try { await API.call('guardarQuesos', S.dia, v, 'v'); } catch (e) { toast('No se pudo compartir lo de ventana de los quesos: ' + e.message); }
+}
+function vQuesos() {
+  if (!S.admin) return '';
+  const hib = opt('quesoSap') === 'hibrido', cerrado = !!S.cierre, L = quesosLista(), D = S.ui.qDraft ||= {}, QD = S.quesosDia || {};
+  const vent = S.files.vent ? 'archivo ' + esc(S.files.vent.name) : Object.values(QD).some(x => x.v) ? 'archivo de ventanas cargado en otra PC' : '';
+  const sumI = L.reduce((s, c) => s + (Number(D[c] ?? QD[c]?.i) || 0), 0), sumV = L.reduce((s, c) => s + (QD[c]?.v || 0), 0);
+  const hayDraft = L.some(c => D[c] !== undefined && String(D[c]) !== String(QD[c]?.i || ''));
+  const filas = L.map(c => {
+    const l = LINES.find(x => x.c === c), m = S.maestro[c], val = D[c] ?? (QD[c]?.i || '');
+    return `<tr><td class="code">${esc(c)}</td><td>${esc(m.d || l?.d || '')}${l?.q && l.metodo !== 'hibrido' && hib ? ' <span class="pill seco" title="Falta el cierre anterior o el archivo de Yasukawa">arrastre</span>' : ''}</td>
+      <td class="n muted">${l && l.prevCont !== null && l.prevCont !== undefined ? fmt(l.prevCont) : '—'}</td>
+      <td class="n">${l && l.metodo !== 'arrastre' ? `<span style="color:${l.varYa < 0 ? 'var(--bad)' : l.varYa > 0 ? 'var(--ok)' : 'inherit'}">${fmtS(l.varYa)}</span>` : '<span class="muted">—</span>'}</td>
+      <td class="n">${QD[c]?.v ? '-' + fmt(QD[c].v) : '<span class="muted">0</span>'}</td>
+      <td class="n"><input type="number" inputmode="numeric" min="0" step="1" class="cj" id="q-i-${esc(c)}" data-act="qIlo" data-c="${esc(c)}" value="${esc(val)}" placeholder="0" ${cerrado ? 'disabled' : ''} aria-label="Hormas facturadas por Ilolay ${esc(c)}"></td>
+      <td class="n"><b>${l ? fmt(l.sis) : '—'}</b></td>
+      <td class="n">${l?.contado ? fmt(l.cont) + (l.dif ? ` <span style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">(${fmtS(l.dif)})</span>` : '') : '<span class="muted">sin contar</span>'}</td></tr>`;
+  }).join('');
+  return `<div class="stack">
+    <div class="row" style="justify-content:space-between"><div><h2>Quesos · ${diaSem(S.dia)} ${dm(S.dia)}</h2><div class="small muted">Hormas que salieron hoy. <b>Yasukawa</b> se calcula solo (variación del stock de Yasukawa desde el cierre anterior), <b>Ventana</b> sale del archivo de ventanas y <b>Ilolay</b> lo cargás acá. Al cerrar el stock queda guardado y al día siguiente arranca en cero.</div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
+    ${!hib ? `<div class="banner warn"><span class="grow">El cálculo de quesos está en modo <b>${opt('quesoSap') === 'manual' ? 'manual' : 'automático'}</b>: lo que cargues acá se guarda pero <b>no descuenta del sistema</b> hasta pasar al modo híbrido.</span><button class="btn pri sm" data-act="qHibrido">Activar modo híbrido</button></div>` : ''}
+    ${hib && !vent ? `<div class="banner info"><span class="grow">Todavía no hay archivo de <b>ventanas</b> del día: lo que salió por ventana figura en 0. Cargalo en Administración → Archivos del día.</span></div>` : ''}
+    ${!L.length ? '<div class="panel empty">No hay artículos marcados como queso. Se marcan en <button class="link" data-act="tab" data-v="maestro">Artículos</button> (columna Cálculo).</div>' : `
+    <div class="row" style="justify-content:space-between"><span class="small muted">${L.length} quesos · Ilolay <b>${fmt(sumI)}</b> hormas · Ventana <b>${fmt(sumV)}</b> hormas${vent ? ' (' + vent + ')' : ''}</span>
+      <div class="row">${cerrado ? '<span class="small muted">Día cerrado: solo lectura.</span>' : `<button class="btn" data-act="qBorrar" ${Object.values(QD).some(x => x.i) || hayDraft ? '' : 'disabled'} title="Deja en cero lo cargado hoy por Ilolay">Borrar lo cargado hoy</button><button class="btn pri" data-act="qGuardar" ${hayDraft ? '' : 'disabled'}>Guardar</button>${hayDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}`}</div></div>
+    <div class="tablebox"><table><thead><tr><th>Código</th><th>Artículo</th><th class="n" title="Hormas contadas al cierre anterior">Cierre ant.</th><th class="n" title="Variación del stock de Yasukawa desde el cierre anterior (se calcula sola)">Yasukawa</th><th class="n" title="Salieron por ventana (archivo de ventanas)">Ventana</th><th class="n" title="Hormas facturadas por Ilolay hoy: cargalas acá">Ilolay (cargar)</th><th class="n">Sistema hoy</th><th class="n">Contado</th></tr></thead><tbody>${filas}</tbody></table></div>`}
+  </div>`;
+}
+async function guardarQuesos(todoCero) {
+  const D = S.ui.qDraft || {}, QD = S.quesosDia ||= {}, m = {};
+  for (const c of quesosLista()) {
+    const u = todoCero ? 0 : Math.max(0, Math.round(Number(D[c] ?? QD[c]?.i) || 0));
+    if (u !== (QD[c]?.i || 0)) m[c] = u;
+  }
+  if (!Object.keys(m).length) { S.ui.qDraft = {}; render(); return; }
+  for (const [c, u] of Object.entries(m)) (QD[c] ||= { i: 0, v: 0 }).i = u;
+  S.ui.qDraft = {}; recalc(); render();
+  try { await API.call('guardarQuesos', S.dia, m, 'i'); toast(todoCero ? 'Quesos de Ilolay de hoy en cero.' : 'Quesos guardados: el sistema ya los descuenta.'); programarRefresco(300); }
+  catch (e) { toast('No se pudo guardar: ' + e.message); }
+}
+/* ---------- Correos: todo lo que se manda por mail, en un solo lugar ---------- */
+function vCorreos() {
+  if (!S.admin) return '';
+  const c = S.cierre;
+  return `<div class="stack">
+    <div class="row" style="justify-content:space-between"><div><h2>Correos</h2><div class="small muted">Los mails que salen del stock, todos juntos. Para: <b>${esc(opt('destinatarios') || 'sin destinatarios (se cargan en Opciones)')}</b></div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
+    <div class="panel stack"><b>Cierre del día</b>
+      ${c ? `<span class="small muted">Stock del ${diaSem(c.fecha)} ${dmy(c.fecha)}, cerrado por ${esc(c.por || '—')}.</span>
+      <div class="row"><button class="btn pri" data-act="copiarMail">Copiar resumen para el mail</button><button class="btn" data-act="pdfCierre">Descargar PDF del cierre</button></div>` : `<span class="small muted">El stock del ${dm(S.dia)} todavía no está cerrado. Cuando lo cierres, desde acá copiás el resumen y bajás el PDF. Los cierres anteriores están en <button class="link" data-act="tab" data-v="historial">Historial</button>.</span>`}
+    </div>
+    <div class="panel stack"><b>Valorizado por período</b><span class="small muted">Pendiente de definir: semanal, quincenal, mensual o entre fechas. Se arma acá cuando me digas qué tiene que llevar.</span></div>
+  </div>`;
+}
 function sisTxt(c) {
   if (!tieneSistema()) return '<span class="muted small">sin archivos</span>';
   const l = LINES.find(x => x.c === c); if (!l) return '<span class="muted">—</span>';
@@ -2716,9 +2793,10 @@ function vOpciones() {
       <label class="stack" style="gap:4px"><span class="lbl">Almacenes o tipos de almacén de SAP que no cuentan</span><input type="text" id="oExc" value="${esc(opt('excluir').join(', '))}" class="mono"><span class="small muted">Separados por coma. La planilla descartaba SFED (mercadería dañada).</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Motivos de diferencia (uno por línea)</span><textarea id="oMot">${esc(opt('motivos').join('\n'))}</textarea></label>
       <div class="stack" style="gap:6px"><span class="lbl">Quesos: facturación por Ilolay (SAP viene en kilos)</span>
-        <label class="row" style="gap:8px"><input type="radio" name="oQ" value="auto" ${opt('quesoSap') !== 'manual' ? 'checked' : ''}> <span>Automática: variación de kilos de SAP ÷ peso nominal de la horma</span></label>
+        <label class="row" style="gap:8px"><input type="radio" name="oQ" value="auto" ${!['manual', 'hibrido'].includes(opt('quesoSap')) ? 'checked' : ''}> <span>Automática: variación de kilos de SAP ÷ peso nominal de la horma</span></label>
+        <label class="row" style="gap:8px"><input type="radio" name="oQ" value="hibrido" ${opt('quesoSap') === 'hibrido' ? 'checked' : ''}> <span><b>Híbrida:</b> Yasukawa por variación de su stock, ventana por el archivo de ventanas, y la facturación Ilolay la cargo en la pestaña <b>Quesos</b>; SAP no se usa para quesos</span></label>
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
-        <span class="small muted">La variación de Yasukawa (en hormas) se aplica en los dos casos. No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
+        <span class="small muted">La variación de Yasukawa (en hormas) se aplica en los tres casos. No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="row" style="gap:8px"><input type="checkbox" id="oAuto" ${opt('autoRec') ? 'checked' : ''}> <span>Marcar para recontar automáticamente cuando el conteo no coincide con el sistema</span></label>
       <span class="small muted">Con esto activado, depósito se entera de que algo no cerró en cuanto lo guarda. Sin activar, el recuento lo pide administración desde Stock del día.</span>
       <label class="stack" style="gap:4px"><span class="lbl">Movimientos: margen para resaltar en amarillo (%)</span><input type="number" id="oTol" value="${esc(tolMov())}" min="0" max="100" step="0.5" inputmode="decimal" style="max-width:110px"><span class="small muted">En Movimientos del día se pintan las filas cuya cantidad coincide con la diferencia entre contado y sistema, con este margen de más o de menos. Con 0 solo se pinta la coincidencia exacta.</span></label>
@@ -3388,6 +3466,9 @@ document.addEventListener('click', async e => {
       toast(n ? n + ' datos actualizados. Revisá y guardá.' : 'No había nada para actualizar.'); render(); break;
     }
     case 'ajExcel': excelEgreso(); break;
+    case 'qGuardar': guardarQuesos(false); break;
+    case 'qBorrar': guardarQuesos(true); break;
+    case 'qHibrido': { const data = { ...S.opciones, quesoSap: 'hibrido', ts: Date.now() }; try { await API.call('guardarOpciones', data); S.opciones = data; toast('Modo híbrido de quesos activado.'); } catch (er) { toast('No se pudo guardar: ' + er.message); } recalc(); render(); break; }
     case 'ajPasar': {
       const ids = [...(S.ui.ajSel || [])]; if (!ids.length) break;
       try {
@@ -3449,6 +3530,7 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'cbQ' && S.ui.cb) { S.ui.cb.q = t.value; const l = $('#cbList'); if (l) l.innerHTML = cbLista(t.value); }
   if (t.dataset.act === 'asigQ') { S.ui.asigQ = t.value; const l = $('#asigList'); if (l) l.innerHTML = listaAsignar(t.value); }
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
+  if (t.dataset.act === 'qIlo') (S.ui.qDraft ||= {})[t.dataset.c] = t.value;
   if (t.dataset.act === 'dcnt' || t.dataset.act === 'dsum' || t.dataset.act === 'ddet') pasarAUnidades(t);
   if (t.dataset.act === 'dnota') DD[t.dataset.c + 'nota'] = t.value;
   if (t.dataset.act === 'dsum') { if (/^-/.test(t.value)) t.value = t.value.replace(/^-+/, ''); DD[t.dataset.c + t.dataset.k] = t.value; const el = document.getElementById('ds-' + t.dataset.c); if (el) el.innerHTML = textoSuma(t.dataset.c); }
@@ -3460,6 +3542,7 @@ document.addEventListener('change', async e => {
   if (a === 'pdfSet') { const d = pdfDraft(), k = t.dataset.k; d[k] = t.type === 'checkbox' ? t.checked : t.type === 'radio' ? t.value === '1' : t.type === 'number' ? Number(t.value) : t.value; render(); return; }
   if (a === 'pdfLstV' || a === 'pdfLstN') { const x = pdfDraft()[t.dataset.l]?.[+t.dataset.i]; if (x) { if (a === 'pdfLstV') x.v = t.checked; else x.n = t.value; } render(); return; }
   if (a === 'pdfKpi') { const d = pdfDraft(), set = new Set(d.kpis || []); if (t.checked) set.add(t.dataset.k); else set.delete(t.dataset.k); d.kpis = PDF_KPIS.map(([k]) => k).filter(k => set.has(k)); render(); return; }
+  if (a === 'qIlo') { (S.ui.qDraft ||= {})[t.dataset.c] = t.value; render(); return; }
   if (a === 'borrarCierre') { S.ui.borrar = { cierre: t.checked, conf: false }; render(); return; }
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
   if (t.id === 'armFile' && t.files?.[0]) { armLeer(t.files[0]); t.value = ''; return; }
