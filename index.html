@@ -273,7 +273,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb58';
+window.__VERSION = 'sb59';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -296,7 +296,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb58</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb59</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2404,7 +2404,7 @@ async function guardarQuesos(todoCero) {
   try { await API.call('guardarQuesos', S.dia, m, 'i'); toast(todoCero ? 'Quesos de Ilolay de hoy en cero.' : 'Quesos guardados: el sistema ya los descuenta.'); programarRefresco(300); }
   catch (e) { toast('No se pudo guardar: ' + e.message); }
 }
-/* ---------- Correos → Valorizado por período: diferencias de los cierres agrupadas por motivo ---------- */
+/* ---------- Correos → Valorizado por período: ajustes (pendientes y pasados) agrupados por motivo ---------- */
 function valPeriodo(k) {
   const h = new Date(); h.setHours(12); const iso = d => d.toISOString().slice(0, 10), d = new Date(h);
   if (k === 'sem') { const dow = (h.getDay() + 6) % 7; d.setDate(h.getDate() - dow); return { desde: iso(d), hasta: iso(h) }; }
@@ -2417,7 +2417,12 @@ async function calcularValorizado(k) {
   if (!V.desde || !V.hasta) { toast('Completá desde y hasta.'); return; }
   if (V.desde > V.hasta) [V.desde, V.hasta] = [V.hasta, V.desde];
   V.cargando = true; V.err = null; render();
-  try { V.filas = await API.call('valorizado', V.desde, V.hasta); V.listo = { desde: V.desde, hasta: V.hasta }; }
+  try {
+    const filas = await API.call('valorizado', V.desde, V.hasta);
+    // Valorizado = unidades × precio de compra actual (Yasukawa); si el artículo no está en el archivo de hoy, el precio del último cierre
+    for (const x of filas) { const l = LINES.find(z => z.c === x.c); const pr = l?.precio || x.pr || 0; x.d = x.d || l?.d || S.maestro[x.c]?.d || ''; x.imp = Math.round(Core.num(x.dif) * pr * 100) / 100; x.sinPrecio = !pr; }
+    V.filas = filas; V.listo = { desde: V.desde, hasta: V.hasta };
+  }
   catch (e) { V.err = /desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : e.message; V.filas = null; }
   V.cargando = false; render();
 }
@@ -2426,9 +2431,9 @@ function valGrupos(filas) {
   const G = new Map();
   for (const x of filas || []) {
     const km = motivoKey(x.m) || 'SIN MOTIVO', g = G.get(km) || { m: km, arts: new Map(), u: 0, imp: 0, n: 0 };
-    const a = g.arts.get(x.c) || { c: x.c, d: x.d, ux: x.u, dif: 0, imp: 0, dias: new Set() };
-    a.dif += Core.num(x.dif); a.imp += Core.num(x.imp); a.dias.add(x.f); g.arts.set(x.c, a);
-    g.u += Core.num(x.dif); g.imp += Core.num(x.imp); g.n++; G.set(km, g);
+    const a = g.arts.get(x.c) || { c: x.c, d: x.d, ux: x.u, dif: 0, imp: 0, dias: new Set(), pend: 0, pas: 0, sinPrecio: false };
+    a.dif += Core.num(x.dif); a.imp += Core.num(x.imp); a.dias.add(x.f); if (x.est === 'pasado') a.pas++; else a.pend++; if (x.sinPrecio) a.sinPrecio = true; g.arts.set(x.c, a);
+    g.u += Core.num(x.dif); g.imp += Core.num(x.imp); g.n++; if (x.est === 'pasado') g.pas = (g.pas || 0) + 1; else g.pend = (g.pend || 0) + 1; G.set(km, g);
   }
   return [...G.values()].sort((a, b) => Math.abs(b.imp) - Math.abs(a.imp)).map(g => ({ ...g, arts: [...g.arts.values()].sort((a, b) => Math.abs(b.imp) - Math.abs(a.imp)) }));
 }
@@ -2440,15 +2445,16 @@ function vValorizado() {
   else if (V.err) cuerpo = `<div class="banner warn"><span class="grow">${esc(V.err)}</span></div>`;
   else if (V.filas) {
     const G = valGrupos(V.filas), tot = G.reduce((s, g) => s + g.imp, 0), dias = new Set(V.filas.map(x => x.f)).size;
-    cuerpo = !G.length ? `<div class="small muted">No hay diferencias en los cierres del ${dm(V.listo.desde)} al ${dm(V.listo.hasta)}.</div>` : `
-      <div class="row" style="justify-content:space-between;align-items:center"><span class="small">Del <b>${dm(V.listo.desde)}</b> al <b>${dm(V.listo.hasta)}</b> · ${dias} cierre${dias === 1 ? '' : 's'} · ${V.filas.length} diferencias · total <b style="color:${tot < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(tot)}</b></span>
+    const pend = V.filas.filter(x => x.est !== 'pasado').length, sinP = V.filas.filter(x => x.sinPrecio).length;
+    cuerpo = !G.length ? `<div class="small muted">No hay ajustes con fecha del ${dm(V.listo.desde)} al ${dm(V.listo.hasta)}.</div>` : `
+      <div class="row" style="justify-content:space-between;align-items:center"><span class="small">Del <b>${dm(V.listo.desde)}</b> al <b>${dm(V.listo.hasta)}</b> · ${dias} día${dias === 1 ? '' : 's'} · ${V.filas.length} ajustes (${V.filas.length - pend} pasados al sistema, ${pend} pendientes)${sinP ? ` · <span style="color:var(--warn)">${sinP} sin precio</span>` : ''} · total <b style="color:${tot < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(tot)}</b></span>
         <div class="row"><button class="btn pri" data-act="valMail">Copiar para el mail</button><button class="btn" data-act="valPdf">PDF</button><button class="btn" data-act="valExcel">Excel</button></div></div>
-      <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">Días</th><th class="n">Unidades</th><th class="n">Valorizado</th></tr></thead><tbody>
-      ${G.map(g => `<tr class="sec"><td colspan="3">${esc(g.m)} <span class="muted" style="font-weight:400">· ${g.arts.length} artículo${g.arts.length === 1 ? '' : 's'} · ${g.n} diferencia${g.n === 1 ? '' : 's'}</span></td><td class="n">${fmtS(g.u)}</td><td class="n" style="color:${g.imp < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(g.imp)}</td></tr>
-        ${g.arts.map(a => `<tr class="${a.dif < 0 ? 'difneg' : 'difpos'}"><td class="code">${esc(a.c)}</td><td>${esc(a.d)}</td><td class="n muted">${a.dias.size}</td><td class="n dif">${fmtS(a.dif)}</td><td class="n">${money(a.imp)}</td></tr>`).join('')}`).join('')}
+      <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n" title="Ajustes: pendientes / pasados al sistema">Ajustes</th><th class="n">Unidades</th><th class="n">Valorizado</th></tr></thead><tbody>
+      ${G.map(g => `<tr class="sec"><td colspan="3">${esc(g.m)} <span class="muted" style="font-weight:400">· ${g.arts.length} artículo${g.arts.length === 1 ? '' : 's'} · ${g.n} ajuste${g.n === 1 ? '' : 's'}${g.pend ? ' · ' + g.pend + ' pendiente' + (g.pend > 1 ? 's' : '') : ''}</span></td><td class="n">${fmtS(g.u)}</td><td class="n" style="color:${g.imp < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(g.imp)}</td></tr>
+        ${g.arts.map(a => `<tr class="${a.dif < 0 ? 'difneg' : 'difpos'}"><td class="code">${esc(a.c)}</td><td>${esc(a.d)}</td><td class="n muted small">${a.pend ? a.pend + ' pend.' : ''}${a.pend && a.pas ? ' / ' : ''}${a.pas ? a.pas + ' pas.' : ''}</td><td class="n dif">${fmtS(a.dif)}</td><td class="n">${a.sinPrecio ? '<span class="muted" title="Artículo sin precio en el archivo de Yasukawa ni en los cierres">' + money(a.imp) + ' *</span>' : money(a.imp)}</td></tr>`).join('')}`).join('')}
       <tr class="sec"><td colspan="3">TOTAL</td><td class="n">${fmtS(G.reduce((s, g) => s + g.u, 0))}</td><td class="n" style="color:${tot < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(tot)}</td></tr></tbody></table></div>`;
   } else cuerpo = '<div class="small muted">Elegí el período y tocá <b>Calcular</b>.</div>';
-  return `<div class="panel stack"><b>Valorizado por período</b><span class="small muted">Diferencias de los cierres del período, agrupadas por motivo (roto, falta, sobra, cruce…) y por artículo, con unidades y valorizado.</span>
+  return `<div class="panel stack"><b>Valorizado por período</b><span class="small muted">Ajustes con fecha dentro del período, pendientes y ya pasados al sistema, agrupados por motivo (roto, falta, sobra, cruce…) y por artículo, con unidades y valorizado (unidades × precio de compra de Yasukawa).</span>
     <div class="row" style="gap:10px;align-items:end;flex-wrap:wrap"><span class="chips">${per}</span>
       <label class="stack" style="gap:2px"><span class="lbl">Desde</span><input type="date" data-act="valF" data-k="desde" value="${esc(V.desde)}"></label>
       <label class="stack" style="gap:2px"><span class="lbl">Hasta</span><input type="date" data-act="valF" data-k="hasta" value="${esc(V.hasta)}"></label>
@@ -2458,7 +2464,7 @@ function vValorizado() {
 function valTexto() {
   const V = S.ui.val, G = valGrupos(V.filas), tot = G.reduce((s, g) => s + g.imp, 0);
   const b = [`${opt('destinatarios') ? 'Para: ' + opt('destinatarios') + '\n' : ''}Asunto: ${opt('asunto')} · Valorizado del ${dmy(V.listo.desde)} al ${dmy(V.listo.hasta)}`, ''];
-  b.push(`Diferencias de stock del ${dmy(V.listo.desde)} al ${dmy(V.listo.hasta)}, por motivo:`, '');
+  b.push(`Ajustes de stock del ${dmy(V.listo.desde)} al ${dmy(V.listo.hasta)} (pendientes y pasados al sistema), por motivo:`, '');
   for (const g of G) {
     b.push(`${g.m} (${g.arts.length} artículo${g.arts.length === 1 ? '' : 's'}): ${fmtS(g.u)} u · ${money(g.imp)}`);
     for (const a of g.arts) b.push(`  ${a.c} ${a.d}: ${fmtS(a.dif)} u · ${money(a.imp)}`);
@@ -2474,7 +2480,7 @@ async function valCopiar() {
 }
 function valPdf() {
   const V = S.ui.val, G = valGrupos(V.filas), cfg = pdfCfg(), P = pdfDoc(false), fs = 9, ft = 15, rowH = Math.round(fs * 1.9), M = 28, ancho = P.W - 2 * M, pad = 12;
-  const cols = [{ n: 'CÓDIGO', w: 0.11 }, { n: 'DESCRIPCIÓN', w: 0.49 }, { n: 'DÍAS', w: 0.08, a: 'r' }, { n: 'UNIDADES', w: 0.14, a: 'r' }, { n: 'VALORIZADO', w: 0.18, a: 'r' }];
+  const cols = [{ n: 'CÓDIGO', w: 0.10 }, { n: 'DESCRIPCIÓN', w: 0.42 }, { n: 'AJ. (PEND.)', w: 0.14, a: 'r' }, { n: 'UNIDADES', w: 0.14, a: 'r' }, { n: 'VALORIZADO', w: 0.20, a: 'r' }];
   let x = M; cols.forEach(cl => { cl.w *= ancho; cl.x = x; x += cl.w; });
   const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
   let y = 0;
@@ -2483,7 +2489,7 @@ function valPdf() {
   const pagina = () => {
     P.nueva(); y = 24 + ft;
     P.text(M + 4, y, 'STOCK ILOLAY · Valorizado del ' + dmy(V.listo.desde) + ' al ' + dmy(V.listo.hasta), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
-    P.text(M + 4, y, 'Diferencias de los cierres del período, por motivo y artículo · generado el ' + new Date().toLocaleString('es-AR'), fs - 1.5, false, 'l', '#666666'); y += 14;
+    P.text(M + 4, y, 'Ajustes del período (pendientes y pasados al sistema), por motivo y artículo · valorizado a precio de compra · generado el ' + new Date().toLocaleString('es-AR'), fs - 1.5, false, 'l', '#666666'); y += 14;
     cab();
   };
   const lugar = h => { if (y + h > P.H - 36) pagina(); };
@@ -2495,7 +2501,7 @@ function valPdf() {
     cel(cols[3], fmtS(g.u) + ' U', b0, true, g.u < 0 ? cfg.cNeg : cfg.cPos); cel(cols[4], money(g.imp), b0, true, g.imp < 0 ? cfg.cNeg : cfg.cPos); y += rowH;
     for (const a of g.arts) {
       lugar(rowH); const b1 = y + rowH / 2 + fs * 0.35, col = a.dif < 0 ? cfg.cNeg : cfg.cPos;
-      cel(cols[0], a.c, b1, false, '#000000'); cel(cols[1], a.d || '', b1, false, '#000000'); cel(cols[2], String(a.dias.size), b1, false, '#666666'); cel(cols[3], fmtS(a.dif) + ' U', b1, false, col); cel(cols[4], money(a.imp), b1, false, col);
+      cel(cols[0], a.c, b1, false, '#000000'); cel(cols[1], a.d || '', b1, false, '#000000'); cel(cols[2], String(a.pend + a.pas) + (a.pend ? ' (' + a.pend + ')' : ''), b1, false, '#666666'); cel(cols[3], fmtS(a.dif) + ' U', b1, false, col); cel(cols[4], money(a.imp), b1, false, col);
       y += rowH; if (cfg.sep !== false) P.line(M, y, M + ancho, y, cS, gS);
     }
     y += 6;
@@ -2506,12 +2512,12 @@ function valPdf() {
   descargar('Valorizado ' + V.listo.desde + ' a ' + V.listo.hasta + '.pdf', P.blob()); toast('PDF del valorizado descargado.');
 }
 function valExcel() {
-  const V = S.ui.val, G = valGrupos(V.filas), filas = [['MOTIVO', 'CODIGO', 'DESCRIPCION', 'DIAS', 'UNIDADES', 'VALORIZADO']];
-  for (const g of G) { for (const a of g.arts) filas.push([g.m, a.c, a.d, a.dias.size, a.dif, Math.round(a.imp * 100) / 100]); filas.push([g.m, '', 'TOTAL ' + g.m, '', g.u, Math.round(g.imp * 100) / 100]); }
-  filas.push([], ['', '', 'TOTAL', '', G.reduce((s, g) => s + g.u, 0), Math.round(G.reduce((s, g) => s + g.imp, 0) * 100) / 100]);
-  const det = [['FECHA', 'CODIGO', 'DESCRIPCION', 'MOTIVO', 'OBS', 'UNIDADES', 'VALORIZADO'], ...V.filas.map(x => [x.f, x.c, x.d, x.m, x.obs, x.dif, x.imp])];
+  const V = S.ui.val, G = valGrupos(V.filas), filas = [['MOTIVO', 'CODIGO', 'DESCRIPCION', 'AJUSTES', 'PENDIENTES', 'PASADOS', 'UNIDADES', 'VALORIZADO']];
+  for (const g of G) { for (const a of g.arts) filas.push([g.m, a.c, a.d, a.pend + a.pas, a.pend, a.pas, a.dif, Math.round(a.imp * 100) / 100]); filas.push([g.m, '', 'TOTAL ' + g.m, '', '', '', g.u, Math.round(g.imp * 100) / 100]); }
+  filas.push([], ['', '', 'TOTAL', '', '', '', G.reduce((s, g) => s + g.u, 0), Math.round(G.reduce((s, g) => s + g.imp, 0) * 100) / 100]);
+  const det = [['FECHA', 'CODIGO', 'DESCRIPCION', 'TIPO', 'MOTIVO', 'OBS', 'ESTADO', 'UNIDADES', 'VALORIZADO'], ...V.filas.map(x => [x.f, x.c, x.d, TIPOS_AJ[x.t]?.n || x.t, x.m, x.obs, x.est === 'pasado' ? 'pasado' : 'pendiente', x.dif, x.imp])];
   try {
-    const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(filas), 'POR MOTIVO'); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(det), 'DETALLE POR DIA');
+    const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(filas), 'POR MOTIVO'); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(det), 'DETALLE');
     descargar('Valorizado ' + V.listo.desde + ' a ' + V.listo.hasta + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
 }
