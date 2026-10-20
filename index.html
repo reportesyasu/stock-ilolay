@@ -273,7 +273,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb54';
+window.__VERSION = 'sb55';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -296,7 +296,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb54</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb55</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2358,20 +2358,38 @@ const BD_LEEME = [
 function vPdfCfg() {
   if (!S.admin) return '';
   const c = S.ui.pdfDraft || pdfCfg();
-  const col = (x, i) => `<tr><td><input type="checkbox" data-act="pdfColV" data-i="${i}" ${x.v ? 'checked' : ''} aria-label="Mostrar ${esc(x.n)}"></td><td><input type="text" data-act="pdfColN" data-i="${i}" value="${esc(x.n)}" style="width:100%"></td><td class="small muted">${esc(PDF_COLS.find(([k]) => k === x.k)?.[1] || x.k)}</td><td style="white-space:nowrap"><button class="btn xs" data-act="pdfColUp" data-i="${i}" ${i ? '' : 'disabled'} title="Subir">▲</button><button class="btn xs" data-act="pdfColDn" data-i="${i}" ${i < c.cols.length - 1 ? '' : 'disabled'} title="Bajar">▼</button></td></tr>`;
+  // Lista con tilde para mostrar, rótulo editable y orden (▲▼): sirve para columnas, partes del PDF y columnas de ajustes
+  const lista = (L, base, rot) => `<div class="tablebox" style="max-height:none"><table><thead><tr><th style="width:36px">Ver</th><th>${rot}</th><th>Dato</th><th>Orden</th></tr></thead><tbody>${(c[L] || []).map((x, i, arr) => `<tr><td><input type="checkbox" data-act="pdfLstV" data-l="${L}" data-i="${i}" ${x.v ? 'checked' : ''} aria-label="Mostrar ${esc(x.n)}"></td><td><input type="text" data-act="pdfLstN" data-l="${L}" data-i="${i}" value="${esc(x.n)}" style="width:100%"></td><td class="small muted">${esc(base.find(([k]) => k === x.k)?.[1] || x.k)}</td><td style="white-space:nowrap"><button class="btn xs" data-act="pdfLstUp" data-l="${L}" data-i="${i}" ${i ? '' : 'disabled'} title="Subir">▲</button><button class="btn xs" data-act="pdfLstDn" data-l="${L}" data-i="${i}" ${i < arr.length - 1 ? '' : 'disabled'} title="Bajar">▼</button></td></tr>`).join('')}</tbody></table></div>`;
   const color = (k, n) => `<label class="row small" style="gap:6px"><input type="color" data-act="pdfSet" data-k="${k}" value="${esc(c[k])}"> ${n}</label>`;
-  const num = (k, n, min, max, ayuda) => `<label class="stack" style="gap:2px"><span class="lbl">${n}</span><input type="number" data-act="pdfSet" data-k="${k}" value="${esc(c[k])}" min="${min}" max="${max}" style="max-width:90px">${ayuda ? `<span class="small muted">${ayuda}</span>` : ''}</label>`;
+  const num = (k, n, min, max, ayuda, step = 1) => `<label class="stack" style="gap:2px"><span class="lbl">${n}</span><input type="number" data-act="pdfSet" data-k="${k}" value="${esc(c[k])}" min="${min}" max="${max}" step="${step}" style="max-width:90px">${ayuda ? `<span class="small muted">${ayuda}</span>` : ''}</label>`;
   const chk = (k, n) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="pdfSet" data-k="${k}" ${c[k] ? 'checked' : ''}> ${n}</label>`;
-  return `<div style="max-width:760px" id="pdfPanel">${secOp('pdf', 'PDF del cierre', 'Letra, columnas, autoajuste y colores del PDF que se descarga al cerrar y desde Historial.')}
+  const txt = (k, n, ayuda) => `<label class="stack" style="gap:2px;flex:1;min-width:240px"><span class="lbl">${n}</span><input type="text" data-act="pdfSet" data-k="${k}" value="${esc(c[k] ?? '')}">${ayuda ? `<span class="small muted">${ayuda}</span>` : ''}</label>`;
+  const sub = (t, ayuda) => `<div style="margin-top:10px;border-top:1px solid var(--line,#ddd);padding-top:8px"><b>${t}</b>${ayuda ? `<div class="small muted">${ayuda}</div>` : ''}</div>`;
+  const kpis = PDF_KPIS.map(([k, n]) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="pdfKpi" data-k="${k}" ${(c.kpis || []).includes(k) ? 'checked' : ''}> ${n}</label>`).join('');
+  return `<div style="max-width:760px" id="pdfPanel">${secOp('pdf', 'PDF del cierre', 'Qué partes salen y en qué orden, totales, ajustes del día, columnas, líneas, letra y colores del PDF que se descarga al cerrar y desde Historial.')}
+    ${sub('Hoja y letra')}
     <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">
       ${num('letra', 'Letra de la tabla (pt)', 5, 14)}${num('titulo', 'Letra del título (pt)', 9, 28)}
       ${num('autoPct', 'Autoajuste de columnas (%)', 10, 100, 'Cada columna toma el ancho que necesita ese % de las filas; las más largas se cortan con “…”.')}
       <div class="stack" style="gap:4px"><span class="lbl">Hoja</span><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="1" ${c.apaisado !== false ? 'checked' : ''}> Apaisada</label><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="0" ${c.apaisado === false ? 'checked' : ''}> Vertical</label></div>
     </div>
-    <div class="row" style="gap:16px;flex-wrap:wrap">${chk('ajustarAncho', 'Estirar la tabla al ancho de la hoja')}${chk('totales', 'Mostrar los totales arriba')}${chk('ajDia', 'Ajustes del día arriba de todo (sin decomisos ni rotos)')}${chk('ajustes', 'Mostrar los ajustes debajo de cada diferencia')}${chk('detalle', 'Incluir el detalle de todo lo contado')}${chk('sinContar', 'Incluir la lista de "sin contar"')}${chk('zebra', 'Filas alternadas')}</div>
+    ${sub('Encabezado')}
+    <div class="row" style="gap:16px;flex-wrap:wrap;align-items:end">${txt('tituloTxt', 'Título', '{dia} se cambia por el día de la semana y {fecha} por la fecha del cierre.')}${chk('subtitulo', 'Mostrar debajo quién cerró y los archivos')}</div>
+    ${sub('Partes del PDF', 'Tildá lo que querés que salga, cambiá el título si querés y ordenalo con ▲▼. (El PDF de “Diferencias”, con el stock sin cerrar, siempre muestra solo las diferencias.)')}
+    ${lista('secciones', PDF_SECC, 'Título en el PDF')}
+    ${sub('Cuadros de totales de arriba')}
+    <div class="row" style="gap:16px;flex-wrap:wrap">${chk('totales', '<b>Mostrar los cuadros</b>')}${kpis}</div>
+    ${sub('Ajustes del día', 'Estos filtros también se usan en “Copiar resumen para el mail”.')}
+    <div class="row" style="gap:16px;flex-wrap:wrap;align-items:end">${txt('ajExcluir', 'No contar ajustes con motivo', 'Palabras separadas por coma. Si el motivo contiene alguna, el ajuste no cuenta. Ej.: ROTO, DECOMISO')}</div>
+    <div class="row" style="gap:16px;flex-wrap:wrap">${chk('ajExcluirDec', 'No contar los ajustes de tipo Decomiso')}${chk('ajNota', 'Mostrar la aclaración debajo del título')}${chk('ajTotal', 'Mostrar el renglón de total')}</div>
+    ${lista('ajCols', PDF_AJCOLS, 'Columna de la tabla de ajustes')}
+    ${sub('Tablas de artículos (diferencias y detalle de lo contado)')}
+    <div class="row" style="gap:16px;flex-wrap:wrap">${chk('ajustarAncho', 'Estirar la tabla al ancho de la hoja')}${chk('porSector', 'Separar por sector (FRÍO / SECO)')}${chk('ajustes', 'En “Artículos con diferencia”, mostrar los ajustes debajo de cada uno')}</div>
+    ${lista('cols', PDF_COLS, 'Rótulo en el PDF')}
+    ${sub('Líneas y colores', 'Las líneas también se usan en el PDF por chofer y proveedor.')}
+    <div class="row" style="gap:16px;flex-wrap:wrap;align-items:end">${chk('sep', 'Líneas entre filas')}${chk('sepV', 'Líneas entre columnas')}${num('grosor', 'Grosor de línea', 0.1, 3, '', 0.1)}${color('cSep', 'Color de las líneas')}${chk('zebra', 'Filas alternadas')}</div>
     <div class="row" style="gap:16px;flex-wrap:wrap">${color('cHead', 'Fondo del encabezado')}${color('cTit', 'Títulos')}${color('cNeg', 'Faltante')}${color('cPos', 'Sobrante')}${color('cZebra', 'Filas alternadas')}</div>
-    <div class="tablebox" style="max-height:none"><table><thead><tr><th style="width:36px">Ver</th><th>Rótulo en el PDF</th><th>Dato</th><th>Orden</th></tr></thead><tbody>${c.cols.map(col).join('')}</tbody></table></div>
-    <div class="row"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfPrueba">Descargar PDF de prueba</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
+    <div class="row" style="margin-top:10px"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfPrueba">Descargar PDF de prueba</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
   </div></details></div>`;
 }
 /* ---------- Opciones → Códigos de barra: escanear y asociar a un artículo ---------- */
@@ -2687,9 +2705,54 @@ function pdfDiferencias() {
   if (!n) { toast('No hay diferencias pendientes.'); return; }
   try {
     const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
-    descargar('Diferencias stock Ilolay ' + c.fecha + ' ' + hh + '.pdf', pdfCierre(c, null, { titulo: 'STOCK ILOLAY · Diferencias pendientes del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), sub: 'Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR'), sinContar: false, detalle: false, modo: 'dif' }));
+    descargar('Diferencias stock Ilolay ' + c.fecha + ' ' + hh + '.pdf', armarPdfDif(c, t));
     toast('PDF con ' + n + ' diferencia' + (n === 1 ? '' : 's') + ' descargado.');
   } catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
+}
+/* PDF de diferencias del día (stock sin cerrar): solo código, descripción, sistema, contado, diferencia y un espacio para escribir el motivo */
+function armarPdfDif(c, t) {
+  const cfg = pdfCfg();
+  const P = pdfDoc(cfg.apaisado !== false);
+  const fs = Math.max(6, Math.min(14, (Number(cfg.letra) || 8) + 1)), ft = Math.max(9, Math.min(24, Number(cfg.titulo) || 15));
+  const rowH = Math.round(fs * 2.3), M = 28, ancho = P.W - 2 * M, pad = 24; // renglones altos y columnas con aire, para leer y escribir a mano
+  const CU = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
+  const L = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || String(a.c).localeCompare(String(b.c), 'es', { numeric: true }));
+  const cols = [
+    { k: 'c', n: 'CÓDIGO', v: l => l.c },
+    { k: 'd', n: 'DESCRIPCIÓN', v: l => l.d || '' },
+    { k: 'sis', n: 'SISTEMA', a: 'r', v: l => CU(l.sis, l.u) },
+    { k: 'cont', n: 'CONTADO', a: 'r', v: l => CU(l.cont, l.u) },
+    { k: 'dif', n: 'DIFERENCIA', a: 'r', v: l => fmtS(l.dif) + ' U', b: true },
+    { k: 'm', n: 'MOTIVO', v: () => '' }
+  ];
+  // Anchos: lo que necesita cada columna + aire; la descripción se achica si hace falta y el motivo se queda con el resto (mínimo 170 pt)
+  for (const cl of cols) cl.w = Math.max(anchoTxt(cl.n, fs - 0.5, true), ...L.map(l => anchoTxt(cl.v(l), fs, !!cl.b))) + pad;
+  const mot = cols[5], desc = cols[1], minMot = Math.min(260, Math.max(170, ancho * 0.24));
+  const fijo = cols.filter(cl => cl !== mot && cl !== desc).reduce((s, cl) => s + cl.w, 0);
+  desc.w = Math.max(120, Math.min(desc.w, ancho - fijo - minMot));
+  mot.w = ancho - fijo - desc.w;
+  let x = M; cols.forEach(cl => { cl.x = x; x += cl.w; });
+  const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
+  let y = 0;
+  const cel = (cl, txt, yy, b, col, size = fs) => { const s = cortar(txt, cl.w - pad, size, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, s, size, b, 'r', col); else P.text(cl.x + pad / 2, yy, s, size, b, 'l', col); };
+  const pagina = () => {
+    P.nueva(); y = 24 + ft;
+    P.text(M + 4, y, cortar('STOCK ILOLAY · Diferencias del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(M + 4, y, cortar('Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · ' + L.length + ' artículo' + (L.length === 1 ? '' : 's') + ' con diferencia', ancho - 8, Math.max(6, fs - 1.5)), Math.max(6, fs - 1.5), false, 'l', '#666666'); y += 14;
+    P.rect(M, y, ancho, rowH, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH / 2 + fs * 0.35, true, '#000000', fs - 0.5)); y += rowH;
+  };
+  pagina();
+  let i = 0;
+  for (const l of L) {
+    if (y + rowH > P.H - 30) pagina();
+    if (cfg.zebra && i++ % 2) P.rect(M, y, ancho, rowH, cfg.cZebra);
+    const base = y + rowH / 2 + fs * 0.35, col = l.dif < 0 ? cfg.cNeg : cfg.cPos;
+    cols.forEach(cl => cel(cl, cl.v(l), base, !!cl.b, cl.k === 'dif' ? col : '#000000'));
+    y += rowH;
+    if (cfg.sep !== false) P.line(M, y, M + ancho, y, cS, gS);
+    if (cfg.sepV) cols.slice(1).forEach(cl => P.line(cl.x, y - rowH, cl.x, y, cS, gS));
+  }
+  return P.blob();
 }
 /* PDF de diferencias con los movimientos del día: por chofer (y proveedor) y por proveedor (chofer → cliente) */
 async function pdfDifMovs() {
@@ -2711,8 +2774,9 @@ function armarPdfDifMovs(c, difs, M, t) {
   const P = pdfDoc(false); // siempre vertical
   const fs = Math.max(6, Math.min(12, Number(cfg.letra) || 8)), ft = Math.max(9, Math.min(22, Number(cfg.titulo) || 15) - 1);
   const rowH = Math.round(fs * 1.55), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov();
+  const Sg = Mg + 22; // sangría de las grillas: el título del artículo va desde el margen, las tablas más a la derecha y sin llegar al final
   const ORI = ['Y', 'I', 'V'], NOM = { Y: 'Yasukawa', I: 'Ilolay', V: 'Ventana' };
-  const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
+  const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
   const comp = s => String(s || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2');
   let y = 0;
   const pagina = () => {
@@ -2732,7 +2796,9 @@ function armarPdfDifMovs(c, difs, M, t) {
       if (lugar(rowH)) cab();
       if (f.hl) P.rect(x0, y - fs - 2, an, rowH, '#fff3a6'); else if (f.fondo) P.rect(x0, y - fs - 2, an, rowH, f.fondo);
       cols.forEach((cl, i) => celda(cl, i, f.v[i] ?? '', !!f.b, f.color?.[i] || (f.gris ? '#666666' : '#000000')));
-      P.line(x0, y + Math.round(fs * 0.45), x0 + an, y + Math.round(fs * 0.45), '#e2e2e2'); y += rowH;
+      if (cfg.sep !== false) P.line(x0, y + rowH - fs - 2, x0 + an, y + rowH - fs - 2, cfg.cSep || '#b4b4b4', Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)));
+      if (cfg.sepV) xs.slice(1).forEach(x => P.line(x, y - fs - 2, x, y + rowH - fs - 2, cfg.cSep || '#b4b4b4', Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5))));
+      y += rowH;
     }
     y += 4;
   };
@@ -2740,7 +2806,6 @@ function armarPdfDifMovs(c, difs, M, t) {
   // Resumen arriba
   const r = c.resumen || {};
   const conMov = difs.filter(l => M.filas.some(x => x.c === l.c)).length;
-  P.text(Mg, y, cortar(`${difs.length} artículo${difs.length === 1 ? '' : 's'} con diferencia · ${conMov} con movimientos · Sobrante ${fmtS(r.sobra || 0)} u · Faltante ${fmt(r.falta || 0)} u · Valorizado ${money(r.importe || 0)}`, ancho, fs + 0.5, true), fs + 0.5, true); y += rowH + 4;
   const resumenCh = {}; // chofer → {o: {Y,I,V}, arts:Set}
   for (const l of difs) {
     const u = l.u || 1, dif = Math.abs(l.dif), hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
@@ -2749,12 +2814,12 @@ function armarPdfDifMovs(c, difs, M, t) {
     // Encabezado del artículo
     P.rect(Mg, y - fs - 4, ancho, rowH * 2 + 4, '#eef2f6');
     P.text(Mg + 4, y, cortar(l.c + '  ' + (l.d || ''), ancho - 8, fs + 1, true), fs + 1, true); y += rowH;
-    P.text(Mg + 4, y, cortar(`Sistema ${cjun(l.sis, u)} · Contado ${cjun(l.cont, u)} · Dif. ${fmtS(l.dif)} u (${money(l.imp || 0)})${l.m ? ' · ' + l.m : ''}`, ancho - 8, fs, true), fs, true, 'l', l.dif < 0 ? cfg.cNeg : cfg.cPos);
+    P.text(Mg + 4, y, cortar(`Sistema ${cjun(l.sis, u)} · Contado ${cjun(l.cont, u)} · Dif. ${fmtS(l.dif)} U${l.m ? ' · ' + l.m : ''}`, ancho - 8, fs, true), fs, true, 'l', l.dif < 0 ? cfg.cNeg : cfg.cPos);
     y += rowH + 6;
     if (!fsMov.length) { P.text(Mg + 4, y, 'Sin movimientos en los archivos cargados.', fs, false, 'l', '#666666'); y += rowH + 6; continue; }
     const total = cuenta.reduce((s, x) => s + x.q, 0);
     for (const x of cuenta) { const k = x.ch || 'Sin chofer'; const rc = (resumenCh[k] ||= { Y: 0, I: 0, V: 0, arts: new Set() }); rc[x.o] = (rc[x.o] || 0) + x.q; rc.arts.add(l.c); }
-    P.text(Mg, y, `Salieron ${fmt(total)} u (${cjun(total, u)})`, fs, false, 'l', '#555555'); y += rowH;
+    P.text(Sg, y, `Salieron ${fmt(total)} U (${cjun(total, u)})`, fs, false, 'l', '#555555'); y += rowH;
     // Ilolay: detallado por chofer → cliente → comprobante, con subtotal por chofer.
     // Yasukawa y Ventana: un renglón por chofer con su total.
     for (const o of ORI) {
@@ -2763,7 +2828,7 @@ function armarPdfDifMovs(c, difs, M, t) {
       const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
       lugar(rowH * 3);
       if (o === 'I') {
-        P.text(Mg, y, `${NOM[o]} · por chofer y cliente · ${fmt(tq)} u`, fs, true, 'l', cfg.cTit); y += rowH;
+        P.text(Sg, y, `${NOM[o]} · por chofer y cliente · ${fmt(tq)} U`, fs, true, 'l', cfg.cTit); y += rowH;
         // se juntan los comprobantes del mismo cliente
         const grupos = new Map();
         for (const x of rs) { if (x.ms === false) continue; const k = (x.ch || 'Sin chofer') + '|' + (x.cli || ''); const g = grupos.get(k) || { ch: x.ch || 'Sin chofer', cli: x.cli || '', q: 0 }; g.q += x.q; grupos.set(k, g); }
@@ -2776,14 +2841,14 @@ function armarPdfDifMovs(c, difs, M, t) {
         }
         cerrar();
         filas.push({ v: ['Total ' + NOM[o], '', fmt(tq)], b: true, fondo: '#eeeeee', hl: hl(tq) });
-        tabla([{ n: 'Chofer', w: 0.36 }, { n: 'Cliente', w: 0.46 }, { n: 'Unid.', w: 0.18, a: 'r' }], filas);
+        tabla([{ n: 'Chofer', w: 0.36 }, { n: 'Cliente', w: 0.46 }, { n: 'UNID.', w: 0.18, a: 'r' }], filas, Sg, Math.min(ancho - 22, 400));
       } else {
-        P.text(Mg, y, `${NOM[o]} · total por chofer · ${fmt(tq)} u`, fs, true, 'l', cfg.cTit); y += rowH;
+        P.text(Sg, y, `${NOM[o]} · total por chofer · ${fmt(tq)} U`, fs, true, 'l', cfg.cTit); y += rowH;
         const porCh = {};
         for (const x of rs) { const k = x.ch || 'Sin chofer'; const g = (porCh[k] ||= { q: 0 }); if (x.ms !== false) g.q += x.q; }
         const filas = Object.entries(porCh).sort((a, b) => b[1].q - a[1].q).map(([k, g]) => ({ v: [k, fmt(g.q)], hl: hl(g.q) }));
         filas.push({ v: ['Total ' + NOM[o], fmt(tq)], b: true, fondo: '#eeeeee', hl: hl(tq) });
-        tabla([{ n: 'Chofer', w: 0.82 }, { n: 'Unid.', w: 0.18, a: 'r' }], filas);
+        tabla([{ n: 'Chofer', w: 0.75 }, { n: 'UNID.', w: 0.25, a: 'r' }], filas, Sg, Math.min(ancho - 22, 260));
       }
     }
     y += 6;
@@ -2792,9 +2857,9 @@ function armarPdfDifMovs(c, difs, M, t) {
   const chs = Object.entries(resumenCh);
   if (chs.length) {
     if (!lugar(rowH * 6)) { y += 4; }
-    P.text(Mg, y, 'Resumen por chofer (solo artículos con diferencia)', fs + 2, true, 'l', cfg.cTit); y += rowH + 2;
-    tabla([{ n: 'Chofer', w: 0.34 }, { n: 'Artículos', w: 0.12, a: 'r' }, { n: 'Yasukawa', w: 0.14, a: 'r' }, { n: 'Ilolay', w: 0.14, a: 'r' }, { n: 'Ventana', w: 0.12, a: 'r' }, { n: 'Total u', w: 0.14, a: 'r' }],
-      chs.sort((a, b) => (b[1].Y + b[1].I + b[1].V) - (a[1].Y + a[1].I + a[1].V)).map(([k, g]) => ({ v: [k, fmt(g.arts.size), g.Y ? fmt(g.Y) : '', g.I ? fmt(g.I) : '', g.V ? fmt(g.V) : '', fmt(g.Y + g.I + g.V)] })));
+    P.text(Sg, y, 'Resumen por chofer (solo artículos con diferencia)', fs + 2, true, 'l', cfg.cTit); y += rowH + 2;
+    tabla([{ n: 'Chofer', w: 0.34 }, { n: 'Artículos', w: 0.12, a: 'r' }, { n: 'Yasukawa', w: 0.14, a: 'r' }, { n: 'Ilolay', w: 0.14, a: 'r' }, { n: 'Ventana', w: 0.12, a: 'r' }, { n: 'TOTAL U', w: 0.14, a: 'r' }],
+      chs.sort((a, b) => (b[1].Y + b[1].I + b[1].V) - (a[1].Y + a[1].I + a[1].V)).map(([k, g]) => ({ v: [k, fmt(g.arts.size), g.Y ? fmt(g.Y) : '', g.I ? fmt(g.I) : '', g.V ? fmt(g.V) : '', fmt(g.Y + g.I + g.V)] })), Sg, Math.min(ancho - 22, 440));
   }
   return P.blob();
 }
@@ -2808,8 +2873,21 @@ async function ajustesDelDia(fecha) {
     return { c: a.c, d: l?.d || S.maestro[a.c]?.d || '', ux: l?.uxc || S.maestro[a.c]?.u || 1, u, t: a.t || '', m: a.m || '', est: a.est, v: Math.round(u * pr * 100) / 100 };
   }).sort((a, b) => a.c.localeCompare(b.c));
 }
-// Para el PDF: se excluyen los de tipo Decomiso y los que tienen motivo ROTO o DECOMISO
-const ajusteCuenta = a => a.t !== 'dec' && !/ROTO|DECOMISO/i.test(a.m || '');
+// Ajustes que cuentan para el PDF del cierre y el mail: se excluyen los de tipo Decomiso y los motivos de la lista
+// (Opciones → PDF del cierre → "No contar ajustes con motivo"; por defecto ROTO y DECOMISO)
+const sinTilde = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+function ajExcluidas(cfg) { return String((cfg || pdfCfg()).ajExcluir ?? '').split(/[,;]+/).map(s => sinTilde(s).trim()).filter(Boolean); }
+function ajusteFiltro(cfg) {
+  cfg = cfg || pdfCfg(); const pal = ajExcluidas(cfg);
+  return a => !(cfg.ajExcluirDec !== false && a.t === 'dec') && !pal.some(p => sinTilde(a.m).includes(p));
+}
+const ajusteCuenta = a => ajusteFiltro()(a);
+// Ajustes del día de un cierre ya filtrados. Cierres viejos (sin ajustesDia): se arman con lo que quedó guardado por artículo.
+function ajustesDiaDe(c, cfg) {
+  const f = ajusteFiltro(cfg), lin = c.lineas || [];
+  if (Array.isArray(c.ajustesDia)) return { lista: c.ajustesDia.filter(f), aprox: false };
+  return { lista: lin.flatMap(l => (l.ajd || []).filter(a => a.f === c.fecha).map(a => ({ c: l.c, d: l.d, ux: l.u, u: a.u, t: a.t, m: a.m, est: 'pend', v: l.dif ? Math.round(a.u * (l.imp / l.dif) * 100) / 100 : null }))).filter(f).sort((a, b) => a.c.localeCompare(b.c)), aprox: true };
+}
 async function cerrarDia() {
   const r = resumen(LINES);
   const lineas = LINES.map(l => ({ c: l.c, d: l.d, s: l.s, u: l.uxc, q: l.q ? 1 : 0, sap: l.sap, ya: l.yasu, sk: l.sapRaw, pe: l.peso, aj: l.aj, sis: l.sis, cont: l.contado ? l.cont : null, dif: l.contado ? l.dif : 0, m: l.contado && l.dif ? l.motivo : '', obs: l.obs || '', nota: l.nota || '', imp: l.importe || 0, por: l.por || null, ...ajDetalle(l.c) }));
@@ -2864,7 +2942,7 @@ function pdfDoc(apaisado = true) {
       cur.push(`${hexRgb(color)} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${xx.toFixed(1)} ${(H - y).toFixed(1)} Td (${t}) Tj ET 0 g`); return api;
     },
     rect(x, y, w, h, color) { cur.push(`${hexRgb(color)} rg ${x.toFixed(1)} ${(H - y - h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f 0 g`); return api; },
-    line(x1, y1, x2, y2, color = '#cccccc') { cur.push(`${hexRgb(color)} RG 0.5 w ${x1.toFixed(1)} ${(H - y1).toFixed(1)} m ${x2.toFixed(1)} ${(H - y2).toFixed(1)} l S 0 G`); return api; },
+    line(x1, y1, x2, y2, color = '#cccccc', w = 0.5) { cur.push(`${hexRgb(color)} RG ${(+w || 0.5).toFixed(2)} w ${x1.toFixed(1)} ${(H - y1).toFixed(1)} m ${x2.toFixed(1)} ${(H - y2).toFixed(1)} l S 0 G`); return api; },
     blob() {
       const objs = [];
       objs.push('<< /Type /Catalog /Pages 2 0 R >>');
@@ -2893,17 +2971,28 @@ const PDF_COLS = [
   ['codigo', 'Código', 'l'], ['descripcion', 'Descripción', 'l'], ['sector', 'Sector', 'l'], ['sistema', 'Sistema', 'r'], ['contado', 'Contado', 'r'],
   ['dif', 'Dif. u', 'r'], ['valorizado', 'Valorizado', 'r'], ['motivo', 'Motivo', 'l'], ['obs', 'Obs. / nota de depósito', 'l']
 ];
-const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, sinContar: true, totales: true, detalle: true, ajustes: true, ajDia: true,
+const PDF_SECC = [['ajDia', 'Ajustes del día'], ['dif', 'Artículos con diferencia'], ['detalle', 'Detalle de todo lo contado'], ['sin', 'Sin contar']];
+const PDF_KPIS = [['articulos', 'Artículos'], ['contados', 'Contados'], ['conAj', 'Con ajuste'], ['valAj', 'Valorizado ajustes'], ['conDif', 'Con diferencia'], ['sobra', 'Sobrante'], ['falta', 'Faltante'], ['valDif', 'Valorizado dif.']];
+const PDF_AJCOLS = [['codigo', 'Código', 0.08], ['descripcion', 'Descripción', 0.34], ['tipo', 'Tipo', 0.14], ['motivo', 'Motivo', 0.16], ['unidades', 'Unidades', 0.12, 'r'], ['valorizado', 'Valorizado', 0.10, 'r'], ['estado', 'Estado', 0.06]];
+const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, totales: true, ajustes: true, porSector: true,
+  tituloTxt: 'STOCK ILOLAY · Cierre del {dia} {fecha}', subtitulo: true,
+  ajExcluir: 'ROTO, DECOMISO', ajExcluirDec: true, ajNota: true, ajTotal: true,
+  sep: true, sepV: false, cSep: '#b4b4b4', grosor: 0.5,
   cHead: '#e6e6e6', cTit: '#000000', cNeg: '#b3261e', cPos: '#1e7a3c', cZebra: '#f5f5f5', zebra: false,
+  secciones: PDF_SECC.map(([k, n]) => ({ k, n, v: k === 'ajDia' || k === 'detalle' })),
+  kpis: ['articulos', 'contados', 'conAj', 'valAj'],
+  ajCols: PDF_AJCOLS.map(([k, n]) => ({ k, n, v: true })),
   cols: PDF_COLS.map(([k, n]) => ({ k, n, v: k !== 'sector' && k !== 'obs' })), sinObs: true };
 function pdfCfg() {
   const guardada = opt('pdf') || {};
   const c = JSON.parse(JSON.stringify({ ...PDF_DEF, ...guardada }));
-  const guard = (c.cols || []).filter(x => PDF_COLS.some(([k]) => k === x.k));
-  for (const [k, n] of PDF_COLS) if (!guard.some(x => x.k === k)) guard.push({ k, n, v: false });
+  // Listas (columnas, partes, columnas de ajustes): se respeta lo guardado y se agrega al final lo que falte
+  const mezclar = (lista, base) => { const g = (Array.isArray(lista) ? lista : []).filter(x => x && base.some(([k]) => k === x.k)); for (const [k, n] of base) if (!g.some(x => x.k === k)) g.push({ k, n, v: false }); return g; };
+  c.cols = mezclar(c.cols, PDF_COLS); c.secciones = mezclar(c.secciones, PDF_SECC); c.ajCols = mezclar(c.ajCols, PDF_AJCOLS);
+  c.kpis = (Array.isArray(c.kpis) ? c.kpis : PDF_DEF.kpis).filter(k => PDF_KPIS.some(([x]) => x === k));
   // A pedido: la columna "Obs. / nota de depósito" se quita (también de configuraciones guardadas antes; se puede volver a tildar)
-  if (!guardada.sinObs) { const o = guard.find(x => x.k === 'obs'); if (o) o.v = false; c.sinObs = true; }
-  c.cols = guard; return c;
+  if (!guardada.sinObs) { const o = c.cols.find(x => x.k === 'obs'); if (o) o.v = false; c.sinObs = true; }
+  return c;
 }
 function pdfCierre(c, cfgIn, opts = {}) {
   const cfg = cfgIn || pdfCfg();
@@ -2911,18 +3000,24 @@ function pdfCierre(c, cfgIn, opts = {}) {
   const r = c.resumen || {};
   const fs = Math.max(5, Math.min(14, Number(cfg.letra) || 8)), ft = Math.max(9, Math.min(28, Number(cfg.titulo) || 15));
   const rowH = Math.round(fs * 1.6), M = 28, ancho = P.W - 2 * M;
+  const esCierre = opts.modo !== 'dif';
+  // Partes del PDF, en el orden elegido en Opciones. El PDF de "Diferencias" (stock sin cerrar) muestra solo las diferencias.
+  const secc = esCierre ? (cfg.secciones || []).filter(s => s.v) : [{ k: 'dif', n: 'Artículos con diferencia', v: true }];
+  const tiene = k => secc.some(s => s.k === k);
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(q, u || 1); return fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
   const valor = (k, l) => ({ codigo: l.c, descripcion: l.d, sector: l.s === 'FRIO' ? 'Frío' : l.s === 'SECO' ? 'Seco' : (l.s || ''), sistema: cjun(l.sis, l.u), contado: cjun(l.cont, l.u),
     dif: l.dif ? fmtS(l.dif) : '0', valorizado: l.dif ? money(l.imp || 0) : '', motivo: l.dif ? (l.m || 'sin motivo') : '', obs: [l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · ') })[k];
   const dif = lin.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
   // Detalle de todo lo contado (con y sin diferencia), en el orden de la lista, separado por sector
-  const conDetalle = cfg.detalle !== false && opts.detalle !== false;
-  const contados = conDetalle ? lin.map((l, i) => [l, i]).filter(([l]) => l.cont !== null && l.cont !== undefined).sort((a, b) => (a[0].s || '').localeCompare(b[0].s || '') || a[1] - b[1]).map(x => x[0]) : [];
+  const contados = lin.map((l, i) => [l, i]).filter(([l]) => l.cont !== null && l.cont !== undefined).sort((a, b) => (a[0].s || '').localeCompare(b[0].s || '') || a[1] - b[1]).map(x => x[0]);
+  const sin = lin.filter(l => l.cont === null || l.cont === undefined);
   // Columnas visibles y autoajuste: cada columna mide lo que necesita el X % de las filas (X = cfg.autoPct)
   const vis = cfg.cols.filter(x => x.v).map(x => { const d = PDF_COLS.find(([k]) => k === x.k); return { k: x.k, n: x.n || d[1], a: d[2] }; });
+  if (!vis.length) vis.push(...PDF_COLS.slice(0, 2).map(([k, n, a]) => ({ k, n, a })));
   const pct = Math.max(10, Math.min(100, Number(cfg.autoPct) || 80)) / 100, pad = 8;
+  const muestra = tiene('detalle') && contados.length ? contados : dif.length ? dif : contados;
   for (const col of vis) {
-    const ws = (contados.length ? contados : dif).map(l => anchoTxt(valor(col.k, l), fs, col.k === 'dif')).sort((a, b) => a - b);
+    const ws = muestra.map(l => anchoTxt(valor(col.k, l), fs, col.k === 'dif')).sort((a, b) => a - b);
     const p = ws.length ? ws[Math.min(ws.length - 1, Math.max(0, Math.ceil(ws.length * pct) - 1))] : 0;
     col.w = Math.max(anchoTxt(col.n, fs - 0.5, true), p) + pad;
   }
@@ -2939,11 +3034,18 @@ function pdfCierre(c, cfgIn, opts = {}) {
   else if (cfg.ajustarAncho && tot() < ancho) { const extra = ancho - tot(), dest = flex.length ? flex : vis, s = dest.reduce((a, x) => a + x.w, 0) || 1; dest.forEach(x => x.w += extra * x.w / s); }
   let xx = M; vis.forEach(x => { x.x = xx; xx += x.w; });
   const anchoTabla = xx - M;
+  // Líneas separadoras (Opciones → PDF: entre filas y/o entre columnas, color y grosor)
+  const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
+  const bajo = yy => yy + rowH - fs - 1; // borde inferior del renglón cuyo texto está en yy
+  const sepH = (yy, x0 = M, an = anchoTabla) => { if (cfg.sep !== false) P.line(x0, bajo(yy), x0 + an, bajo(yy), cS, gS); };
+  const sepV = (xs, yy) => { if (cfg.sepV) xs.forEach(x => P.line(x, yy - fs - 1, x, bajo(yy), cS, gS)); };
   let y = 0;
+  const titTxt = () => opts.titulo || String(cfg.tituloTxt || PDF_DEF.tituloTxt).replace(/\{dia\}/gi, diaSem(c.fecha)).replace(/\{fecha\}/gi, dmy(c.fecha));
   const encabezado = titulo => {
     P.nueva(); y = 24 + ft;
-    P.text(M + 4, y, opts.titulo || ('STOCK ILOLAY · Cierre del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha)), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
-    P.text(M + 4, y, (opts.sub || ('Cerrado por ' + (c.por || '—') + (c.ts ? ' el ' + new Date(c.ts).toLocaleString('es-AR') : ''))) + (c.archivos?.sap || c.archivos?.yasu ? ' · Archivos: ' + [c.archivos.sap, c.archivos.yasu].filter(Boolean).join(' + ') : ''), Math.max(6, fs - 0.5), false, 'l', '#666666'); y += 18;
+    P.text(M + 4, y, cortar(titTxt(), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    if (opts.sub || cfg.subtitulo !== false) { P.text(M + 4, y, cortar((opts.sub || ('Cerrado por ' + (c.por || '—') + (c.ts ? ' el ' + new Date(c.ts).toLocaleString('es-AR') : ''))) + (c.archivos?.sap || c.archivos?.yasu ? ' · Archivos: ' + [c.archivos.sap, c.archivos.yasu].filter(Boolean).join(' + ') : ''), ancho - 8, Math.max(6, fs - 0.5)), Math.max(6, fs - 0.5), false, 'l', '#666666'); y += 18; }
+    else y += 8;
     if (titulo) { P.text(M + 4, y, titulo, fs + 3, true, 'l', cfg.cTit); y += 8; }
   };
   const celda = (col, txt, yy, bold = false, color = '#000000', size = fs) => {
@@ -2952,43 +3054,53 @@ function pdfCierre(c, cfgIn, opts = {}) {
   };
   const cabecera = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); vis.forEach(col => celda(col, col.n, y + rowH - 2, true, '#000000', fs - 0.5)); y += rowH + 2 + fs + 2; };
   encabezado();
-  const esCierre = opts.modo !== 'dif';
-  // Ajustes del día del cierre (sin decomisos ni rotos). Cierres viejos: se arman con lo que quedó guardado por artículo.
-  let ajDia = null, ajAprox = false;
-  if (esCierre) {
-    if (Array.isArray(c.ajustesDia)) ajDia = c.ajustesDia.filter(ajusteCuenta);
-    else {
-      ajAprox = true;
-      ajDia = lin.flatMap(l => (l.ajd || []).filter(a => a.f === c.fecha).map(a => ({ c: l.c, d: l.d, ux: l.u, u: a.u, t: a.t, m: a.m, est: 'pend', v: l.dif ? Math.round(a.u * (l.imp / l.dif) * 100) / 100 : null }))).filter(ajusteCuenta);
-    }
+  // Ajustes del día del cierre (filtrados según Opciones: sin decomisos ni rotos)
+  const { lista: ajDia, aprox: ajAprox } = esCierre ? ajustesDiaDe(c, cfg) : { lista: [], aprox: false };
+  const vAj = ajDia.reduce((s, a) => s + (a.v || 0), 0);
+  // Cuadros de totales de arriba
+  const KV = {
+    articulos: ['Artículos', fmt(r.articulos ?? lin.length), '#000000'], contados: ['Contados', fmt(r.contados ?? contados.length), '#000000'],
+    conAj: ['Con ajuste', fmt(new Set(ajDia.map(a => a.c)).size), '#000000'],
+    valAj: ['Valorizado ajustes', ajAprox && ajDia.some(a => a.v === null) ? '—' : money(vAj), vAj < 0 ? cfg.cNeg : vAj > 0 ? cfg.cPos : '#000000'],
+    conDif: ['Con diferencia', fmt(r.conDif ?? dif.length), '#000000'], sobra: ['Sobrante', fmtS(r.sobra || 0) + ' u', cfg.cPos], falta: ['Faltante', fmt(r.falta || 0) + ' u', cfg.cNeg],
+    valDif: [esCierre ? 'Valorizado dif.' : 'Valorizado', money(r.importe || 0), '#000000']
+  };
+  const kSel = esCierre ? (cfg.kpis || []) : ['articulos', 'contados', 'conDif', 'sobra', 'falta', 'valDif'];
+  if (cfg.totales !== false && kSel.length) {
+    const kp = kSel.map(k => KV[k]).filter(Boolean), kw = ancho / kp.length;
+    kp.forEach(([n, v, col], i) => { const x = M + i * kw; P.rect(x + 2, y, kw - 4, 34, '#f2f2f2'); P.text(x + 8, y + 12, cortar(n.toUpperCase(), kw - 14, 7, true), 7, true, 'l', '#666666'); P.text(x + 8, y + 27, cortar(v, kw - 14, 12, true), 12, true, 'l', col); }); y += 50;
   }
-  if (cfg.totales !== false) {
-    const vAj = ajDia ? ajDia.reduce((s, a) => s + (a.v || 0), 0) : 0;
-    const kp = esCierre
-      ? [['Artículos', fmt(r.articulos ?? lin.length), '#000000'], ['Contados', fmt(r.contados), '#000000'], ['Con ajuste', fmt(new Set(ajDia.map(a => a.c)).size), '#000000'], ['Valorizado ajustes', ajAprox && ajDia.some(a => a.v === null) ? '—' : money(vAj), vAj < 0 ? cfg.cNeg : vAj > 0 ? cfg.cPos : '#000000']]
-      : [['Artículos', fmt(r.articulos ?? lin.length), '#000000'], ['Contados', fmt(r.contados), '#000000'], ['Con diferencia', fmt(r.conDif), '#000000'], ['Sobrante', fmtS(r.sobra || 0) + ' u', cfg.cPos], ['Faltante', fmt(r.falta || 0) + ' u', cfg.cNeg], ['Valorizado', money(r.importe || 0), '#000000']];
-    const kw = ancho / kp.length;
-    kp.forEach(([n, v, col], i) => { const x = M + i * kw; P.rect(x + 2, y, kw - 4, 34, '#f2f2f2'); P.text(x + 8, y + 12, n.toUpperCase(), 7, true, 'l', '#666666'); P.text(x + 8, y + 27, v, 12, true, 'l', col); }); y += 50;
-  }
-  if (esCierre && cfg.ajDia !== false) {
-    P.text(M + 4, y, 'Ajustes del día (' + ajDia.length + ')', fs + 3, true, 'l', cfg.cTit); y += 4;
-    P.text(M + 4, y + fs + 2, 'Ajustes con fecha ' + dm(c.fecha) + ', pendientes y pasados al sistema. No incluye decomisos ni rotos.' + (ajAprox ? ' (Cierre anterior a esta versión: solo los pendientes que quedaron guardados.)' : ''), Math.max(6, fs - 1), false, 'l', '#666666'); y += fs + 8;
-    const cols = [{ n: 'Código', w: 0.08 }, { n: 'Descripción', w: 0.34 }, { n: 'Tipo', w: 0.14 }, { n: 'Motivo', w: 0.16 }, { n: 'Unidades', w: 0.12, a: 'r' }, { n: 'Valorizado', w: 0.10, a: 'r' }, { n: 'Estado', w: 0.06 }];
-    const xs = []; let ax = M; cols.forEach(cl => { cl.w *= anchoTabla; xs.push(ax); ax += cl.w; });
-    const cel = (i, v, yy, b, col) => { const cl = cols[i], t = cortar(v, cl.w - pad, fs, b); if (cl.a === 'r') P.text(xs[i] + cl.w - pad / 2, yy, t, fs, b, 'r', col); else P.text(xs[i] + pad / 2, yy, t, fs, b, 'l', col); };
-    const cab = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); cols.forEach((cl, i) => cel(i, cl.n, y + rowH - 2, true, '#000000')); y += rowH + 2 + fs + 2; };
-    cab();
+  const secAjDia = nombre => {
+    if (y > P.H - 90) encabezado();
+    P.text(M + 4, y, nombre + ' (' + ajDia.length + ')', fs + 3, true, 'l', cfg.cTit); y += 4;
+    if (cfg.ajNota !== false) {
+      const pal = ajExcluidas(cfg), exc = [cfg.ajExcluirDec !== false ? 'los de tipo Decomiso' : '', pal.length ? 'los de motivo ' + pal.join(', ') : ''].filter(Boolean);
+      const nota = 'Ajustes con fecha ' + dm(c.fecha) + ', pendientes y pasados al sistema.' + (exc.length ? ' No incluye ' + exc.join(' ni ') + '.' : '') + (ajAprox ? ' (Cierre anterior a esta versión: solo los pendientes que quedaron guardados.)' : '');
+      P.text(M + 4, y + fs + 2, cortar(nota, anchoTabla - 8, Math.max(6, fs - 1)), Math.max(6, fs - 1), false, 'l', '#666666'); y += fs + 8;
+    } else y += 4;
+    let cols = (cfg.ajCols || []).filter(x => x.v);
+    if (!cols.length) cols = PDF_AJCOLS.map(([k, n]) => ({ k, n }));
+    cols = cols.map(x => { const d = PDF_AJCOLS.find(([k]) => k === x.k); return { k: x.k, n: x.n || d[1], w: d[2], a: d[3] }; });
+    const sw = cols.reduce((s, x) => s + x.w, 0); let ax = M; cols.forEach(cl => { cl.w = cl.w / sw * anchoTabla; cl.x = ax; ax += cl.w; });
+    const cel = (cl, v, yy, b, col) => { const t = cortar(v, cl.w - pad, fs, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, t, fs, b, 'r', col); else P.text(cl.x + pad / 2, yy, t, fs, b, 'l', col); };
+    const cab = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH - 2, true, '#000000')); y += rowH + 2 + fs + 2; };
+    const val = (k, a) => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return { codigo: a.c, descripcion: a.d || '', tipo: TIPOS_AJ[a.t]?.n || a.t || '', motivo: a.m || '', unidades: `${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${fmt(sp.cj)} cj ${fmt(sp.un)} u)`, valorizado: a.v === null || a.v === undefined ? '—' : money(a.v), estado: a.est === 'pasado' ? 'pasado' : 'pendiente' }[k]; };
+    const colr = (k, a) => k === 'unidades' || k === 'valorizado' ? (a.u < 0 ? cfg.cNeg : cfg.cPos) : k === 'tipo' || k === 'motivo' ? '#333333' : k === 'estado' ? '#666666' : '#000000';
+    cab(); let i = 0;
     for (const a of ajDia) {
-      if (y > P.H - 34) { encabezado('Ajustes del día (continuación)'); cab(); }
-      const col = a.u < 0 ? cfg.cNeg : cfg.cPos, sp = Core.split(Math.abs(a.u), a.ux || 1);
-      cel(0, a.c, y, false, '#000000'); cel(1, a.d || '', y, false, '#000000'); cel(2, TIPOS_AJ[a.t]?.n || a.t, y, false, '#333333'); cel(3, a.m || '', y, false, '#333333');
-      cel(4, `${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${fmt(sp.cj)} cj ${fmt(sp.un)} u)`, y, true, col); cel(5, a.v === null ? '—' : money(a.v), y, false, col); cel(6, a.est === 'pasado' ? 'pasado' : 'pendiente', y, false, '#666666');
-      P.line(M, y + Math.round(fs * 0.5), M + anchoTabla, y + Math.round(fs * 0.5), '#dddddd'); y += rowH;
+      if (y > P.H - 34) { encabezado(nombre + ' (continuación)'); cab(); }
+      if (cfg.zebra && i++ % 2) P.rect(M, y - fs - 1, anchoTabla, rowH, cfg.cZebra);
+      cols.forEach(cl => cel(cl, val(cl.k, a), y, cl.k === 'unidades', colr(cl.k, a)));
+      sepV(cols.slice(1).map(cl => cl.x), y); sepH(y); y += rowH;
     }
-    if (!ajDia.length) { P.text(M + 4, y, 'No hubo ajustes en el día (fuera de decomisos y rotos).', fs + 1); y += rowH; }
-    else { const tv = ajDia.reduce((s, a) => s + (a.v || 0), 0); P.rect(M, y - fs - 1, anchoTabla, rowH, '#eeeeee'); cel(1, 'Total ajustes del día', y, true, '#000000'); cel(5, money(tv), y, true, tv < 0 ? cfg.cNeg : cfg.cPos); y += rowH; }
-    y += 12;
-  }
+    if (!ajDia.length) { P.text(M + 4, y, 'No hubo ajustes en el día' + (ajExcluidas(cfg).length || cfg.ajExcluirDec !== false ? ' (fuera de los excluidos).' : '.'), fs + 1); y += rowH; }
+    else if (cfg.ajTotal !== false) {
+      if (y > P.H - 34) { encabezado(nombre + ' (continuación)'); cab(); }
+      const cT = cols.find(cl => cl.k === 'descripcion') || cols[0], cV = cols.find(cl => cl.k === 'valorizado');
+      P.rect(M, y - fs - 1, anchoTabla, rowH, '#eeeeee'); cel(cT, 'Total ajustes del día', y, true, '#000000');
+      if (cV && cV !== cT) cel(cV, money(vAj), y, true, vAj < 0 ? cfg.cNeg : cfg.cPos); y += rowH;
+    }
+  };
   const ajTxt = l => {
     if (Array.isArray(l.ajd) && l.ajd.length) return l.ajd.map(a => `Ajuste · ${TIPOS_AJ[a.t]?.n || a.t || ''}${a.m ? ' · motivo ' + a.m : ''}: ${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${cjun(Math.abs(a.u), l.u)})${a.f ? ' · cargado el ' + dm(a.f) : ''}`);
     return l.aj ? [`Ajustes pendientes incluidos en el sistema: ${fmtS(l.aj)} u`] : [];
@@ -2999,31 +3111,42 @@ function pdfCierre(c, cfgIn, opts = {}) {
     let sec = null, i = 0;
     for (const l of lista) {
       if (y > P.H - 34) { encabezado(titulo + ' (continuación)'); cabecera(); sec = null; }
-      if (l.s !== sec && !vis.some(x => x.k === 'sector')) { sec = l.s; P.text(M + 4, y, sec === 'FRIO' ? 'FRÍO' : (sec || 'SIN SECTOR'), fs - 0.5, true, 'l', '#555555'); y += rowH; }
+      if (cfg.porSector !== false && l.s !== sec && !vis.some(x => x.k === 'sector')) { sec = l.s; P.text(M + 4, y, sec === 'FRIO' ? 'FRÍO' : (sec || 'SIN SECTOR'), fs - 0.5, true, 'l', '#555555'); y += rowH; }
       if (cfg.zebra && i++ % 2) P.rect(M, y - fs - 1, anchoTabla, rowH, cfg.cZebra);
       for (const col of vis) {
         const v = valor(col.k, l);
         const color = (col.k === 'dif' || col.k === 'valorizado') && l.dif ? (l.dif < 0 ? cfg.cNeg : cfg.cPos) : col.k === 'dif' ? '#888888' : col.k === 'motivo' && !l.m ? '#888888' : col.k === 'obs' ? '#333333' : '#000000';
         celda(col, v, y, col.k === 'dif' && !!l.dif, color);
       }
+      sepV(vis.slice(1).map(x => x.x), y);
       if (conAj) for (const t of ajTxt(l)) {
         y += Math.round(rowH * 0.85);
         if (y > P.H - 34) { encabezado(titulo + ' (continuación)'); cabecera(); }
         P.text(M + 26, y, cortar(t, anchoTabla - 30, fs - 1, false), fs - 1, false, 'l', '#5b4a00');
       }
-      P.line(M, y + Math.round(fs * 0.5), M + anchoTabla, y + Math.round(fs * 0.5), '#dddddd'); y += rowH;
+      sepH(y); y += rowH;
     }
     if (!lista.length) { P.text(M + 4, y, vacio, fs + 1); y += rowH; }
   };
-  seccion('Artículos con diferencia', dif, 'No hubo diferencias.', cfg.ajustes !== false);
-  if (conDetalle) { y += 12; seccion('Detalle de todo lo contado', contados, 'No se contó ningún artículo.'); }
-  const sin = lin.filter(l => l.cont === null || l.cont === undefined);
-  if (sin.length && cfg.sinContar !== false && opts.sinContar !== false) {
-    y += 10; if (y > P.H - 60) encabezado();
-    P.text(M + 4, y, 'Sin contar (' + sin.length + ')', fs + 3, true, 'l', cfg.cTit); y += rowH + 2;
+  const secSin = nombre => {
+    if (y > P.H - 60) encabezado();
+    P.text(M + 4, y, nombre + ' (' + sin.length + ')', fs + 3, true, 'l', cfg.cTit); y += rowH + 2;
+    if (!sin.length) { P.text(M + 4, y, 'Se contó todo.', fs + 1); y += rowH; return; }
     const cw = Math.min(ancho, 520);
-    for (const l of sin) { if (y > P.H - 34) encabezado('Sin contar (continuación)'); P.text(M + 4, y, l.c, fs); P.text(M + 60, y, cortar(l.d, cw - 180, fs), fs); P.text(M + cw, y, 'sistema ' + cjun(l.sis, l.u), fs, false, 'r'); y += rowH - 1; }
-  }
+    for (const l of sin) {
+      if (y > P.H - 34) encabezado(nombre + ' (continuación)');
+      P.text(M + 4, y, l.c, fs); P.text(M + 60, y, cortar(l.d, cw - 180, fs), fs); P.text(M + cw, y, 'sistema ' + cjun(l.sis, l.u), fs, false, 'r');
+      sepV([M + 56, M + cw - 116], y); sepH(y, M, cw); y += rowH;
+    }
+  };
+  secc.forEach((s, i) => {
+    if (i) y += 12;
+    const n = s.n || PDF_SECC.find(([k]) => k === s.k)?.[1] || '';
+    if (s.k === 'ajDia') secAjDia(n);
+    else if (s.k === 'dif') seccion(n, dif, 'No hubo diferencias.', cfg.ajustes !== false);
+    else if (s.k === 'detalle') seccion(n, contados, 'No se contó ningún artículo.');
+    else if (s.k === 'sin') secSin(n);
+  });
   return P.blob();
 }
 function descargarPdfCierre(c) {
@@ -3059,13 +3182,16 @@ async function exportar(cierre) {
 async function copiarMail() {
   const c = S.cierre; if (!c) return;
   const dif = (c.lineas || []).filter(l => l.dif);
-  const sob = dif.filter(l => l.dif > 0), fal = dif.filter(l => l.dif < 0);
-  const ln = l => `${l.c} ${l.d}: ${fmtS(l.dif)} u${l.m ? ' (' + l.m + ')' : ''}${l.nota ? ' — depósito: ' + l.nota : ''}`;
-  const txt = `${opt('destinatarios') ? 'Para: ' + opt('destinatarios') + '\n' : ''}Asunto: ${opt('asunto')} ${dmy(c.fecha).replace(/\//g, '.')}\n\nStock Ilolay del ${diaSem(c.fecha)} ${dmy(c.fecha)}: ${c.resumen?.contados ?? ''} artículos contados, ${dif.length} con diferencia.\n\nSOBRA:\n${sob.map(ln).join('\n') || '-'}\n\nFALTA:\n${fal.map(ln).join('\n') || '-'}\n\nValorizado: ${money(c.resumen?.importe)}`;
+  // Sobra / falta = ajustes del día (positivos / negativos), sin roto ni decomiso (lo que se elija en Opciones → PDF del cierre)
+  const { lista: aj } = ajustesDiaDe(c);
+  const sob = aj.filter(a => a.u > 0), fal = aj.filter(a => a.u < 0), nArt = new Set(aj.map(a => a.c)).size;
+  const sum = L => L.reduce((s, a) => s + (a.v || 0), 0);
+  const ln = a => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return `${a.c} ${a.d}: ${fmtS(a.u)} u (${fmt(sp.cj)} cj ${fmt(sp.un)} u)${a.m ? ' · ' + a.m : ''}${a.v !== null && a.v !== undefined ? ' · ' + money(a.v) : ''}`; };
+  const bloque = (t, L) => `${t}:\n${L.map(ln).join('\n') || '-'}${L.length ? '\nTotal ' + t.toLowerCase() + ': ' + money(sum(L)) : ''}`;
+  const txt = `${opt('destinatarios') ? 'Para: ' + opt('destinatarios') + '\n' : ''}Asunto: ${opt('asunto')} ${dmy(c.fecha).replace(/\//g, '.')}\n\nStock Ilolay del ${diaSem(c.fecha)} ${dmy(c.fecha)}: ${c.resumen?.contados ?? ''} artículos contados, ${dif.length} con diferencia, ${nArt} artículo${nArt === 1 ? '' : 's'} con ajustes.\n\n${bloque('SOBRA', sob)}\n\n${bloque('FALTA', fal)}\n\nValorizado de los ajustes: ${money(sum(aj))}`;
   try { await navigator.clipboard.writeText(txt); toast('Resumen copiado. Pegalo en el mail.'); }
   catch { S.ui.mailTxt = txt; $('#sheet').innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" data-stop="1"><h3>Resumen para el mail</h3><textarea id="mailTxt" style="min-height:320px">${esc(txt)}</textarea><button class="btn" data-act="cerrarDet">Cerrar</button></div></div>`; $('#mailTxt').select(); }
 }
-
 /* bloque 6 */
 /* ================= Eventos ================= */
 document.addEventListener('click', async e => {
@@ -3147,7 +3273,7 @@ document.addEventListener('click', async e => {
     case 'armPlantilla': armPlantilla(); break;
     case 'armActualizar': armActualizar(); break;
     case 'armCancelar': S.ui.arm = {}; render(); break;
-    case 'pdfColUp': case 'pdfColDn': { const d = pdfDraft(), i = +t.dataset.i, j = a === 'pdfColUp' ? i - 1 : i + 1; [d.cols[i], d.cols[j]] = [d.cols[j], d.cols[i]]; render(); break; }
+    case 'pdfLstUp': case 'pdfLstDn': { const L = pdfDraft()[t.dataset.l], i = +t.dataset.i, j = a === 'pdfLstUp' ? i - 1 : i + 1; if (L && L[i] && L[j]) [L[i], L[j]] = [L[j], L[i]]; render(); break; }
     case 'pdfReset': S.ui.pdfDraft = JSON.parse(JSON.stringify(PDF_DEF)); render(); break;
     case 'pdfPrueba': pdfPrueba(); break;
     case 'pdfGuardar': { const data = { ...S.opciones, pdf: S.ui.pdfDraft, ts: Date.now() }; try { await API.call('guardarOpciones', data); S.opciones = data; S.ui.pdfDraft = null; toast('Configuración del PDF guardada.'); } catch (er) { toast('No se pudo guardar: ' + er.message); } render(); break; }
@@ -3279,8 +3405,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const t = e.target, a = t.dataset?.act, c = t.dataset?.c;
   if (a === 'pdfSet') { const d = pdfDraft(), k = t.dataset.k; d[k] = t.type === 'checkbox' ? t.checked : t.type === 'radio' ? t.value === '1' : t.type === 'number' ? Number(t.value) : t.value; render(); return; }
-  if (a === 'pdfColV') { pdfDraft().cols[+t.dataset.i].v = t.checked; render(); return; }
-  if (a === 'pdfColN') { pdfDraft().cols[+t.dataset.i].n = t.value; render(); return; }
+  if (a === 'pdfLstV' || a === 'pdfLstN') { const x = pdfDraft()[t.dataset.l]?.[+t.dataset.i]; if (x) { if (a === 'pdfLstV') x.v = t.checked; else x.n = t.value; } render(); return; }
+  if (a === 'pdfKpi') { const d = pdfDraft(), set = new Set(d.kpis || []); if (t.checked) set.add(t.dataset.k); else set.delete(t.dataset.k); d.kpis = PDF_KPIS.map(([k]) => k).filter(k => set.has(k)); render(); return; }
   if (a === 'borrarCierre') { S.ui.borrar = { cierre: t.checked, conf: false }; render(); return; }
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
   if (t.id === 'armFile' && t.files?.[0]) { armLeer(t.files[0]); t.value = ''; return; }
