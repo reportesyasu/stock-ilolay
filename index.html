@@ -273,7 +273,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb55';
+window.__VERSION = 'sb56';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -296,7 +296,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb55</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb56</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -865,6 +865,7 @@ const TIPOS_AJ = {
   dec: { n: 'Decomiso', sign: -1, diario: false },
   pend: { n: 'Pendiente / corte', sign: 0, diario: false },
   otro: { n: 'Otro', sign: 0, diario: false },
+  cont: { n: 'Ajuste por conteo', sign: 0, diario: false },
   ing: { n: 'Ingreso del día', sign: 1, diario: true },
   vta: { n: 'Venta del día', sign: -1, diario: true }
 };
@@ -1576,14 +1577,14 @@ function tablaHoy(lines, sis, cerrado) {
       <td class="n hide-sm">${sis ? `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>` : '<span class="muted small" title="Faltan los archivos del día">sin archivos</span>'}</td>
       <td class="n"><span class="cnt">${inCj}<span>cj</span>${inUn}<span>u</span></span></td>
       <td class="n dif">${sis && l.contado ? (l.dif ? fmtS(l.dif) : '<span class="muted">0</span>') : ''}</td>
-      <td>${l.contado && l.dif ? motivoSel('a-m-' + l.c, l.motivo, false).replace('data-act="motivo"', `data-act="motivo" data-c="${esc(l.c)}"`) : ''}</td>
-      <td class="hide-sm">${l.contado && l.dif ? `<input type="text" class="obs" id="a-o-${esc(l.c)}" data-act="obs" data-c="${esc(l.c)}" value="${esc(l.obs)}" placeholder="Observación">` : ''}</td>
       <td class="n hide-sm">${ayer}</td>
       <td class="acc">${cerrado ? '' : `<div class="row acc-btns">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button></div>`}</td>
+      <td>${l.contado && l.dif ? motivoSel('a-m-' + l.c, l.motivo, false).replace('data-act="motivo"', `data-act="motivo" data-c="${esc(l.c)}"`) : ''}</td>
+      <td class="hide-sm">${l.contado && l.dif ? `<input type="text" class="obs" id="a-o-${esc(l.c)}" data-act="obs" data-c="${esc(l.c)}" value="${esc(l.obs)}" placeholder="Observación">` : ''}</td>
       <td class="n val">${sis && l.contado && l.dif ? money(l.importe) : ''}</td>
     </tr>`;
   }
-  return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n hide-sm">Sistema</th><th class="n">Contado</th><th class="n">Dif. u</th><th>Motivo</th><th class="hide-sm">Obs.</th><th class="n hide-sm">Ayer</th><th></th><th class="n">Valorizado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n hide-sm">Sistema</th><th class="n">Contado</th><th class="n">Dif. u</th><th class="n hide-sm">Ayer</th><th></th><th>Motivo</th><th class="hide-sm">Obs.</th><th class="n">Valorizado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 /* bloque 3 */
@@ -1653,7 +1654,7 @@ function histArtHtml(c) {
     ${ci.length ? `<div class="small" style="margin:2px 0 6px">${conDif ? `Con diferencia en <b>${conDif}</b> de ${ci.length} cierres · neto <b style="color:${neto < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(neto)} u</b>` : 'Sin diferencias en estos cierres.'}</div>
     <div class="tablebox"><table><thead><tr><th>Día</th>${verSis ? '<th class="n">Sistema</th>' : ''}<th class="n">Contado</th><th class="n">Dif.</th><th>Motivo / obs.</th></tr></thead><tbody>${ci.map(x => `<tr class="${x.dif < 0 ? 'difneg' : x.dif > 0 ? 'difpos' : ''}"><td>${diaSem(x.fecha).slice(0, 3)} ${dm(x.fecha)}</td>${verSis ? `<td class="n">${fmt(x.sis)}</td>` : ''}<td class="n">${cjun(x.cont)}</td><td class="n dif">${x.dif ? fmtS(x.dif) : '<span class="muted">0</span>'}</td><td class="small">${esc(x.m || '')}${x.obs ? ' · ' + esc(x.obs) : ''}${x.nota ? ` <span style="color:var(--warn)">“${esc(x.nota)}”</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Este artículo todavía no tiene cierres guardados.</div>'}
     <span class="lbl" style="margin-top:10px;display:block">Ajustes del artículo</span>
-    ${aj.length ? `<div class="tablebox"><table><thead><tr><th>Desde</th><th>Motivo</th><th>Detalle</th><th class="n">Unidades</th><th>Estado</th></tr></thead><tbody>${aj.map(a => `<tr><td class="small">${a.f ? dm(a.f) : ''}</td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small">${a.estado === 'pasado' ? `<span class="muted">pasado ${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) : ''}</span>` : '<b>pendiente</b>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Sin ajustes pendientes ni pasados en los últimos 30 días.</div>'}`;
+    ${aj.length ? `<div class="tablebox"><table><thead><tr><th>Desde</th><th>Tipo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th>Estado</th></tr></thead><tbody>${aj.map(a => `<tr><td class="small">${a.f ? dm(a.f) : ''}</td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small">${a.estado === 'pasado' ? `<span class="muted">pasado ${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) : ''}</span>` : '<b>pendiente</b>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Sin ajustes pendientes ni pasados en los últimos 30 días.</div>'}`;
 }
 /* La ficha se vuelve a dibujar con cada actualización automática: solo se reemplaza si cambió algo,
    y se conserva hasta dónde se había bajado (antes volvía arriba de todo). */
@@ -2280,13 +2281,13 @@ function vAjustes() {
   const grupos = {};
   for (const a of list) (grupos[grupoAj(a)] ||= []).push(a);
   const claves = Object.keys(grupos).sort(porDet ? ((x, y) => (x === '' ? 1 : y === '' ? -1 : 0) || grupos[y].length - grupos[x].length || x.localeCompare(y)) : ((x, y) => (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99)));
-  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td class="n mono small">${sisTxt(a.c)}</td><td>${porDet ? esc(TIPOS_AJ[a.t]?.n || a.t) : esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
+  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td class="small muted">${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
   const bloques = claves.map(k => {
     const g = grupos[k].sort((a, b) => (a.c || '').localeCompare(b.c || ''));
     const todos = g.every(a => sel.has(a.id));
     const suma = g.reduce((s, a) => s + Core.num(a.u), 0);
-    const nombre = porDet ? (k || 'Sin detalle') : (TIPOS_AJ[k]?.n || k);
-    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="8">${esc(nombre)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
+    const nombre = porDet ? (k || 'Sin motivo') : (TIPOS_AJ[k]?.n || k);
+    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="9">${esc(nombre)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
   }).join('');
   const P = S.ui.ajPasados;
   return `<div class="stack">
@@ -2296,19 +2297,41 @@ function vAjustes() {
     <form class="panel row" id="fAj">
       <input type="text" id="ajC" placeholder="Código" required style="width:110px" class="mono" value="${esc(S.ui.ajPre || '')}">
       <input type="number" id="ajU" placeholder="Unidades" required style="width:110px">
-      <select id="ajT" aria-label="Motivo del ajuste">${Object.entries(TIPOS_AJ).map(([k, t]) => `<option value="${k}">${t.n}${t.sign ? (t.sign < 0 ? ' (resta)' : ' (suma)') : ' (±)'}</option>`).join('')}</select>
-      <input type="text" id="ajM" placeholder="Detalle (opcional)" style="flex:1;min-width:160px">
+      <select id="ajT" aria-label="Tipo de ajuste" title="Tipo de ajuste">${Object.entries(TIPOS_AJ).map(([k, t]) => `<option value="${k}">${t.n}${t.sign ? (t.sign < 0 ? ' (resta)' : ' (suma)') : ' (±)'}</option>`).join('')}</select>
+      <input type="text" id="ajM" placeholder="Motivo (ej. ROTO)" style="flex:1;min-width:140px" value="${esc(S.ui.ajPreM || '')}">
+      <input type="text" id="ajO" placeholder="Observación (opcional)" style="flex:1;min-width:160px" value="${esc(S.ui.ajPreO || '')}">
       <button class="btn pri" type="submit">Agregar</button>
     </form>
-    <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Detalle'], ['tipo', 'Motivo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
-      <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
-    <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th class="n">Sistema</th><th>${porDet ? 'Motivo' : 'Detalle'}</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
-    ${bloques || '<tr><td colspan="9" class="empty">No hay ajustes pendientes.</td></tr>'}
+    <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Motivo'], ['tipo', 'Tipo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
+      <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
+    <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>Tipo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
+    ${bloques || '<tr><td colspan="10" class="empty">No hay ajustes pendientes.</td></tr>'}
     </tbody></table></div>
     <details class="panel" id="ajPasDet" ${S.ui.ajPasAb ? 'open' : ''}><summary><b>Ajustes ya pasados al sistema</b> <span class="small muted">(últimos 90 días; ya no cuentan en el stock)</span></summary>
-      ${!P ? '<div class="small muted" style="margin-top:8px">Cargando…</div>' : !P.length ? '<div class="small muted" style="margin-top:8px">Todavía no hay ajustes marcados como pasados.</div>' : `<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Pasado</th><th>Motivo</th><th>Código</th><th>Artículo</th><th>Detalle</th><th class="n">Unidades</th><th>Desde</th><th></th></tr></thead><tbody>${P.map(a => `<tr><td class="small">${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) + ' ' + hora(a.pts) : ''}<div class="small muted">${esc(a.ppor || '')}</div></td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(a.m)}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajVolver" data-id="${esc(a.id)}" title="Volver a pendiente: vuelve a contar en el sistema">Volver a pendiente</button></td></tr>`).join('')}</tbody></table></div>`}
+      ${!P ? '<div class="small muted" style="margin-top:8px">Cargando…</div>' : !P.length ? '<div class="small muted" style="margin-top:8px">Todavía no hay ajustes marcados como pasados.</div>' : `<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Pasado</th><th>Tipo</th><th>Código</th><th>Artículo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th>Desde</th><th></th></tr></thead><tbody>${P.map(a => `<tr><td class="small">${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) + ' ' + hora(a.pts) : ''}<div class="small muted">${esc(a.ppor || '')}</div></td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(a.m)}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajVolver" data-id="${esc(a.id)}" title="Volver a pendiente: vuelve a contar en el sistema">Volver a pendiente</button></td></tr>`).join('')}</tbody></table></div>`}
     </details>
   </div>`;
+}
+/* Excel para egreso: los ajustes tildados, totalizados por artículo */
+function excelEgreso() {
+  const ids = S.ui.ajSel || new Set(), sel = S.ajustes.filter(a => ids.has(a.id));
+  if (!sel.length) { toast('Tildá los ajustes que querés incluir.'); return; }
+  const por = new Map();
+  for (const a of sel) {
+    const g = por.get(a.c) || { c: a.c, u: 0, n: 0, mot: new Set() };
+    g.u += Core.num(a.u); g.n++; const m = [a.m, a.o && a.o !== a.m ? a.o : ''].filter(Boolean).join(' · '); if (m) g.mot.add(m); por.set(a.c, g);
+  }
+  const filas = [...por.values()].sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true })).map(g => {
+    const l = LINES.find(x => x.c === g.c), ux = l?.uxc || S.maestro[g.c]?.u || 1, sp = Core.split(Math.abs(g.u), ux), sg = g.u < 0 ? -1 : 1;
+    return [g.c, l?.d || S.maestro[g.c]?.d || '', ux, g.u, sg * sp.cj, sg * sp.un, g.n, [...g.mot].join(' / ')];
+  });
+  const total = filas.reduce((s, f) => s + f[3], 0);
+  try {
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'UXC', 'UNIDADES', 'CAJAS', 'UNID. SUELTAS', 'AJUSTES', 'MOTIVOS'], ...filas, [], ['', 'TOTAL (' + filas.length + ' artículos)', '', total]]), 'EGRESO');
+    descargar('Egreso ajustes ' + dm(S.dia).replace('/', '-') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    toast('Excel descargado: ' + filas.length + ' artículo' + (filas.length === 1 ? '' : 's') + ' (' + sel.length + ' ajustes).');
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
 }
 function sisTxt(c) {
   if (!tieneSistema()) return '<span class="muted small">sin archivos</span>';
@@ -2714,7 +2737,7 @@ function vOpciones() {
 // Detalle de los ajustes pendientes de un artículo (se guarda con el cierre)
 function ajDetalle(c) {
   const a = (S.ajustes || []).filter(x => x.c === c);
-  return a.length ? { ajd: a.map(x => ({ u: Number(x.u) || 0, t: x.t || '', m: x.m || '', f: x.f || '' })) } : {};
+  return a.length ? { ajd: a.map(x => ({ u: Number(x.u) || 0, t: x.t || '', m: x.m || '', o: x.o || '', f: x.f || '' })) } : {};
 }
 function docActual() {
   const r = resumen(LINES);
@@ -2893,7 +2916,7 @@ async function ajustesDelDia(fecha) {
   const todos = [...(S.ajustes || []).map(a => ({ ...a, est: 'pend' })), ...(pasados || []).map(a => ({ ...a, est: 'pasado' }))].filter(a => a.f === fecha);
   return todos.map(a => {
     const l = LINES.find(x => x.c === a.c), pr = l?.precio || 0, u = Number(a.u) || 0;
-    return { c: a.c, d: l?.d || S.maestro[a.c]?.d || '', ux: l?.uxc || S.maestro[a.c]?.u || 1, u, t: a.t || '', m: a.m || '', est: a.est, v: Math.round(u * pr * 100) / 100 };
+    return { c: a.c, d: l?.d || S.maestro[a.c]?.d || '', ux: l?.uxc || S.maestro[a.c]?.u || 1, u, t: a.t || '', m: a.m || '', o: a.o || '', est: a.est, v: Math.round(u * pr * 100) / 100 };
   }).sort((a, b) => a.c.localeCompare(b.c));
 }
 // Ajustes que cuentan para el PDF del cierre y el mail: se excluyen los de tipo Decomiso y los motivos de la lista
@@ -2996,7 +3019,7 @@ const PDF_COLS = [
 ];
 const PDF_SECC = [['ajDia', 'Ajustes del día'], ['dif', 'Artículos con diferencia'], ['detalle', 'Detalle de todo lo contado'], ['sin', 'Sin contar']];
 const PDF_KPIS = [['articulos', 'Artículos'], ['contados', 'Contados'], ['conAj', 'Con ajuste'], ['valAj', 'Valorizado ajustes'], ['conDif', 'Con diferencia'], ['sobra', 'Sobrante'], ['falta', 'Faltante'], ['valDif', 'Valorizado dif.']];
-const PDF_AJCOLS = [['codigo', 'Código', 0.08], ['descripcion', 'Descripción', 0.34], ['tipo', 'Tipo', 0.14], ['motivo', 'Motivo', 0.16], ['unidades', 'Unidades', 0.12, 'r'], ['valorizado', 'Valorizado', 0.10, 'r'], ['estado', 'Estado', 0.06]];
+const PDF_AJCOLS = [['codigo', 'Código', 0.08], ['descripcion', 'Descripción', 0.34], ['tipo', 'Tipo', 0.14], ['motivo', 'Motivo', 0.16], ['obs', 'Observación', 0.16], ['unidades', 'Unidades', 0.12, 'r'], ['valorizado', 'Valorizado', 0.10, 'r'], ['estado', 'Estado', 0.06]];
 const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, totales: true, ajustes: true, porSector: true,
   tituloTxt: 'STOCK ILOLAY · Cierre del {dia} {fecha}', subtitulo: true,
   ajExcluir: 'ROTO, DECOMISO', ajExcluirDec: true, ajNota: true, ajTotal: true,
@@ -3004,7 +3027,7 @@ const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAnch
   cHead: '#e6e6e6', cTit: '#000000', cNeg: '#b3261e', cPos: '#1e7a3c', cZebra: '#f5f5f5', zebra: false,
   secciones: PDF_SECC.map(([k, n]) => ({ k, n, v: k === 'ajDia' || k === 'detalle' })),
   kpis: ['articulos', 'contados', 'conAj', 'valAj'],
-  ajCols: PDF_AJCOLS.map(([k, n]) => ({ k, n, v: true })),
+  ajCols: PDF_AJCOLS.map(([k, n]) => ({ k, n, v: k !== 'obs' })),
   cols: PDF_COLS.map(([k, n]) => ({ k, n, v: k !== 'sector' && k !== 'obs' })), sinObs: true };
 function pdfCfg() {
   const guardada = opt('pdf') || {};
@@ -3107,8 +3130,8 @@ function pdfCierre(c, cfgIn, opts = {}) {
     const sw = cols.reduce((s, x) => s + x.w, 0); let ax = M; cols.forEach(cl => { cl.w = cl.w / sw * anchoTabla; cl.x = ax; ax += cl.w; });
     const cel = (cl, v, yy, b, col) => { const t = cortar(v, cl.w - pad, fs, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, t, fs, b, 'r', col); else P.text(cl.x + pad / 2, yy, t, fs, b, 'l', col); };
     const cab = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH - 2, true, '#000000')); y += rowH + 2 + fs + 2; };
-    const val = (k, a) => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return { codigo: a.c, descripcion: a.d || '', tipo: TIPOS_AJ[a.t]?.n || a.t || '', motivo: a.m || '', unidades: `${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${fmt(sp.cj)} cj ${fmt(sp.un)} u)`, valorizado: a.v === null || a.v === undefined ? '—' : money(a.v), estado: a.est === 'pasado' ? 'pasado' : 'pendiente' }[k]; };
-    const colr = (k, a) => k === 'unidades' || k === 'valorizado' ? (a.u < 0 ? cfg.cNeg : cfg.cPos) : k === 'tipo' || k === 'motivo' ? '#333333' : k === 'estado' ? '#666666' : '#000000';
+    const val = (k, a) => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return { codigo: a.c, descripcion: a.d || '', tipo: TIPOS_AJ[a.t]?.n || a.t || '', motivo: a.m || '', obs: a.o && a.o !== a.m ? a.o : '', unidades: `${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${fmt(sp.cj)} cj ${fmt(sp.un)} u)`, valorizado: a.v === null || a.v === undefined ? '—' : money(a.v), estado: a.est === 'pasado' ? 'pasado' : 'pendiente' }[k]; };
+    const colr = (k, a) => k === 'unidades' || k === 'valorizado' ? (a.u < 0 ? cfg.cNeg : cfg.cPos) : k === 'tipo' || k === 'motivo' || k === 'obs' ? '#333333' : k === 'estado' ? '#666666' : '#000000';
     cab(); let i = 0;
     for (const a of ajDia) {
       if (y > P.H - 34) { encabezado(nombre + ' (continuación)'); cab(); }
@@ -3125,7 +3148,7 @@ function pdfCierre(c, cfgIn, opts = {}) {
     }
   };
   const ajTxt = l => {
-    if (Array.isArray(l.ajd) && l.ajd.length) return l.ajd.map(a => `Ajuste · ${TIPOS_AJ[a.t]?.n || a.t || ''}${a.m ? ' · motivo ' + a.m : ''}: ${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${cjun(Math.abs(a.u), l.u)})${a.f ? ' · cargado el ' + dm(a.f) : ''}`);
+    if (Array.isArray(l.ajd) && l.ajd.length) return l.ajd.map(a => `Ajuste · ${TIPOS_AJ[a.t]?.n || a.t || ''}${a.m ? ' · motivo ' + a.m : ''}${a.o && a.o !== a.m ? ' · ' + a.o : ''}: ${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${cjun(Math.abs(a.u), l.u)})${a.f ? ' · cargado el ' + dm(a.f) : ''}`);
     return l.aj ? [`Ajustes pendientes incluidos en el sistema: ${fmtS(l.aj)} u`] : [];
   };
   const seccion = (titulo, lista, vacio, conAj) => {
@@ -3209,7 +3232,7 @@ async function copiarMail() {
   const { lista: aj } = ajustesDiaDe(c);
   const sob = aj.filter(a => a.u > 0), fal = aj.filter(a => a.u < 0), nArt = new Set(aj.map(a => a.c)).size;
   const sum = L => L.reduce((s, a) => s + (a.v || 0), 0);
-  const ln = a => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return `${a.c} ${a.d}: ${fmtS(a.u)} u (${fmt(sp.cj)} cj ${fmt(sp.un)} u)${a.m ? ' · ' + a.m : ''}${a.v !== null && a.v !== undefined ? ' · ' + money(a.v) : ''}`; };
+  const ln = a => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return `${a.c} ${a.d}: ${fmtS(a.u)} u (${fmt(sp.cj)} cj ${fmt(sp.un)} u)${a.m ? ' · ' + a.m : ''}${a.o && a.o !== a.m ? ' · ' + a.o : ''}${a.v !== null && a.v !== undefined ? ' · ' + money(a.v) : ''}`; };
   const bloque = (t, L) => `${t}:\n${L.map(ln).join('\n') || '-'}${L.length ? '\nTotal ' + t.toLowerCase() + ': ' + money(sum(L)) : ''}`;
   const txt = `${opt('destinatarios') ? 'Para: ' + opt('destinatarios') + '\n' : ''}Asunto: ${opt('asunto')} ${dmy(c.fecha).replace(/\//g, '.')}\n\nStock Ilolay del ${diaSem(c.fecha)} ${dmy(c.fecha)}: ${c.resumen?.contados ?? ''} artículos contados, ${dif.length} con diferencia, ${nArt} artículo${nArt === 1 ? '' : 's'} con ajustes.\n\n${bloque('SOBRA', sob)}\n\n${bloque('FALTA', fal)}\n\nValorizado de los ajustes: ${money(sum(aj))}`;
   try { await navigator.clipboard.writeText(txt); toast('Resumen copiado. Pegalo en el mail.'); }
@@ -3225,7 +3248,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'cerrarDet' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="cerrarDet"]')) return;
   const a = t.dataset.act, c = t.dataset.c, v = t.dataset.v;
   switch (a) {
-    case 'tab': S.ui.tab = v; S.ui.q = ''; scanDestino = null; if (v !== 'ajustes') S.ui.ajPre = null; S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); render(); window.scrollTo(0, 0); break;
+    case 'tab': S.ui.tab = v; S.ui.q = ''; scanDestino = null; if (v !== 'ajustes') { S.ui.ajPre = null; S.ui.ajPreM = ''; S.ui.ajPreO = ''; } S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); render(); window.scrollTo(0, 0); break;
     case 'vista': if (v === 'auto') delete document.documentElement.dataset.vista; else document.documentElement.dataset.vista = v; try { localStorage.setItem('vista', v); } catch { } render(); break;
     case 'copiarLog': try { await navigator.clipboard.writeText(S.scanLog.join('\n')); toast('Registro copiado.'); } catch { toast('No se pudo copiar; sacá una captura.'); } break;
     case 'probarConexion': probarConexion(); break;
@@ -3280,14 +3303,19 @@ document.addEventListener('click', async e => {
         toast('Se tomó el stock del sistema para ' + c + '.');
       } else {
         try {
-          await API.call('agregarAjuste', { c, u: l.dif, t: 'otro', m: 'Conteo ' + dm(S.dia) + (motivo ? ' · ' + motivo : '') + (obs ? ' · ' + obs : ''), f: S.dia });
-          await guardarConteo(c, { m: motivo, obs, res: 'conteo' });
+          const ob = obs || motivo;
+          await API.call('agregarAjuste', { c, u: l.dif, t: 'cont', m: motivo || obs, o: ob, f: S.dia });
+          await guardarConteo(c, { m: motivo, obs: ob, res: 'conteo' });
           toast('Ajuste creado: el sistema queda igual a lo contado (' + fmtS(l.dif) + ' u).');
         } catch (er) { toast('No se pudo crear el ajuste.'); }
       }
       break;
     }
-    case 'aAjuste': S.ui.tab = 'ajustes'; S.ui.ajPre = c; cargarAjPasados(); render(); window.scrollTo(0, 0); setTimeout(() => { const i = $('#ajC'); if (i) { i.value = c; $('#ajU')?.focus(); } }, 0); break;
+    case 'aAjuste': {
+      const k = S.conteos[c] || {}, mot = ($('#a-m-' + CSS.escape(c))?.value || k.m || '').trim(), ob = ($('#a-o-' + CSS.escape(c))?.value || k.obs || '').trim();
+      S.ui.ajPreM = mot; S.ui.ajPreO = ob || mot;
+    }
+    S.ui.tab = 'ajustes'; S.ui.ajPre = c; cargarAjPasados(); render(); window.scrollTo(0, 0); setTimeout(() => { const i = $('#ajC'); if (i) { i.value = c; $('#ajU')?.focus(); } }, 0); break;
     case 'recTodas': { t.disabled = true; const lote = LINES.filter(l => l.contado && l.dif && !l.rec).map(l => ({ c: l.c, patch: { rec: true } })); await guardarLote(lote); toast(lote.length + ' artículos marcados para recontar.'); break; }
     case 'ajustarSis': { const l = LINES.find(x => x.c === c); if (!l?.dif) break; try { await API.call('agregarAjuste', { c, u: l.dif, t: 'otro', m: 'Ajuste a lo contado ' + dm(S.dia) + (l.motivo ? ' · ' + l.motivo : ''), f: S.dia }); toast('Ajuste creado.'); programarRefresco(200); } catch (er) { toast('No se pudo crear el ajuste: ' + er.message); } break; }
     case 'dsave': await guardarDeposito(c); break;
@@ -3359,6 +3387,7 @@ document.addEventListener('click', async e => {
       for (const [code, it] of Object.entries(draft)) { const y = Y[code]; if (!y) continue; if (y.desc && y.desc !== it.d) { it.d = y.desc; n++; } if (y.cap > 0 && y.cap !== it.u) { it.u = y.cap; n++; } if (y.ean && !(it.e || []).includes(y.ean)) { it.e = [...(it.e || []), y.ean]; n++; } }
       toast(n ? n + ' datos actualizados. Revisá y guardá.' : 'No había nada para actualizar.'); render(); break;
     }
+    case 'ajExcel': excelEgreso(); break;
     case 'ajPasar': {
       const ids = [...(S.ui.ajSel || [])]; if (!ids.length) break;
       try {
@@ -3496,7 +3525,7 @@ document.addEventListener('submit', async e => {
     const c = Core.code($('#ajC').value), t = $('#ajT').value; let u = Core.num($('#ajU').value);
     if (!c || !u) { toast('Completá código y unidades.'); return; }
     const sg = TIPOS_AJ[t].sign; if (sg) u = sg * Math.abs(u);
-    try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), f: S.dia }); e.target.reset(); toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
+    try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
     const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: $('#oAuto').checked, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
