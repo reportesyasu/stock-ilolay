@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb70';
+window.__VERSION = 'sb71';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb70</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb71</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2598,7 +2598,7 @@ async function valCopiar() {
   catch { $('#sheet').innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" data-stop="1"><h3>Valorizado para el mail</h3><textarea id="mailTxt" style="min-height:320px">${esc(txt)}</textarea><button class="btn" data-act="cerrarDet">Cerrar</button></div></div>`; $('#mailTxt').select(); }
 }
 function valPdf() {
-  const V = S.ui.val, G = valGrupos(V.filas), cfg = pdfCfg(), P = pdfDoc(false), fs = 9, ft = 15, rowH = Math.round(fs * 1.9), M = 28, ancho = P.W - 2 * M, pad = 12;
+  const V = S.ui.val, G = valGrupos(V.filas), cfg = pdfCfg(), P = pdfDoc(false, cfg.fuente), fs = 9, ft = 15, rowH = Math.round(fs * 1.9), M = 28, ancho = P.W - 2 * M, pad = 12;
   const cols = [{ n: 'CÓDIGO', w: 0.10 }, { n: 'DESCRIPCIÓN', w: 0.42 }, { n: 'AJ. (PEND.)', w: 0.14, a: 'r' }, { n: 'UNIDADES', w: 0.14, a: 'r' }, { n: 'VALORIZADO', w: 0.20, a: 'r' }];
   let x = M; cols.forEach(cl => { cl.w *= ancho; cl.x = x; x += cl.w; });
   const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
@@ -2657,7 +2657,7 @@ function vCorreos() {
 function pdfAjustesSel() {
   const ids = S.ui.ajSel || new Set(), sel = S.ajustes.filter(a => ids.has(a.id));
   if (!sel.length) { toast('Tildá los ajustes que querés incluir.'); return; }
-  const cfg = pdfCfg(), P = pdfDoc(false), fs = 9, ft = 15, rowH = Math.round(fs * 2), M = 28, ancho = P.W - 2 * M, pad = 12;
+  const cfg = pdfCfg(), P = pdfDoc(false, cfg.fuente), fs = 9, ft = 15, rowH = Math.round(fs * 2), M = 28, ancho = P.W - 2 * M, pad = 12;
   const por = new Map();
   for (const a of sel) { const g = por.get(a.c) || { c: a.c, u: 0, n: 0, f: new Set(), mot: new Set() }; g.u += Core.num(a.u); g.n++; if (a.f) g.f.add(a.f); if (a.m) g.mot.add(a.m); por.set(a.c, g); }
   const L = [...por.values()].sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true }));
@@ -2770,11 +2770,12 @@ function vPdfCfg() {
   const chk = (k, n) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="pdfSet" data-k="${k}" ${c[k] ? 'checked' : ''}> ${n}</label>`;
   const txt = (k, n, ayuda) => `<label class="stack" style="gap:2px;flex:1;min-width:240px"><span class="lbl">${n}</span><input type="text" data-act="pdfSet" data-k="${k}" value="${esc(c[k] ?? '')}">${ayuda ? `<span class="small muted">${ayuda}</span>` : ''}</label>`;
   const sub = (t, ayuda) => `<div style="margin-top:10px;border-top:1px solid var(--line,#ddd);padding-top:8px"><b>${t}</b>${ayuda ? `<div class="small muted">${ayuda}</div>` : ''}</div>`;
+  const fuente = (k, n = 'Fuente') => `<label class="stack" style="gap:2px"><span class="lbl">${n}</span><select data-act="pdfSet" data-k="${k}">${Object.entries(PDF_FUENTES).map(([v, f]) => `<option value="${v}" ${(c[k] || 'Helvetica') === v ? 'selected' : ''}>${f[2]}</option>`).join('')}</select></label>`;
   const kpis = PDF_KPIS.map(([k, n]) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="pdfKpi" data-k="${k}" ${(c.kpis || []).includes(k) ? 'checked' : ''}> ${n}</label>`).join('');
-  return `<div style="max-width:760px" id="pdfPanel">${secOp('pdf', 'PDF del cierre', 'Qué partes salen y en qué orden, totales, ajustes del día, columnas, líneas, letra y colores del PDF que se descarga al cerrar y desde Historial.')}
+  return `<div style="max-width:760px" id="pdfPanel">${secOp('pdf', 'PDF (cierre y diferencias)', 'Fuente, letra y tamaños de los PDF de cierre, de diferencias y por chofer; qué partes salen y en qué orden, totales, ajustes del día, columnas, líneas, letra y colores del PDF que se descarga al cerrar y desde Historial.')}
     ${sub('Hoja y letra')}
     <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">
-      ${num('letra', 'Letra de la tabla (pt)', 5, 14)}${num('titulo', 'Letra del título (pt)', 9, 28)}
+      ${fuente('fuente')}${num('letra', 'Letra de la tabla (pt)', 5, 14)}${num('titulo', 'Letra del título (pt)', 9, 28)}
       ${num('autoPct', 'Autoajuste de columnas (%)', 10, 100, 'Cada columna toma el ancho que necesita ese % de las filas; las más largas se cortan con “…”.')}
       <div class="stack" style="gap:4px"><span class="lbl">Hoja</span><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="1" ${c.apaisado !== false ? 'checked' : ''}> Apaisada</label><label class="row small" style="gap:6px"><input type="radio" name="pdfOri" data-act="pdfSet" data-k="apaisado" value="0" ${c.apaisado === false ? 'checked' : ''}> Vertical</label></div>
     </div>
@@ -2794,6 +2795,12 @@ function vPdfCfg() {
     ${sub('Líneas y colores', 'Las líneas también se usan en el PDF por chofer y proveedor.')}
     <div class="row" style="gap:16px;flex-wrap:wrap;align-items:end">${chk('sep', 'Líneas entre filas')}${chk('sepV', 'Líneas entre columnas')}${num('grosor', 'Grosor de línea', 0.1, 3, '', 0.1)}${color('cSep', 'Color de las líneas')}${chk('zebra', 'Filas alternadas')}</div>
     <div class="row" style="gap:16px;flex-wrap:wrap">${color('cHead', 'Fondo del encabezado')}${color('cTit', 'Títulos')}${color('cNeg', 'Faltante')}${color('cPos', 'Sobrante')}${color('cZebra', 'Filas alternadas')}</div>
+    ${sub('PDF de diferencias del día', 'El que sale desde Diferencias con el stock sin cerrar: código, descripción (completa, en varios renglones si hace falta), sistema, contado y diferencia.')}
+    <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">${fuente('difFuente')}${num('difLetra', 'Letra (pt)', 6, 18)}${num('difTitulo', 'Letra del título (pt)', 9, 28)}${num('difAlto', 'Alto de renglón', 1.3, 4, 'Veces la letra. Más alto deja lugar para anotar.', 0.1)}
+      <div class="stack" style="gap:4px"><span class="lbl">Hoja</span><label class="row small" style="gap:6px"><input type="radio" name="pdfDifOri" data-act="pdfSet" data-k="difApaisado" value="1" ${c.difApaisado !== false ? 'checked' : ''}> Apaisada</label><label class="row small" style="gap:6px"><input type="radio" name="pdfDifOri" data-act="pdfSet" data-k="difApaisado" value="0" ${c.difApaisado === false ? 'checked' : ''}> Vertical</label></div></div>
+    ${sub('PDF por chofer y proveedor', 'Grilla por chofer con código, descripción, boca (cliente y domicilio) y unidades. Sale siempre en hoja vertical.')}
+    <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">${fuente('chFuente')}${num('chLetra', 'Letra (pt)', 6, 16)}${num('chTitulo', 'Letra del título (pt)', 9, 26)}${num('chAlto', 'Alto de renglón', 1.1, 3, 'Veces la letra.', 0.1)}</div>
+    <div class="row"><button class="btn" data-act="pdfDif">Probar PDF de diferencias</button><button class="btn" data-act="pdfDifMov">Probar PDF por chofer</button><span class="small muted">Usan lo que está en pantalla aunque no lo hayas guardado. Necesitan los archivos del día y alguna diferencia.</span></div>
     <div class="row" style="margin-top:10px"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfPrueba">Descargar PDF de prueba</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
   </div></details></div>`;
 }
@@ -3145,12 +3152,24 @@ function pdfDiferencias() {
     toast('PDF con ' + n + ' diferencia' + (n === 1 ? '' : 's') + ' descargado.');
   } catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
 }
+// Parte un texto en renglones que entren en el ancho (para que no se corte con "…")
+function partirTxt(s, w, size, bold) {
+  const out = []; let cur = '';
+  for (const pal of String(s || '').split(/\s+/).filter(Boolean)) {
+    const prueba = cur ? cur + ' ' + pal : pal;
+    if (anchoTxt(prueba, size, bold) <= w) { cur = prueba; continue; }
+    if (cur) out.push(cur);
+    cur = pal; while (anchoTxt(cur, size, bold) > w && cur.length > 1) { let k = cur.length - 1; while (k > 1 && anchoTxt(cur.slice(0, k), size, bold) > w) k--; out.push(cur.slice(0, k)); cur = cur.slice(k); }
+  }
+  if (cur) out.push(cur);
+  return out.length ? out : [''];
+}
 /* PDF de diferencias del día (stock sin cerrar): solo código, descripción, sistema, contado, diferencia y un espacio para escribir el motivo */
 function armarPdfDif(c, t) {
-  const cfg = pdfCfg();
-  const P = pdfDoc(cfg.apaisado !== false);
-  const fs = Math.max(6, Math.min(14, (Number(cfg.letra) || 8) + 1)), ft = Math.max(9, Math.min(24, Number(cfg.titulo) || 15));
-  const rowH = Math.round(fs * 2.3), M = 28, ancho = P.W - 2 * M, pad = 24; // renglones altos y columnas con aire, para leer y escribir a mano
+  const cfg = S.ui.pdfDraft || pdfCfg();
+  const P = pdfDoc(cfg.difApaisado !== false, cfg.difFuente);
+  const fs = Math.max(6, Math.min(18, Number(cfg.difLetra) || 9)), ft = Math.max(9, Math.min(28, Number(cfg.difTitulo) || 15));
+  const rowH = Math.round(fs * Math.max(1.3, Math.min(4, Number(cfg.difAlto) || 2.3))), M = 28, ancho = P.W - 2 * M, pad = 24; // renglones altos y columnas con aire, para leer y escribir a mano
   const CU = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
   const L = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || String(a.c).localeCompare(String(b.c), 'es', { numeric: true }));
   const cols = [
@@ -3176,14 +3195,18 @@ function armarPdfDif(c, t) {
   };
   pagina();
   let i = 0;
+  const lhD = Math.round(fs * 1.25);
   for (const l of L) {
-    if (y + rowH > P.H - 30) pagina();
-    if (cfg.zebra && i++ % 2) P.rect(M, y, ancho, rowH, cfg.cZebra);
+    // La descripción sale completa: si no entra, sigue en el renglón de abajo
+    const dl = partirTxt(l.d || '', desc.w - pad, fs, false), h = Math.max(rowH, dl.length * lhD + (rowH - fs));
+    if (y + h > P.H - 30) pagina();
+    if (cfg.zebra && i++ % 2) P.rect(M, y, ancho, h, cfg.cZebra);
     const base = y + rowH / 2 + fs * 0.35, col = l.dif < 0 ? cfg.cNeg : cfg.cPos;
-    cols.forEach(cl => cel(cl, cl.v(l), base, !!cl.b, cl.k === 'dif' ? col : '#000000'));
-    y += rowH;
+    cols.forEach(cl => { if (cl !== desc) cel(cl, cl.v(l), base, !!cl.b, cl.k === 'dif' ? col : '#000000'); });
+    dl.forEach((s, k) => P.text(desc.x + pad / 2, base + k * lhD, s, fs, false, 'l', '#000000'));
+    y += h;
     if (cfg.sep !== false) P.line(M, y, M + ancho, y, cS, gS);
-    if (cfg.sepV) cols.slice(1).forEach(cl => P.line(cl.x, y - rowH, cl.x, y, cS, gS));
+    if (cfg.sepV) cols.slice(1).forEach(cl => P.line(cl.x, y - h, cl.x, y, cS, gS));
   }
   return P.blob();
 }
@@ -3246,10 +3269,10 @@ function vClientes() {
 }
 function armarPdfDifMovs(c, difs, M, t) {
   // Una grilla por chofer: CÓDIGO · DESCRIPCIÓN · BOCA (cliente y domicilio, de la base de clientes) · FAC (unidades)
-  const cfg = pdfCfg();
-  const P = pdfDoc(false); // siempre vertical
-  const fs = Math.max(7, Math.min(12, (Number(cfg.letra) || 8) + 0.5)), ft = Math.max(9, Math.min(22, Number(cfg.titulo) || 15) - 1);
-  const lh = Math.round(fs * 1.3), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov(), pad = 5;
+  const cfg = S.ui.pdfDraft || pdfCfg();
+  const P = pdfDoc(false, cfg.chFuente); // siempre vertical
+  const fs = Math.max(6, Math.min(16, Number(cfg.chLetra) || 8.5)), ft = Math.max(9, Math.min(26, Number(cfg.chTitulo) || 14));
+  const lh = Math.round(fs * Math.max(1.1, Math.min(3, Number(cfg.chAlto) || 1.3))), Mg = 28, ancho = P.W - 2 * Mg, tol = tolMov(), pad = 5;
   const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
   const ORI = { Y: 'Yasu.', I: 'Ilolay', V: 'Vent.' };
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
@@ -3397,7 +3420,11 @@ const HELV = (() => {
   set('FTZ', 611); set('GOQ', 778); set('J', 500); set('M', 833); set('W', 944); set('^', 469); set('ckssvxyz', 500); set('m', 833); set('t', 278);
   set('{}', 334); set('|', 260); return w;
 })();
+// Fuentes estándar del PDF (no hace falta incrustarlas). Times usa los anchos de Helvetica (es más angosta: entra seguro); Courier es de ancho fijo.
+const PDF_FUENTES = { Helvetica: ['Helvetica', 'Helvetica-Bold', 'Helvetica (sin serifa)'], Times: ['Times-Roman', 'Times-Bold', 'Times (con serifa)'], Courier: ['Courier', 'Courier-Bold', 'Courier (máquina de escribir)'] };
+let PDF_FUENTE = 'Helvetica';
 function anchoTxt(s, size, bold) {
+  if (PDF_FUENTE === 'Courier') return [...String(s ?? '')].length * 0.6 * size;
   let t = 0; for (const ch of String(s ?? '')) { const b = ch.normalize('NFD')[0]; t += HELV[b] ?? 556; }
   return t / 1000 * size * (bold ? 1.06 : 1);
 }
@@ -3408,7 +3435,8 @@ function cortar(s, maxW, size, bold) {
   return s.slice(0, lo) + '…';
 }
 const hexRgb = (h, def = '#000000') => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || def)) || /^#?([0-9a-f]{6})$/i.exec(def); const n = parseInt(m[1], 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(x => x.toFixed(3)).join(' '); };
-function pdfDoc(apaisado = true) {
+function pdfDoc(apaisado = true, fuente = 'Helvetica') {
+  PDF_FUENTE = PDF_FUENTES[fuente] ? fuente : 'Helvetica'; const FN = PDF_FUENTES[PDF_FUENTE];
   const W = apaisado ? 842 : 595, H = apaisado ? 595 : 842, pages = []; let cur = null;
   const api = {
     W, H,
@@ -3424,8 +3452,8 @@ function pdfDoc(apaisado = true) {
       const objs = [];
       objs.push('<< /Type /Catalog /Pages 2 0 R >>');
       objs.push(`<< /Type /Pages /Kids [${pages.map((_, i) => `${5 + i * 2} 0 R`).join(' ')}] /Count ${pages.length} >>`);
-      objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
-      objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+      objs.push(`<< /Type /Font /Subtype /Type1 /BaseFont /${FN[0]} /Encoding /WinAnsiEncoding >>`);
+      objs.push(`<< /Type /Font /Subtype /Type1 /BaseFont /${FN[1]} /Encoding /WinAnsiEncoding >>`);
       pages.forEach((ops, i) => {
         const pie = `0.45 g BT /F1 7 Tf ${W - 110} 18 Td (${pdfTxt('Página ' + (i + 1) + ' de ' + pages.length)}) Tj ET 0 g`;
         const st = ops.concat(pie).join('\n');
@@ -3451,7 +3479,8 @@ const PDF_COLS = [
 const PDF_SECC = [['ajDia', 'Ajustes del día'], ['dif', 'Artículos con diferencia'], ['detalle', 'Detalle de todo lo contado'], ['sin', 'Sin contar']];
 const PDF_KPIS = [['articulos', 'Artículos'], ['contados', 'Contados'], ['conAj', 'Con ajuste'], ['valAj', 'Valorizado ajustes'], ['conDif', 'Con diferencia'], ['sobra', 'Sobrante'], ['falta', 'Faltante'], ['valDif', 'Valorizado dif.']];
 const PDF_AJCOLS = [['codigo', 'Código', 0.08], ['descripcion', 'Descripción', 0.34], ['tipo', 'Tipo', 0.14], ['motivo', 'Motivo', 0.16], ['obs', 'Observación', 0.16], ['unidades', 'Unidades', 0.12, 'r'], ['valorizado', 'Valorizado', 0.10, 'r'], ['estado', 'Estado', 0.06]];
-const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, totales: true, ajustes: true, porSector: true,
+const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAncho: true, totales: true, ajustes: true, porSector: true, fuente: 'Helvetica',
+  difLetra: 9, difTitulo: 15, difApaisado: true, difFuente: 'Helvetica', difAlto: 2.3, chLetra: 8.5, chTitulo: 14, chFuente: 'Helvetica', chAlto: 1.3,
   tituloTxt: 'STOCK ILOLAY · Cierre del {dia} {fecha}', subtitulo: true,
   ajExcluir: 'ROTO, DECOMISO', ajExcluirDec: true, ajNota: true, ajTotal: true,
   sep: true, sepV: false, cSep: '#b4b4b4', grosor: 0.5,
@@ -3473,7 +3502,7 @@ function pdfCfg() {
 }
 function pdfCierre(c, cfgIn, opts = {}) {
   const cfg = cfgIn || pdfCfg();
-  const P = pdfDoc(cfg.apaisado !== false); const lin = c.lineas || [];
+  const P = pdfDoc(cfg.apaisado !== false, cfg.fuente); const lin = c.lineas || [];
   const r = c.resumen || {};
   const fs = Math.max(5, Math.min(14, Number(cfg.letra) || 8)), ft = Math.max(9, Math.min(28, Number(cfg.titulo) || 15));
   const rowH = Math.round(fs * 1.6), M = 28, ancho = P.W - 2 * M;
