@@ -184,8 +184,8 @@ html,body{overflow-x:clip}
 .sheet{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,var(--ink) 35%,transparent);display:flex;justify-content:flex-end}
 .sheet .box{width:min(620px,100%);height:100%;overflow-y:auto;background:var(--surface);padding:18px max(16px,env(safe-area-inset-right,0px)) 40px 18px;display:grid;gap:14px;align-content:start;padding-top:calc(18px + env(safe-area-inset-top,0px))}
 .sheet .box>*{min-width:0}
-table.mini{width:100%;border-collapse:collapse;font-size:12.5px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;table-layout:fixed}
-table.mini th,table.mini td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+table.mini{width:100%;border-collapse:collapse;font-size:14px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;table-layout:fixed}
+table.mini th,table.mini td{padding:6px 7px;border-bottom:1px solid var(--line);vertical-align:top;overflow:hidden;text-overflow:ellipsis}
 table.mini th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);background:var(--sunk);text-align:left}
 table.mini .n{text-align:right;white-space:nowrap}
 table.mini tr.sub td{padding-left:18px;color:var(--muted);font-size:12px;border-bottom-style:dashed}
@@ -193,7 +193,7 @@ table.mini tr.tot td{font-weight:600;background:var(--sunk)}
 table.mini tr.org th{font-size:12.5px;color:var(--ink);text-transform:none;letter-spacing:0}
 table.mini td.cli{white-space:nowrap}
 table.mini td.mono{font-family:var(--f-mono);font-size:11px;word-break:break-all}
-table.mini.g2 td{font-size:12px}
+table.mini.g2 td{font-size:14px}
 table.mini tr.subt td{font-weight:600;background:var(--sunk);font-size:12px}
 table.mini tr.hl td{background:#fff3b0 !important;color:#3a3000}
 table.mini tr.hl td .muted{color:#6b5c00}
@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb67';
+window.__VERSION = 'sb68';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb67</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb68</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1679,21 +1679,21 @@ function movDiaHtml(c) {
     const tq = rs.filter(x => x.ms !== false).reduce((s, x) => s + x.q, 0);
     const fechas = [...new Set(rs.map(x => x.f).filter(Boolean))].map(dm).join(', ');
     let filas = '', chAct = null, sub = 0, subN = 0;
-    const cierreCh = () => { if (chAct !== null) filas += `<tr data-mk="${esc(c + '|sub|' + o + '|' + chAct)}" class="subt ${hl(sub) ? 'hl' : ''} ${OK[c + '|sub|' + o + '|' + chAct] ? 'okr' : ''}"><td colspan="3">Subtotal ${esc(chAct || 'Sin chofer')} <span class="muted">· ${subN} ${subN === 1 ? 'renglón' : 'renglones'}</span></td><td class="n">${fmt(sub)}</td></tr>`; };
+    const cierreCh = () => { if (chAct !== null) filas += `<tr data-mk="${esc(c + '|sub|' + o + '|' + chAct)}" class="subt ${hl(sub) ? 'hl' : ''} ${OK[c + '|sub|' + o + '|' + chAct] ? 'okr' : ''}"><td colspan="2">Subtotal ${esc(chAct || 'Sin chofer')} <span class="muted">· ${subN} ${subN === 1 ? 'renglón' : 'renglones'}</span></td><td class="n">${fmt(sub)}</td></tr>`; };
     let ri = 0;
     for (const x of rs) {
       if (x.ch !== chAct) { cierreCh(); chAct = x.ch; sub = 0; subN = 0; }
       if (x.ms !== false) sub += x.q; subN++;
       const key = c + '|' + o + '|' + (x.comp || '') + '|' + (x.cli || '') + '|' + (x.ch || '') + '|' + x.q + '|' + (ri++);
-      filas += `<tr data-mk="${esc(key)}" class="${x.ms === false ? 'muted' : ''} ${hl(x.q) ? 'hl' : ''} ${OK[key] ? 'okr' : ''}"><td class="mono" title="${esc(x.comp || '')}">${esc(String(x.comp || '').replace(/^0*(\d+)-0*(\d)/, '$1-$2'))}</td><td class="cli" title="${esc(x.cli || '')}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`;
+      filas += `<tr data-mk="${esc(key)}" class="${x.ms === false ? 'muted' : ''} ${hl(x.q) ? 'hl' : ''} ${OK[key] ? 'okr' : ''}"><td class="cli" title="${esc(x.cli || '')}${x.comp ? ' · comprobante ' + esc(String(x.comp).replace(/^0*(\d+)-0*(\d)/, '$1-$2')) : ''}">${esc(x.cli || '')}</td><td title="${esc(x.ch || '')}${x.viaje ? ' · viaje ' + esc(x.viaje) : ''}">${esc(corto(x.ch))}</td><td class="n">${x.q < 0 ? '<span style="color:var(--ok)">+' + fmt(-x.q) + '</span>' : fmt(x.q)}${x.nota ? '<div class="muted">' + esc(x.nota) + '</div>' : ''}${x.ms === false ? '<div>no mueve</div>' : ''}</td></tr>`;
     }
     cierreCh();
     const ab = !!(S.ui.movAb || {})[o];
     const nHl = rs.filter(x => hl(x.q)).length;
     return `<details class="movorg" data-o="${o}" ${ab ? 'open' : ''}><summary><b>${ORIGEN[o] || o}</b>${fechas ? ' <span class="muted">· ' + fechas + '</span>' : ''} <span class="muted">· ${rs.length} ${rs.length === 1 ? 'renglón' : 'renglones'}</span>${nHl ? `<span class="pill hlp">${nHl} coincide${nHl > 1 ? 'n' : ''}</span>` : ''}<span class="tq">${fmt(tq)} u</span></summary>
-      <table class="mini g2"><colgroup><col style="width:29%"><col style="width:33%"><col style="width:26%"><col style="width:12%"></colgroup><thead><tr><th>Comprob.</th><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${filas}</tbody></table></details>`;
+      <table class="mini g2"><colgroup><col style="width:52%"><col style="width:34%"><col style="width:14%"></colgroup><thead><tr><th>Cliente</th><th>Chofer</th><th class="n">Unid.</th></tr></thead><tbody>${filas}</tbody></table></details>`;
   }).join('');
-  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div><div class="small muted" style="margin:0 0 6px">Tocá un renglón para marcarlo en <span style="color:var(--ok);font-weight:600">verde</span> (ya controlado); tocalo de nuevo para desmarcar.</div>${dif ? `<div class="small" style="margin:0 0 6px"><span class="hlbox">&nbsp;&nbsp;&nbsp;</span> En amarillo: lo que coincide (±${fmt(tol)} %) con la diferencia de <b>${fmt(dif)} u</b> entre contado y sistema.</div>` : ''}${g1}<div class="small muted" style="margin:10px 0 4px">Comprobantes · tocá cada origen para ver u ocultar el detalle</div>${g2}
+  return titulo + `<div class="small" style="margin:2px 0 6px">Salieron <b>${fmt(total)} u</b> (${cj(total)}) · ${chs.length} chofer${chs.length === 1 ? '' : 'es'}</div><div class="small muted" style="margin:0 0 6px">Tocá un renglón para marcarlo en <span style="color:var(--ok);font-weight:600">verde</span> (ya controlado); tocalo de nuevo para desmarcar.</div>${dif ? `<div class="small" style="margin:0 0 6px"><span class="hlbox">&nbsp;&nbsp;&nbsp;</span> En amarillo: lo que coincide (±${fmt(tol)} %) con la diferencia de <b>${fmt(dif)} u</b> entre contado y sistema.</div>` : ''}${g1}<div class="small muted" style="margin:10px 0 4px">Detalle por cliente · tocá cada origen para ver u ocultar</div>${g2}
     <div class="small muted" style="margin-top:6px">${arch}${fs.some(x => x.q < 0) ? ' · en verde: notas de crédito (vuelve al stock)' : ''}</div>`;
 }
 function histArtHtml(c) {
