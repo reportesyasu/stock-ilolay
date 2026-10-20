@@ -273,7 +273,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb57';
+window.__VERSION = 'sb58';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -296,7 +296,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb57</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb58</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1388,7 +1388,7 @@ function restoreFocus(k) {
 }
 function renderTop() {
   const tabs = S.admin
-    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['quesos', 'Quesos'], ['correos', 'Correos'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Opciones']]
+    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['quesos', 'Quesos'], ['correos', 'Correos'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Configuración']]
     : [['contar', 'Depósito']];
   $('#tabs').hidden = false;
   $('#tabs').innerHTML = (tabs.length < 2 ? [] : tabs).map(([k, n]) => `<button data-act="tab" data-v="${k}" ${S.ui.tab === k ? 'aria-current="page"' : ''}>${n}</button>`).join('') + '<button data-act="salir" title="Cambiar de PIN o de servidor">Salir</button>';
@@ -2279,11 +2279,17 @@ async function guardarMaestro() {
 }
 
 /* ---------- Ajustes ---------- */
+function motivoKey(m) { return String(m || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 function vAjustes() {
-  const list = [...S.ajustes];
-  const tot = {}; for (const a of list) tot[a.c] = (tot[a.c] || 0) + Core.num(a.u);
+  // Filtro por motivo (independiente del agrupado): junta un mismo motivo de todas las fechas para el PDF, el Excel o marcarlos como pasados
+  const todosAj = [...S.ajustes], fil = S.ui.ajFil || '';
+  const motivos = {}; for (const a of todosAj) { const k = motivoKey(a.m); motivos[k] = (motivos[k] || 0) + 1; }
+  if (fil && !(fil in motivos)) { S.ui.ajFil = ''; return vAjustes(); } // el motivo filtrado ya no tiene pendientes: vuelve a Todos
+  const list = fil ? todosAj.filter(a => motivoKey(a.m) === fil) : todosAj;
+  const tot = {}; for (const a of todosAj) tot[a.c] = (tot[a.c] || 0) + Core.num(a.u);
   const sel = S.ui.ajSel ||= new Set();
-  for (const id of [...sel]) if (!list.some(a => a.id === id)) sel.delete(id);
+  for (const id of [...sel]) if (!todosAj.some(a => a.id === id)) sel.delete(id);
+  const selFil = list.filter(a => sel.has(a.id)).length, todosFil = list.length > 0 && selFil === list.length;
   // Agrupados por detalle (ROTO, CRÉDITO…) o por motivo (tipo de ajuste)
   const porDet = (S.ui.ajAgr || 'det') === 'det';
   const orden = Object.keys(TIPOS_AJ);
@@ -2311,10 +2317,11 @@ function vAjustes() {
       <input type="text" id="ajO" placeholder="Observación (opcional)" style="flex:1;min-width:160px" value="${esc(S.ui.ajPreO || '')}">
       <button class="btn pri" type="submit">Agregar</button>
     </form>
+    <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><span class="small muted">Filtrar por motivo</span><select data-act="ajFil" aria-label="Filtrar por motivo" style="min-width:200px"><option value="">Todos (${todosAj.length})</option>${Object.entries(motivos).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `<option value="${esc(k)}" ${k === fil ? 'selected' : ''}>${esc(k || 'Sin motivo')} (${n})</option>`).join('')}</select>${fil || list.length ? `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajSelFil" ${todosFil ? 'checked' : ''}> Tildar ${fil ? 'todos los de este motivo' : 'todos'} (${list.length})</label>` : ''}${fil ? `<span class="small muted">${list.length} ajuste${list.length === 1 ? '' : 's'} · ${fmtS(list.reduce((s, a) => s + Core.num(a.u), 0))} u${selFil ? ` · <b>${selFil} tildado${selFil > 1 ? 's' : ''}</b>` : ''}</span>` : ''}</div>
     <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Motivo'], ['tipo', 'Tipo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
-      <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
+      <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajPdf" ${sel.size ? '' : 'disabled'} title="PDF con los ajustes tildados, totalizado por artículo (sirve para juntar un motivo de varias fechas)">PDF${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
     <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>Tipo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
-    ${bloques || '<tr><td colspan="10" class="empty">No hay ajustes pendientes.</td></tr>'}
+    ${bloques || `<tr><td colspan="10" class="empty">${fil ? 'No hay ajustes pendientes con ese motivo.' : 'No hay ajustes pendientes.'}</td></tr>`}
     </tbody></table></div>
     <details class="panel" id="ajPasDet" ${S.ui.ajPasAb ? 'open' : ''}><summary><b>Ajustes ya pasados al sistema</b> <span class="small muted">(últimos 90 días; ya no cuentan en el stock)</span></summary>
       ${!P ? '<div class="small muted" style="margin-top:8px">Cargando…</div>' : !P.length ? '<div class="small muted" style="margin-top:8px">Todavía no hay ajustes marcados como pasados.</div>' : `<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Pasado</th><th>Tipo</th><th>Código</th><th>Artículo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th>Desde</th><th></th></tr></thead><tbody>${P.map(a => `<tr><td class="small">${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) + ' ' + hora(a.pts) : ''}<div class="small muted">${esc(a.ppor || '')}</div></td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td>${esc(a.m)}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajVolver" data-id="${esc(a.id)}" title="Volver a pendiente: vuelve a contar en el sistema">Volver a pendiente</button></td></tr>`).join('')}</tbody></table></div>`}
@@ -2397,18 +2404,168 @@ async function guardarQuesos(todoCero) {
   try { await API.call('guardarQuesos', S.dia, m, 'i'); toast(todoCero ? 'Quesos de Ilolay de hoy en cero.' : 'Quesos guardados: el sistema ya los descuenta.'); programarRefresco(300); }
   catch (e) { toast('No se pudo guardar: ' + e.message); }
 }
+/* ---------- Correos → Valorizado por período: diferencias de los cierres agrupadas por motivo ---------- */
+function valPeriodo(k) {
+  const h = new Date(); h.setHours(12); const iso = d => d.toISOString().slice(0, 10), d = new Date(h);
+  if (k === 'sem') { const dow = (h.getDay() + 6) % 7; d.setDate(h.getDate() - dow); return { desde: iso(d), hasta: iso(h) }; }
+  if (k === 'quin') { if (h.getDate() <= 15) { d.setDate(1); return { desde: iso(d), hasta: iso(h) }; } d.setDate(16); return { desde: iso(d), hasta: iso(h) }; }
+  d.setDate(1); return { desde: iso(d), hasta: iso(h) };
+}
+async function calcularValorizado(k) {
+  const V = S.ui.val ||= { ...valPeriodo('sem'), per: 'sem' };
+  if (k) { Object.assign(V, valPeriodo(k)); V.per = k; } else V.per = '';
+  if (!V.desde || !V.hasta) { toast('Completá desde y hasta.'); return; }
+  if (V.desde > V.hasta) [V.desde, V.hasta] = [V.hasta, V.desde];
+  V.cargando = true; V.err = null; render();
+  try { V.filas = await API.call('valorizado', V.desde, V.hasta); V.listo = { desde: V.desde, hasta: V.hasta }; }
+  catch (e) { V.err = /desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : e.message; V.filas = null; }
+  V.cargando = false; render();
+}
+// Agrupa por motivo y, dentro, por artículo (sumando las unidades y el valorizado de todos los días del período)
+function valGrupos(filas) {
+  const G = new Map();
+  for (const x of filas || []) {
+    const km = motivoKey(x.m) || 'SIN MOTIVO', g = G.get(km) || { m: km, arts: new Map(), u: 0, imp: 0, n: 0 };
+    const a = g.arts.get(x.c) || { c: x.c, d: x.d, ux: x.u, dif: 0, imp: 0, dias: new Set() };
+    a.dif += Core.num(x.dif); a.imp += Core.num(x.imp); a.dias.add(x.f); g.arts.set(x.c, a);
+    g.u += Core.num(x.dif); g.imp += Core.num(x.imp); g.n++; G.set(km, g);
+  }
+  return [...G.values()].sort((a, b) => Math.abs(b.imp) - Math.abs(a.imp)).map(g => ({ ...g, arts: [...g.arts.values()].sort((a, b) => Math.abs(b.imp) - Math.abs(a.imp)) }));
+}
+function vValorizado() {
+  const V = S.ui.val ||= { ...valPeriodo('sem'), per: 'sem' };
+  const per = [['sem', 'Semanal'], ['quin', 'Quincenal'], ['mes', 'Mensual']].map(([k, n]) => `<button class="chip" data-act="valPer" data-v="${k}" aria-pressed="${V.per === k}">${n}</button>`).join('');
+  let cuerpo = '';
+  if (V.cargando) cuerpo = '<div class="small muted">Buscando los cierres…</div>';
+  else if (V.err) cuerpo = `<div class="banner warn"><span class="grow">${esc(V.err)}</span></div>`;
+  else if (V.filas) {
+    const G = valGrupos(V.filas), tot = G.reduce((s, g) => s + g.imp, 0), dias = new Set(V.filas.map(x => x.f)).size;
+    cuerpo = !G.length ? `<div class="small muted">No hay diferencias en los cierres del ${dm(V.listo.desde)} al ${dm(V.listo.hasta)}.</div>` : `
+      <div class="row" style="justify-content:space-between;align-items:center"><span class="small">Del <b>${dm(V.listo.desde)}</b> al <b>${dm(V.listo.hasta)}</b> · ${dias} cierre${dias === 1 ? '' : 's'} · ${V.filas.length} diferencias · total <b style="color:${tot < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(tot)}</b></span>
+        <div class="row"><button class="btn pri" data-act="valMail">Copiar para el mail</button><button class="btn" data-act="valPdf">PDF</button><button class="btn" data-act="valExcel">Excel</button></div></div>
+      <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">Días</th><th class="n">Unidades</th><th class="n">Valorizado</th></tr></thead><tbody>
+      ${G.map(g => `<tr class="sec"><td colspan="3">${esc(g.m)} <span class="muted" style="font-weight:400">· ${g.arts.length} artículo${g.arts.length === 1 ? '' : 's'} · ${g.n} diferencia${g.n === 1 ? '' : 's'}</span></td><td class="n">${fmtS(g.u)}</td><td class="n" style="color:${g.imp < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(g.imp)}</td></tr>
+        ${g.arts.map(a => `<tr class="${a.dif < 0 ? 'difneg' : 'difpos'}"><td class="code">${esc(a.c)}</td><td>${esc(a.d)}</td><td class="n muted">${a.dias.size}</td><td class="n dif">${fmtS(a.dif)}</td><td class="n">${money(a.imp)}</td></tr>`).join('')}`).join('')}
+      <tr class="sec"><td colspan="3">TOTAL</td><td class="n">${fmtS(G.reduce((s, g) => s + g.u, 0))}</td><td class="n" style="color:${tot < 0 ? 'var(--bad)' : 'var(--ok)'}">${money(tot)}</td></tr></tbody></table></div>`;
+  } else cuerpo = '<div class="small muted">Elegí el período y tocá <b>Calcular</b>.</div>';
+  return `<div class="panel stack"><b>Valorizado por período</b><span class="small muted">Diferencias de los cierres del período, agrupadas por motivo (roto, falta, sobra, cruce…) y por artículo, con unidades y valorizado.</span>
+    <div class="row" style="gap:10px;align-items:end;flex-wrap:wrap"><span class="chips">${per}</span>
+      <label class="stack" style="gap:2px"><span class="lbl">Desde</span><input type="date" data-act="valF" data-k="desde" value="${esc(V.desde)}"></label>
+      <label class="stack" style="gap:2px"><span class="lbl">Hasta</span><input type="date" data-act="valF" data-k="hasta" value="${esc(V.hasta)}"></label>
+      <button class="btn pri" data-act="valCalc" ${V.cargando ? 'disabled' : ''}>Calcular</button></div>
+    ${cuerpo}</div>`;
+}
+function valTexto() {
+  const V = S.ui.val, G = valGrupos(V.filas), tot = G.reduce((s, g) => s + g.imp, 0);
+  const b = [`${opt('destinatarios') ? 'Para: ' + opt('destinatarios') + '\n' : ''}Asunto: ${opt('asunto')} · Valorizado del ${dmy(V.listo.desde)} al ${dmy(V.listo.hasta)}`, ''];
+  b.push(`Diferencias de stock del ${dmy(V.listo.desde)} al ${dmy(V.listo.hasta)}, por motivo:`, '');
+  for (const g of G) {
+    b.push(`${g.m} (${g.arts.length} artículo${g.arts.length === 1 ? '' : 's'}): ${fmtS(g.u)} u · ${money(g.imp)}`);
+    for (const a of g.arts) b.push(`  ${a.c} ${a.d}: ${fmtS(a.dif)} u · ${money(a.imp)}`);
+    b.push('');
+  }
+  b.push(`TOTAL: ${money(tot)}`);
+  return b.join('\n');
+}
+async function valCopiar() {
+  const txt = valTexto();
+  try { await navigator.clipboard.writeText(txt); toast('Valorizado copiado. Pegalo en el mail.'); }
+  catch { $('#sheet').innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" data-stop="1"><h3>Valorizado para el mail</h3><textarea id="mailTxt" style="min-height:320px">${esc(txt)}</textarea><button class="btn" data-act="cerrarDet">Cerrar</button></div></div>`; $('#mailTxt').select(); }
+}
+function valPdf() {
+  const V = S.ui.val, G = valGrupos(V.filas), cfg = pdfCfg(), P = pdfDoc(false), fs = 9, ft = 15, rowH = Math.round(fs * 1.9), M = 28, ancho = P.W - 2 * M, pad = 12;
+  const cols = [{ n: 'CÓDIGO', w: 0.11 }, { n: 'DESCRIPCIÓN', w: 0.49 }, { n: 'DÍAS', w: 0.08, a: 'r' }, { n: 'UNIDADES', w: 0.14, a: 'r' }, { n: 'VALORIZADO', w: 0.18, a: 'r' }];
+  let x = M; cols.forEach(cl => { cl.w *= ancho; cl.x = x; x += cl.w; });
+  const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
+  let y = 0;
+  const cel = (cl, t, yy, b, col, size = fs) => { const s = cortar(t, cl.w - pad, size, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, s, size, b, 'r', col); else P.text(cl.x + pad / 2, yy, s, size, b, 'l', col); };
+  const cab = () => { P.rect(M, y, ancho, rowH, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH / 2 + fs * 0.35, true, '#000000', fs - 0.5)); y += rowH; };
+  const pagina = () => {
+    P.nueva(); y = 24 + ft;
+    P.text(M + 4, y, 'STOCK ILOLAY · Valorizado del ' + dmy(V.listo.desde) + ' al ' + dmy(V.listo.hasta), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(M + 4, y, 'Diferencias de los cierres del período, por motivo y artículo · generado el ' + new Date().toLocaleString('es-AR'), fs - 1.5, false, 'l', '#666666'); y += 14;
+    cab();
+  };
+  const lugar = h => { if (y + h > P.H - 36) pagina(); };
+  pagina();
+  for (const g of G) {
+    lugar(rowH * 3);
+    P.rect(M, y, ancho, rowH, '#eef2f6'); const b0 = y + rowH / 2 + fs * 0.35;
+    P.text(M + 6, b0, cortar(g.m + ' · ' + g.arts.length + ' artículo' + (g.arts.length === 1 ? '' : 's'), cols[0].w + cols[1].w + cols[2].w - 12, fs, true), fs, true, 'l', cfg.cTit);
+    cel(cols[3], fmtS(g.u) + ' U', b0, true, g.u < 0 ? cfg.cNeg : cfg.cPos); cel(cols[4], money(g.imp), b0, true, g.imp < 0 ? cfg.cNeg : cfg.cPos); y += rowH;
+    for (const a of g.arts) {
+      lugar(rowH); const b1 = y + rowH / 2 + fs * 0.35, col = a.dif < 0 ? cfg.cNeg : cfg.cPos;
+      cel(cols[0], a.c, b1, false, '#000000'); cel(cols[1], a.d || '', b1, false, '#000000'); cel(cols[2], String(a.dias.size), b1, false, '#666666'); cel(cols[3], fmtS(a.dif) + ' U', b1, false, col); cel(cols[4], money(a.imp), b1, false, col);
+      y += rowH; if (cfg.sep !== false) P.line(M, y, M + ancho, y, cS, gS);
+    }
+    y += 6;
+  }
+  lugar(rowH); const tot = G.reduce((s, g) => s + g.imp, 0), tu = G.reduce((s, g) => s + g.u, 0);
+  P.rect(M, y, ancho, rowH, '#eeeeee'); const b2 = y + rowH / 2 + fs * 0.35;
+  P.text(M + 6, b2, 'TOTAL DEL PERÍODO', fs, true); cel(cols[3], fmtS(tu) + ' U', b2, true, tu < 0 ? cfg.cNeg : cfg.cPos); cel(cols[4], money(tot), b2, true, tot < 0 ? cfg.cNeg : cfg.cPos);
+  descargar('Valorizado ' + V.listo.desde + ' a ' + V.listo.hasta + '.pdf', P.blob()); toast('PDF del valorizado descargado.');
+}
+function valExcel() {
+  const V = S.ui.val, G = valGrupos(V.filas), filas = [['MOTIVO', 'CODIGO', 'DESCRIPCION', 'DIAS', 'UNIDADES', 'VALORIZADO']];
+  for (const g of G) { for (const a of g.arts) filas.push([g.m, a.c, a.d, a.dias.size, a.dif, Math.round(a.imp * 100) / 100]); filas.push([g.m, '', 'TOTAL ' + g.m, '', g.u, Math.round(g.imp * 100) / 100]); }
+  filas.push([], ['', '', 'TOTAL', '', G.reduce((s, g) => s + g.u, 0), Math.round(G.reduce((s, g) => s + g.imp, 0) * 100) / 100]);
+  const det = [['FECHA', 'CODIGO', 'DESCRIPCION', 'MOTIVO', 'OBS', 'UNIDADES', 'VALORIZADO'], ...V.filas.map(x => [x.f, x.c, x.d, x.m, x.obs, x.dif, x.imp])];
+  try {
+    const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(filas), 'POR MOTIVO'); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(det), 'DETALLE POR DIA');
+    descargar('Valorizado ' + V.listo.desde + ' a ' + V.listo.hasta + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
+}
 /* ---------- Correos: todo lo que se manda por mail, en un solo lugar ---------- */
 function vCorreos() {
   if (!S.admin) return '';
   const c = S.cierre;
   return `<div class="stack">
-    <div class="row" style="justify-content:space-between"><div><h2>Correos</h2><div class="small muted">Los mails que salen del stock, todos juntos. Para: <b>${esc(opt('destinatarios') || 'sin destinatarios (se cargan en Opciones)')}</b></div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
+    <div class="row" style="justify-content:space-between"><div><h2>Correos</h2><div class="small muted">Los mails que salen del stock, todos juntos. Para: <b>${esc(opt('destinatarios') || 'sin destinatarios (se cargan en Configuración)')}</b></div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
     <div class="panel stack"><b>Cierre del día</b>
       ${c ? `<span class="small muted">Stock del ${diaSem(c.fecha)} ${dmy(c.fecha)}, cerrado por ${esc(c.por || '—')}.</span>
       <div class="row"><button class="btn pri" data-act="copiarMail">Copiar resumen para el mail</button><button class="btn" data-act="pdfCierre">Descargar PDF del cierre</button></div>` : `<span class="small muted">El stock del ${dm(S.dia)} todavía no está cerrado. Cuando lo cierres, desde acá copiás el resumen y bajás el PDF. Los cierres anteriores están en <button class="link" data-act="tab" data-v="historial">Historial</button>.</span>`}
     </div>
-    <div class="panel stack"><b>Valorizado por período</b><span class="small muted">Pendiente de definir: semanal, quincenal, mensual o entre fechas. Se arma acá cuando me digas qué tiene que llevar.</span></div>
+    ${vValorizado()}
   </div>`;
+}
+/* PDF de los ajustes tildados (p. ej. todos los decomisos de varias fechas), totalizado por artículo, para el egreso */
+function pdfAjustesSel() {
+  const ids = S.ui.ajSel || new Set(), sel = S.ajustes.filter(a => ids.has(a.id));
+  if (!sel.length) { toast('Tildá los ajustes que querés incluir.'); return; }
+  const cfg = pdfCfg(), P = pdfDoc(false), fs = 9, ft = 15, rowH = Math.round(fs * 2), M = 28, ancho = P.W - 2 * M, pad = 12;
+  const por = new Map();
+  for (const a of sel) { const g = por.get(a.c) || { c: a.c, u: 0, n: 0, f: new Set(), mot: new Set() }; g.u += Core.num(a.u); g.n++; if (a.f) g.f.add(a.f); if (a.m) g.mot.add(a.m); por.set(a.c, g); }
+  const L = [...por.values()].sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true }));
+  const motivos = [...new Set(sel.map(a => a.m).filter(Boolean))], fechas = [...new Set(sel.map(a => a.f).filter(Boolean))].sort();
+  const CU = (q, u) => { const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
+  const cols = [{ n: 'CÓDIGO', w: 0.10 }, { n: 'DESCRIPCIÓN', w: 0.40 }, { n: 'FECHAS', w: 0.17 }, { n: 'AJ.', w: 0.06, a: 'r' }, { n: 'UNIDADES', w: 0.12, a: 'r' }, { n: 'CAJAS + U', w: 0.15, a: 'r' }];
+  let x = M; cols.forEach(cl => { cl.w *= ancho; cl.x = x; x += cl.w; });
+  const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
+  let y = 0;
+  const cel = (cl, t, yy, b, col, size = fs) => { const s = cortar(t, cl.w - pad, size, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, s, size, b, 'r', col); else P.text(cl.x + pad / 2, yy, s, size, b, 'l', col); };
+  const pagina = () => {
+    P.nueva(); y = 24 + ft;
+    P.text(M + 4, y, cortar('STOCK ILOLAY · Ajustes' + (motivos.length === 1 ? ' · ' + motivos[0] : ''), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(M + 4, y, cortar((motivos.length > 1 ? 'Motivos: ' + motivos.join(', ') + ' · ' : '') + (fechas.length ? 'Fechas: ' + (fechas.length === 1 ? dm(fechas[0]) : dm(fechas[0]) + ' al ' + dm(fechas[fechas.length - 1]) + ' (' + fechas.length + ' días)') + ' · ' : '') + sel.length + ' ajustes · ' + L.length + ' artículos · generado el ' + new Date().toLocaleString('es-AR'), ancho - 8, fs - 1.5), fs - 1.5, false, 'l', '#666666'); y += 14;
+    P.rect(M, y, ancho, rowH, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH / 2 + fs * 0.35, true, '#000000', fs - 0.5)); y += rowH;
+  };
+  pagina();
+  let tot = 0;
+  for (const g of L) {
+    if (y + rowH > P.H - 40) pagina();
+    const l = LINES.find(z => z.c === g.c), ux = l?.uxc || S.maestro[g.c]?.u || 1, fs2 = [...g.f].sort();
+    const base = y + rowH / 2 + fs * 0.35, col = g.u < 0 ? cfg.cNeg : cfg.cPos;
+    cel(cols[0], g.c, base, false, '#000000'); cel(cols[1], l?.d || S.maestro[g.c]?.d || '', base, false, '#000000');
+    cel(cols[2], fs2.length > 2 ? dm(fs2[0]) + ' al ' + dm(fs2[fs2.length - 1]) : fs2.map(dm).join(', '), base, false, '#333333');
+    cel(cols[3], String(g.n), base, false, '#666666'); cel(cols[4], fmtS(g.u) + ' U', base, true, col); cel(cols[5], CU(g.u, ux), base, false, col);
+    y += rowH; tot += g.u;
+    if (cfg.sep !== false) P.line(M, y, M + ancho, y, cS, gS);
+  }
+  if (y + rowH > P.H - 40) pagina();
+  P.rect(M, y, ancho, rowH, '#eeeeee'); const base = y + rowH / 2 + fs * 0.35;
+  cel(cols[1], 'TOTAL · ' + L.length + ' artículos', base, true, '#000000'); cel(cols[3], String(sel.length), base, true, '#000000'); cel(cols[4], fmtS(tot) + ' U', base, true, tot < 0 ? cfg.cNeg : cfg.cPos);
+  descargar('Ajustes ' + (motivos.length === 1 ? motivos[0].replace(/[\\/:*?"<>|]/g, ' ') + ' ' : '') + hoyISO() + '.pdf', P.blob());
+  toast('PDF descargado: ' + L.length + ' artículo' + (L.length === 1 ? '' : 's') + ' (' + sel.length + ' ajustes).');
 }
 function sisTxt(c) {
   if (!tieneSistema()) return '<span class="muted small">sin archivos</span>';
@@ -2470,7 +2627,7 @@ const BD_LEEME = [
   ['STOCK ILOLAY · bases de datos'], [''],
   ['Cada hoja reemplaza una tabla de la base: ARTICULOS, AJUSTES, CIERRES, CIERRES_RESUMEN y CODIGOS.'],
   ['No cambies los títulos de la primera fila. Podés agregar, borrar o corregir renglones.'],
-  ['Al cargar el archivo en Opciones → Base de datos, la app muestra cuántos renglones trae cada hoja y elegís cuáles reemplazar.'],
+  ['Al cargar el archivo en Configuración → Base de datos, la app muestra cuántos renglones trae cada hoja y elegís cuáles reemplazar.'],
   ['Las hojas que borres del archivo (o que destildes) no se tocan.'], [''],
   ['ARTICULOS: sector FRIO o SECO · queso y baja: 1 = sí, 0 = no · uxc = unidades por caja · ean: varios códigos separados por espacio.'],
   ['AJUSTES: tipo egr (falta facturar), dec (decomiso), pend (pendiente/corte), otro, ing (ingreso del día), vta (venta del día) · unidades con signo (− resta) · estado pend o pasado.'],
@@ -2740,7 +2897,7 @@ async function bdLeerArchivo(file) {
     await paso(100, 'Listo');
     const norm = s => String(s || '').trim().toUpperCase();
     const hojas = [];
-    for (const [hoja, tabla, titulo, cols] of [...BD_HOJAS, ['CONFIG', 'config', 'Opciones y PIN', ['clave', 'valor']]]) {
+    for (const [hoja, tabla, titulo, cols] of [...BD_HOJAS, ['CONFIG', 'config', 'Configuración y PIN', ['clave', 'valor']]]) {
       const nombre = wb.SheetNames.find(n => norm(n) === hoja); if (!nombre || !wb.aoa[nombre]) continue;
       const aoa = wb.aoa[nombre];
       const hdr = (aoa[0] || []).map(h => String(h).trim().toLowerCase());
@@ -2785,9 +2942,12 @@ const secOp = (id, titulo, sub) => `<details class="panel opsec" data-sec="${id}
 function abrirSecOp(id) { OP_AB.add(id); try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { } }
 const tolMov = () => { const n = Number(opt('tolMov')); return Number.isFinite(n) && n >= 0 ? n : 5; };
 function vOpciones() {
-  return `<div class="stack"><form class="stack" id="fOpt" style="max-width:760px">
-    <div><h2>Opciones</h2><div class="small muted">Tocá cada sección para abrirla o cerrarla.</div></div>
+  return `<div class="stack">
+    <div><h2>Configuración</h2><div class="small muted">Tocá cada sección para abrirla o cerrarla.</div></div>
     <div class="row" style="gap:6px"><button class="btn sm" type="button" data-act="opTodas" data-v="1">Abrir todas</button><button class="btn sm" type="button" data-act="opTodas" data-v="0">Cerrar todas</button></div>
+  ${vBorrarConteos()}
+  ${vCodigosBarra()}
+  <form class="stack" id="fOpt" style="max-width:760px">
     ${secOp('gral', 'Lectura de archivos y cierre', 'Prefijo, almacenes que no cuentan, motivos, quesos, recuento, margen de movimientos y mail.')}
       <label class="stack" style="gap:4px"><span class="lbl">Prefijo de los artículos Ilolay en Yasukawa</span><input type="text" id="oPre" value="${esc(opt('prefijo'))}" style="max-width:120px" class="mono"><span class="small muted">En la tabla "articulo", COD_FAB viene como 21/1031: se toma lo que sigue al prefijo.</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Almacenes o tipos de almacén de SAP que no cuentan</span><input type="text" id="oExc" value="${esc(opt('excluir').join(', '))}" class="mono"><span class="small muted">Separados por coma. La planilla descartaba SFED (mercadería dañada).</span></label>
@@ -2806,9 +2966,7 @@ function vOpciones() {
     ${secOp('compartir', 'Cómo compartir con depósito', 'Dirección de la página y PIN.')}<span class="small">Pasales la dirección de esta página y su <b>PIN de depósito</b>. Los PIN se ven y se editan en Supabase: Table Editor → tabla <span class="mono">config</span>, clave <span class="mono">pins</span> (podés agregar uno por persona, con su nombre, para saber quién contó). Con PIN de depósito solo se ve la pestaña Depósito.</span><span class="muted">Conectado como ${esc(S.me.id || '')}${S.admin ? ' (administración)' : ' (depósito)'} · servidor: ${esc(CFG.url)}</span></div></details>
   </form>
   ${vPdfCfg()}
-  ${vBaseDatos()}
-  ${vCodigosBarra()}
-  ${vBorrarConteos()}</div>`;
+  ${vBaseDatos()}</div>`;
 }
 
 /* ================= Acciones ================= */
@@ -3466,6 +3624,12 @@ document.addEventListener('click', async e => {
       toast(n ? n + ' datos actualizados. Revisá y guardá.' : 'No había nada para actualizar.'); render(); break;
     }
     case 'ajExcel': excelEgreso(); break;
+    case 'ajPdf': pdfAjustesSel(); break;
+    case 'valPer': calcularValorizado(v); break;
+    case 'valCalc': calcularValorizado(); break;
+    case 'valMail': valCopiar(); break;
+    case 'valPdf': valPdf(); break;
+    case 'valExcel': valExcel(); break;
     case 'qGuardar': guardarQuesos(false); break;
     case 'qBorrar': guardarQuesos(true); break;
     case 'qHibrido': { const data = { ...S.opciones, quesoSap: 'hibrido', ts: Date.now() }; try { await API.call('guardarOpciones', data); S.opciones = data; toast('Modo híbrido de quesos activado.'); } catch (er) { toast('No se pudo guardar: ' + er.message); } recalc(); render(); break; }
@@ -3548,9 +3712,12 @@ document.addEventListener('change', async e => {
   if (t.id === 'armFile' && t.files?.[0]) { armLeer(t.files[0]); t.value = ''; return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
+  if (a === 'valF') { const V = S.ui.val ||= valPeriodo('sem'); V[t.dataset.k] = t.value; V.per = ''; render(); return; }
+  if (a === 'ajFil') { S.ui.ajFil = t.value; S.ui.ajConfDel = false; render(); return; }
+  if (a === 'ajSelFil') { const sel = S.ui.ajSel ||= new Set(), fil = S.ui.ajFil || ''; for (const x of S.ajustes.filter(x => !fil || motivoKey(x.m) === fil)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } S.ui.ajConfDel = false; render(); return; }
   if (a === 'ajSel' || a === 'ajSelGrupo') S.ui.ajConfDel = false;
   if (a === 'ajSel') { const sel = S.ui.ajSel ||= new Set(); if (t.checked) sel.add(t.dataset.id); else sel.delete(t.dataset.id); render(); return; }
-  if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => grupoAj(x) === t.dataset.v)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
+  if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => grupoAj(x) === t.dataset.v && (!S.ui.ajFil || motivoKey(x.m) === S.ui.ajFil))) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
   if (a === 'cnt') {
     delete t.dataset.dirty;
     const other = $(`#a-${t.dataset.k === 'cj' ? 'un' : 'cj'}-${CSS.escape(c)}`);
