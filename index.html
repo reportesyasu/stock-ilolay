@@ -221,7 +221,7 @@ input[data-tecla]:focus{outline:3px solid var(--accent,#1d5f86);outline-offset:1
 .tecla button:active{filter:brightness(.88)}
 .tecla button.f{font-size:14px;font-weight:600;background:color-mix(in srgb,var(--surface) 80%,var(--line))}
 .tecla button.ok{grid-row:span 2;height:auto;background:var(--accent,#1d5f86);color:#fff;font-size:15px}
-body.con-tecla{padding-bottom:190px}
+body.con-tecla{padding-bottom:max(190px,70vh)}
 /* aviso grande de guardado */
 .ok-grande{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:rgba(0,0,0,.28);animation:okg-in .15s ease-out}
 .ok-grande.sale{opacity:0;transition:opacity .18s}
@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb78';
+window.__VERSION = 'sb79';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb78</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb79</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1943,8 +1943,21 @@ function teclaEl() {
 function teclaMostrar(el) {
   const k = teclaEl(); clearTimeout(teclaOcultarT);
   if (k.hidden) { k.hidden = false; document.body.classList.add('con-tecla'); }
-  const r = el.getBoundingClientRect(), tope = window.innerHeight - k.offsetHeight - 12;
-  if (r.bottom > tope || r.top < 60) window.scrollBy({ top: r.bottom - tope + (r.top < 60 ? -80 : 0), behavior: 'auto' });
+  encuadrar(el); requestAnimationFrame(() => encuadrar(el));
+}
+// Acomoda la página para que la tarjeta del artículo (título, cajas y unidades) quede entera entre la barra de arriba y el teclado
+function encuadrar(el) {
+  if (!el || !el.isConnected) return;
+  const k = document.getElementById('tecla'), kh = k && !k.hidden ? k.offsetHeight : 0;
+  const vv = window.visualViewport, alto = vv ? vv.height + vv.offsetTop : window.innerHeight;
+  const card = el.closest('.card') || el, barra = document.querySelector('.scan .bar');
+  const arriba = Math.max($('#top')?.getBoundingClientRect().bottom || 0, barra ? barra.getBoundingClientRect().bottom : 0) + 8;
+  const abajo = Math.min(alto, window.innerHeight - kh) - 8;
+  const rc = card.getBoundingClientRect(), ri = el.getBoundingClientRect();
+  let d = 0;
+  if (rc.height <= abajo - arriba) { if (rc.top < arriba) d = rc.top - arriba; else if (rc.bottom > abajo) d = rc.bottom - abajo; }
+  else { d = rc.top - arriba; if (ri.bottom - d > abajo) d = ri.bottom - abajo; }
+  if (Math.abs(d) > 1) window.scrollBy({ top: d, behavior: 'auto' });
 }
 function teclaOcultar() { const k = document.getElementById('tecla'); if (k && !k.hidden) { k.hidden = true; document.body.classList.remove('con-tecla'); } }
 function teclaPulsar(v) {
@@ -1990,7 +2003,10 @@ function pasarAUnidades(el) {
 }
 document.addEventListener('click', e => { const tr = e.target.closest?.('tr[data-mk]'); if (tr && !e.target.closest('button, a, input, select')) { movOkToggle(tr.dataset.mk); tr.classList.toggle('okr'); } });
 document.addEventListener('click', e => { const el = e.target; if (esNum(el) && el.readOnly && tecladoApp()) { if (document.activeElement !== el) el.focus(); teclaMostrar(el); } });
-document.addEventListener('focusin', e => { if (esNum(e.target) && tecladoApp()) teclaMostrar(e.target); else if (e.target.matches?.('input, textarea, select')) teclaOcultar(); });
+document.addEventListener('focusin', e => {
+  if (esNum(e.target) && tecladoApp()) teclaMostrar(e.target);
+  else { if (e.target.matches?.('input, textarea, select')) teclaOcultar(); if (esNum(e.target)) { const el = e.target; setTimeout(() => encuadrar(el), 350); } } // teclado del celular: se espera a que abra
+});
 document.addEventListener('focusout', () => { clearTimeout(teclaOcultarT); teclaOcultarT = setTimeout(() => { if (!esNum(document.activeElement)) teclaOcultar(); }, 150); });
 /* Aviso grande de "Guardado" en el centro de la pantalla (depósito) */
 let okGrandeT = null;
