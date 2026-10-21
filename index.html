@@ -292,7 +292,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb80';
+window.__VERSION = 'sb81';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -315,7 +315,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb80</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb81</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1987,8 +1987,11 @@ function teclaPulsar(v) {
 // Al cargar cajas (contar o sumar): si pasan 1,5 s sin escribir, el cursor pasa solo a Unidades.
 // En "Contar detallado" pasa al campo siguiente (pallets → bases → bultos → unidades); del último no se mueve.
 let pasaUnT = null;
+// Demora para pasar solo al casillero siguiente (Configuración → Lectura de archivos y cierre); por defecto 1,5 s
+const pasoMs = () => { const v = Number(String(opt('pasoSeg') ?? 1.5).replace(',', '.')); return isFinite(v) && v > 0 ? Math.round(Math.min(10, v) * 1000) : 0; };
 function pasarAUnidades(el) {
   clearTimeout(pasaUnT);
+  const ms = pasoMs(); if (!ms) return; // 0 = sin pase automático (Configuración)
   if (el?.dataset?.act === 'ddet') {
     if (String(el.value).trim() === '') return;
     const id = el.id, c = el.dataset.c;
@@ -1996,7 +1999,7 @@ function pasarAUnidades(el) {
       const ac = document.activeElement; if (!ac || ac.id !== id || String(ac.value).trim() === '') return;
       const campos = [...document.querySelectorAll(`#card-${CSS.escape(c)} input[data-act="ddet"]`)], sig = campos[campos.findIndex(x => x.id === id) + 1];
       if (sig) { sig.focus(); try { if (!sig.readOnly) sig.select(); } catch { } }
-    }, 1500);
+    }, ms);
     return;
   }
   const k = el?.dataset?.k; if (!el || !['cj', 'acj'].includes(k) || !['dcnt', 'dsum'].includes(el.dataset.act) || String(el.value).trim() === '') return;
@@ -2005,7 +2008,7 @@ function pasarAUnidades(el) {
     const ac = document.activeElement; if (!ac || ac.id !== id || String(ac.value).trim() === '') return;
     const un = document.querySelector(`input[data-act="${act}"][data-k="${kUn}"][data-c="${CSS.escape(c)}"]`);
     if (un) { un.focus(); try { if (!un.readOnly) un.select(); } catch { } }
-  }, 1500);
+  }, ms);
 }
 document.addEventListener('click', e => { const a = e.target.closest?.('.ayuda, .opsec-body > .small.muted, h2 + .small.muted'); if (a && !e.target.closest('button, a, input, select, label')) a.classList.toggle('abierta'); });
 document.addEventListener('click', e => { const tr = e.target.closest?.('tr[data-mk]'); if (tr && !e.target.closest('button, a, input, select')) { movOkToggle(tr.dataset.mk); tr.classList.toggle('okr'); } });
@@ -3177,6 +3180,7 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">La variación de Yasukawa (en hormas) se aplica en los tres casos. No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
+      <label class="stack" style="gap:2px"><span class="lbl">Pase automático al casillero siguiente (segundos)</span><input type="number" id="oPaso" min="0" max="10" step="0.1" value="${esc(opt('pasoSeg') ?? 1.5)}" style="max-width:110px"><span class="small muted">Al cargar Cajas (o pallets, bases y bultos en Contar detallado), si pasa este tiempo sin tocar otra tecla el cursor salta solo al casillero siguiente. 0 = no pasa solo.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oLogCam" ${opt('verLogCam') ? 'checked' : ''}> <span>Mostrar el <b>registro de la cámara</b> en Depósito (solo para revisar un problema con el escáner)</span></label>
       <span class="small muted">Lo contado que no coincide con el sistema ya le aparece solo a depósito en <b>Con diferencia</b>. El botón sirve para pedir que vuelvan a contar un artículo puntual aunque no tenga diferencia (aparece en Con diferencia, en amarillo).</span>
       <label class="stack" style="gap:4px"><span class="lbl">Movimientos: margen para resaltar en amarillo (%)</span><input type="number" id="oTol" value="${esc(tolMov())}" min="0" max="100" step="0.5" inputmode="decimal" style="max-width:110px"><span class="small muted">En Movimientos del día se pintan las filas cuya cantidad coincide con la diferencia entre contado y sistema, con este margen de más o de menos. Con 0 solo se pinta la coincidencia exacta.</span></label>
@@ -4137,7 +4141,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, verLogCam: $('#oLogCam').checked, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
