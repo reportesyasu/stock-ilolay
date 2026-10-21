@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb88';
+window.__VERSION = 'sb89';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb88</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb89</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2836,6 +2836,41 @@ async function cargarHist() {
   catch (e) { H.lista = []; toast('No se pudo leer el historial: ' + e.message); }
   H.cargando = false; render();
 }
+/* Historial → día abierto: en lugar de la diferencia, lo que se ajustó ese día (suma de los ajustes del artículo, pendientes y pasados) */
+// Cierres viejos que no guardaron los ajustes del día: se buscan en la tabla de ajustes por la fecha
+async function histAjCargar(fecha) {
+  const c = S.ui.hist.lista.find(x => x.fecha === fecha);
+  if (!c || Array.isArray(c.ajustesDia) || c.ajBuscando) return;
+  c.ajBuscando = true;
+  try {
+    const filas = await API.call('valorizado', fecha, fecha), porC = new Map((c.lineas || []).map(l => [l.c, l]));
+    c.ajustesDia = filas.map(x => { const l = porC.get(x.c), u = Number(x.dif) || 0, pr = l?.dif ? Math.abs(l.imp / l.dif) : Number(x.pr) || 0;
+      return { c: x.c, d: x.d || l?.d || '', u, t: x.t, m: x.m, o: x.obs, est: x.est, v: pr ? Math.round(u * pr * 100) / 100 : null }; });
+    c.ajDeTabla = true;
+  } catch (e) { c.ajError = e.message; }
+  c.ajBuscando = false;
+  if (S.ui.tab === 'historial' && S.ui.hist.abierto === fecha) render();
+}
+function histAjTabla(ab) {
+  if (ab.ajBuscando) return '<div class="panel empty">Buscando los ajustes del día…</div>';
+  const A = new Map();
+  const sumar = (c, a, v) => { const x = A.get(c) || { u: 0, v: 0, vOk: true, txt: [] }; x.u += Number(a.u) || 0; if (v === null || v === undefined) x.vOk = false; else x.v += Number(v) || 0; const t = [TIPOS_AJ[a.t]?.n || '', a.m || '', a.o && a.o !== a.m ? a.o : ''].filter(Boolean).join(' · '); if (t && !x.txt.includes(t)) x.txt.push(t); A.set(c, x); };
+  if (Array.isArray(ab.ajustesDia)) for (const a of ab.ajustesDia) sumar(a.c, a, a.v);
+  else for (const l of ab.lineas || []) for (const a of (l.ajd || []).filter(a => a.f === ab.fecha)) sumar(l.c, a, l.dif ? Math.round(a.u * (l.imp / l.dif) * 100) / 100 : null);
+  const lin = ab.lineas || [], porC = new Map(lin.map(l => [l.c, l]));
+  const filas = lin.filter(l => A.has(l.c) || l.dif).map(l => [l.c, l]);
+  for (const c of A.keys()) if (!porC.has(c)) filas.push([c, { c, d: (ab.ajustesDia || []).find(a => a.c === c)?.d || S.maestro[c]?.d || '', s: S.maestro[c]?.s || '' }]);
+  const tot = { u: 0, v: 0, vOk: true };
+  const tr = filas.map(([c, l]) => {
+    const x = A.get(c);
+    if (x) { tot.u += x.u; tot.v += x.v; if (!x.vOk) tot.vOk = false; }
+    const cls = x ? (x.u < 0 ? 'difneg' : x.u > 0 ? 'difpos' : '') : '';
+    const mot = x ? esc(x.txt.join('; ')) : `<span class="muted">sin ajuste${l.dif ? ' · dif. ' + fmtS(l.dif) + ' u' : ''}${l.m ? ' · ' + esc(l.m) : ''}${l.obs ? ' · ' + esc(l.obs) : ''}</span>`;
+    return `<tr class="${cls}"><td class="code">${esc(c)}</td><td>${esc(l.d || '')}</td><td>${esc(l.s || '')}</td><td class="n">${l.sis === undefined ? '' : fmt(l.sis)}</td><td class="n">${l.cont === null || l.cont === undefined ? '' : fmt(l.cont)}</td><td class="n dif">${x ? fmtS(x.u) : '<span class="muted">—</span>'}</td><td>${mot}</td><td class="n">${x ? (x.vOk ? money(x.v) : x.v ? money(x.v) + ' *' : '—') : ''}</td></tr>`;
+  }).join('');
+  return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th>Sector</th><th class="n">Sistema u</th><th class="n">Contado u</th><th class="n" title="Suma de los ajustes del artículo con fecha de ese día (pendientes y pasados al sistema)">Ajuste u</th><th>Tipo · motivo · observación</th><th class="n">Valorizado ajuste</th></tr></thead><tbody>${tr || '<tr><td colspan="8" class="empty">Sin ajustes ni diferencias.</td></tr>'}</tbody>${A.size ? `<tfoot><tr><td colspan="5"><b>Total ajustado</b></td><td class="n"><b>${fmtS(tot.u)}</b></td><td></td><td class="n"><b>${money(tot.v)}${tot.vOk ? '' : ' *'}</b></td></tr></tfoot>` : ''}</table></div>
+    <div class="small muted">Ajuste u = suma de los ajustes cargados ese día para el artículo (pendientes y pasados). Los renglones grises tuvieron diferencia sin ajuste.${A.size && !tot.vOk ? ' * Hay ajustes de artículos sin precio conocido: no suman al valorizado.' : ''}${ab.ajDeTabla ? ' Este cierre es anterior a que se guardaran los ajustes con el cierre: se muestran los ajustes con esa fecha que hay hoy en la base.' : ''}${ab.ajError ? ' <span style="color:var(--bad)">No se pudieron leer los ajustes: ' + esc(ab.ajError) + '</span>' : ''}</div>`;
+}
 function vHistorial() {
   const H = S.ui.hist;
   const L = H.lista;
@@ -2859,8 +2894,8 @@ function vHistorial() {
     ${L.map(c => { let so = 0, fa = 0; for (const l of c.lineas || []) { if (l.dif > 0) so += l.dif; else if (l.dif < 0) fa += l.dif; }
       return `<tr><td><button class="link" data-act="hAbrir" data-v="${esc(c.fecha)}">${diaSem(c.fecha).slice(0, 3)} ${dm(c.fecha)}</button></td><td class="n">${c.resumen?.articulos ?? (c.lineas || []).length}</td><td class="n">${c.resumen?.conDif ?? ''}</td><td class="n" style="color:var(--ok)">${so ? fmtS(so) : ''}</td><td class="n" style="color:var(--bad)">${fa ? fmt(fa) : ''}</td><td class="n">${money(c.resumen?.importe)}</td><td class="small muted">${c.origen === 'planilla' ? 'Excel' : 'App'}</td></tr>`; }).join('')}
     </tbody></table></div>
-    ${ab ? `<div class="panel stack"><div class="row" style="justify-content:space-between"><h3>Diferencias del ${diaSem(ab.fecha)} ${dm(ab.fecha)}</h3><div class="row"><button class="btn sm" data-act="hPdf" data-v="${esc(ab.fecha)}">Descargar PDF</button><button class="btn sm" data-act="hExport" data-v="${esc(ab.fecha)}">Descargar Excel</button><button class="btn sm" data-act="hCerrar">Cerrar</button></div></div>
-      <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th>Sector</th><th class="n">Sistema u</th><th class="n">Contado u</th><th class="n">Dif.</th><th>Motivo</th><th class="n">Valorizado</th></tr></thead><tbody>${(ab.lineas || []).filter(l => l.dif).map(l => `<tr class="${l.dif < 0 ? 'difneg' : 'difpos'}"><td class="code">${esc(l.c)}</td><td>${esc(l.d)}</td><td>${esc(l.s)}</td><td class="n">${fmt(l.sis)}</td><td class="n">${fmt(l.cont)}</td><td class="n dif">${fmtS(l.dif)}</td><td>${esc(l.m)}${l.obs ? ' · ' + esc(l.obs) : ''}</td><td class="n">${money(l.imp)}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Sin diferencias.</td></tr>'}</tbody></table></div></div>` : ''}`}
+    ${ab ? `<div class="panel stack"><div class="row" style="justify-content:space-between"><h3>Ajustes del ${diaSem(ab.fecha)} ${dm(ab.fecha)}</h3><div class="row"><button class="btn sm" data-act="hPdf" data-v="${esc(ab.fecha)}">Descargar PDF</button><button class="btn sm" data-act="hExport" data-v="${esc(ab.fecha)}">Descargar Excel</button><button class="btn sm" data-act="hCerrar">Cerrar</button></div></div>
+      ${histAjTabla(ab)}</div>` : ''}`}
   </div>`;
 }
 
@@ -4115,7 +4150,7 @@ document.addEventListener('click', async e => {
     }
     case 'ajVolver': try { await API.call('marcarAjustes', [t.dataset.id], false); toast('El ajuste volvió a pendiente y cuenta otra vez en el sistema.'); S.ui.ajPasados = (S.ui.ajPasados || []).filter(a => a.id !== t.dataset.id); programarRefresco(200); render(); } catch (er) { toast('No se pudo: ' + er.message); } break;
     case 'ajDel': try { S.ajustes = S.ajustes.filter(a => a.id !== t.dataset.id); recalc(); render(); await API.call('borrarAjuste', t.dataset.id); programarRefresco(200); } catch (er) { toast('No se pudo borrar: ' + er.message); } break;
-    case 'hAbrir': S.ui.hist.abierto = S.ui.hist.abierto === v ? null : v; render(); break;
+    case 'hAbrir': S.ui.hist.abierto = S.ui.hist.abierto === v ? null : v; render(); if (S.ui.hist.abierto) histAjCargar(v); break;
     case 'hCerrar': S.ui.hist.abierto = null; render(); break;
     case 'hExport': exportar(S.ui.hist.lista.find(x => x.fecha === v)); break;
   }
