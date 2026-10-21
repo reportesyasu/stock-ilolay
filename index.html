@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb71';
+window.__VERSION = 'sb75';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb71</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb75</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -457,7 +457,7 @@ const Core = (() => {
         em: ix('EMISOR'), nro: ix('NRO_CLIENTE'), cli: ix('CLIENTE'), suc: ix('SUCURSAL'), dom: ix('DOMICILIO'), est: ix('ESTADO') } };
       // Facturación Yasukawa (ventas por vendedor / cliente / artículo, con chofer)
       if (hdr.includes('CHOFER') && hdr.includes('COD.FAB.') && ixp('UN.F') >= 0) return { kind: 'fya', h: i, col: {
-        cod: ix('COD.FAB.'), desc: ix('DESCRIPCION'), q: ixp('UN.F'), cred: ixp('UN.CRED'), ch: ix('CHOFER'), comp: ix('COMPROBANTE'), cli: ix('CLIENTE'), nc: ix('NRO.CLIE'),
+        cod: ix('COD.FAB.'), desc: ix('DESCRIPCION'), q: ixp('UN.F'), cred: ixp('UN.CRED'), ch: ix('CHOFER'), comp: ix('COMPROBANTE'), cli: ix('CLIENTE'), nc: ix('NRO.CLIE'), dom: hdr.findIndex(h => /DOMICILIO|DIRECCION/.test(h)),
         loc: ix('LOCALIDAD'), viaje: ix('VIAJE'), f: ix('FECHA'), hora: ix('HORA'), ms: ix('MOD.STOCK'), est: ix('ESTADO') } };
       // Comprobantes cargados (relaciona la factura de Ilolay con viaje y chofer)
       if (hdr.includes('DESP_NRO') && hdr.includes('CHOFER')) return { kind: 'comp', h: i, col: {
@@ -553,7 +553,7 @@ const Core = (() => {
       const cod = codPre(cel(r, c.cod), prefijo); if (!cod) continue;
       const est = U(cel(r, c.est)); if (est && est !== 'ACTIVO') continue;
       const cred = num(cel(r, c.cred));
-      filas.push({ o: 'Y', c: cod, comp: clean(cel(r, c.comp)), cli: clean(cel(r, c.cli)), nc: clean(cel(r, c.nc)), loc: clean(cel(r, c.loc)), ch: clean(cel(r, c.ch)) || 'Sin chofer',
+      filas.push({ o: 'Y', c: cod, comp: clean(cel(r, c.comp)), cli: clean(cel(r, c.cli)), nc: clean(cel(r, c.nc)), dom: c.dom >= 0 ? clean(cel(r, c.dom)).replace(/^'+/, '') : '', loc: clean(cel(r, c.loc)), ch: clean(cel(r, c.ch)) || 'Sin chofer',
         viaje: clean(cel(r, c.viaje)), f: fISO(cel(r, c.f)), h: clean(cel(r, c.hora)), q: num(cel(r, c.q)) - cred, cred, ms: U(cel(r, c.ms)) !== 'NO' });
     }
     return { filas, n };
@@ -1193,7 +1193,7 @@ async function leerArchivos(list) {
       if (info.kind === 'fil') found.fil = { ...meta, data: Core.buildFil(rows, info) };
       if (info.kind === 'comp') found.comp = { ...meta, data: Core.buildComp(rows, info) };
       if (info.kind === 'vent') found.vent = { ...meta, data: Core.buildVent(rows, info, opt('prefijo')) };
-      if (info.kind === 'cli') { if (S.admin) subirClientes(f); continue; }
+      if (info.kind === 'cli') continue;
     } catch (e) { err.push(f.name + ' (' + (e.message || 'no se pudo leer') + ')'); }
   }
   for (const k of ARCH_KEYS) if (found[k]) S.files[k] = found[k];
@@ -1333,7 +1333,7 @@ function recalc() {
     }, 600);
   }
   // Recuento automático: solo desde la PC de administración (es la que tiene los archivos), sin repetir marcas
-  if (S.admin && opt('autoRec') && !S.cierre && tieneSistema() && S.online) {
+  if (false) { // recuento automático: reemplazado por la lista "Con diferencia" de depósito
     clearTimeout(autoRecT);
     autoRecT = setTimeout(() => {
       if (S.cierre) return;
@@ -1534,7 +1534,7 @@ function vHoy() {
   if (faltanArch.length) avisos.push(`<div class="banner bad"><span class="grow"><b>Cruce parcial:</b> falta el archivo de ${faltanArch.map(k => NOMBRE_ARCH[k]).join(' y ')}. El stock del sistema se calcula con lo que hay${faltanArch.includes('yasu') ? ' (sin el stock de Yasukawa, sin precios para valorizar y con unidades por caja de la lista de artículos)' : ' (sin el stock de SAP)'}, así que las diferencias pueden no ser reales hasta que lo cargues.</span></div>`);
   if (!cerrado && !sis) avisos.push(`<div class="banner warn"><span class="grow">Cargá el stock de SAP y el de Yasukawa para ver el stock del sistema y las diferencias. Los conteos de depósito ya se ven abajo.</span></div>`);
   if (hu.length) avisos.push(`<div class="banner warn"><span class="grow">${hu.length} artículo${hu.length > 1 ? 's' : ''} con stock en los archivos no ${hu.length > 1 ? 'están' : 'está'} en la lista de artículos: ${hu.slice(0, 4).map(h => esc(h.c)).join(', ')}${hu.length > 4 ? '…' : ''}</span><button class="btn sm" data-act="tab" data-v="maestro">Revisar</button></div>`);
-  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['cont', 'Contados', r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ['rec', 'Recontar', r.rec]];
+  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['cont', 'Contados', r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ...(opt('btnRecontar') || r.rec ? [['rec', 'Recontar', r.rec]] : [])];
   return `<div class="stack">
     ${cerrado ? '' : vFiles()}
     ${S.ui.postCierre ? `<div class="confirm stack" style="border-color:var(--ok)"><b style="color:var(--ok)">✓ Cierre del ${dm(S.ui.postCierre.doc.fecha)} guardado en la base.</b>
@@ -1569,7 +1569,7 @@ function vHoy() {
       <input type="search" id="qHoy" data-act="buscar" placeholder="Buscar código o descripción" value="${esc(S.ui.q)}" style="min-width:220px;flex:1;max-width:320px">
       ${!cerrado ? `<button class="btn sm ${opt('verSisDep') ? 'ok' : ''}" data-act="verSisDep" aria-pressed="${!!opt('verSisDep')}" title="Mostrar u ocultar la existencia del sistema a depósito en Recontar y Con diferencia">Depósito ve el sistema: <b>${opt('verSisDep') ? 'Sí' : 'No (a ciegas)'}</b></button>${opt('verSisDep') ? (S.remoto && S.remoto.fecha === S.dia && S.remoto.items ? `<span class="small muted">depósito ve el cruce de las ${hora(S.remoto.ts)}</span>` : `<span class="small" style="color:var(--bad)">depósito todavía no tiene cruce del ${dm(S.dia)}: cargá los archivos en esta PC</span>`) : ''}` : ''}
       ${!cerrado && sis && r.dif ? `<button class="btn sm" data-act="pdfDif" title="PDF con todos los artículos que hoy tienen diferencia (el día sigue abierto)">PDF de diferencias (${r.dif})</button><button class="btn sm" data-act="pdfDifMov" title="PDF de las diferencias con lo que salió de cada artículo: por chofer y cliente, y por proveedor (Yasukawa, Ilolay, Ventana)">PDF por chofer y proveedor</button>` : ''}
-      ${!cerrado && sis && r.dif - r.rec > 0 ? `<button class="btn sm" data-act="recTodas">Pedir recuento de las ${r.dif} con diferencia</button>` : ''}
+
     </div>
     ${tablaHoy(lines, sis, cerrado)}
   </div>`;
@@ -1643,7 +1643,7 @@ function tablaHoy(lines, sis, cerrado) {
       <td class="n"><span class="cnt">${inCj}<span>cj</span>${inUn}<span>u</span></span></td>
       <td class="n dif">${sis && l.contado ? (l.dif ? fmtS(l.dif) : '<span class="muted">0</span>') : ''}</td>
       <td class="n hide-sm">${ayer}</td>
-      <td class="acc">${cerrado ? '' : `<div class="row acc-btns">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button></div>`}</td>
+      <td class="acc">${cerrado ? '' : `<div class="row acc-btns">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}${opt('btnRecontar') || l.rec ? `<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button>` : ''}</div>`}</td>
       <td>${l.contado && l.dif ? motivoSel('a-m-' + l.c, l.motivo, false).replace('data-act="motivo"', `data-act="motivo" data-c="${esc(l.c)}"`) : ''}</td>
       <td class="hide-sm">${l.contado && l.dif ? `<input type="text" class="obs" id="a-o-${esc(l.c)}" data-act="obs" data-c="${esc(l.c)}" value="${esc(l.obs)}" placeholder="Observación">` : ''}</td>
       <td class="n val">${sis && l.contado && l.dif ? money(l.importe) : ''}</td>
@@ -1802,12 +1802,14 @@ function vContar() {
   const verSis = (S.admin || !!opt('verSisDep')) && tieneSistema() && !cerrado;
   const lin = c => LINES.find(x => x.c === c);
   const conDif = c => { const l = lin(c); return !!(l && l.contado && l.dif); };
-  const nDif = verSis ? sec.filter(i => conDif(i.c)).length : 0;
-  if (!verSis && S.ui.solo === 'dif') S.ui.solo = 'pend';
+  // "Con diferencia": lo contado que no coincide con el sistema + lo que administración pidió recontar. Se ve aunque depósito cuente a ciegas.
+  const hayDif = tieneSistema() && !cerrado, enDif = i => (hayDif && conDif(i.c)) || !!k(i.c)?.rec;
+  const nDif = sec.filter(enDif).length;
+  if (S.ui.solo === 'rec') S.ui.solo = 'dif';
   // Después de escanear se muestra solo ese artículo, para no cargar la cantidad en otro por error
   const vis = sec.filter(i => {
     if (S.ui.foco) return S.ui.foco === i.c;
-    if (S.ui.solo === 'dif' && !conDif(i.c)) return false;
+    if (S.ui.solo === 'dif' && !enDif(i)) return false;
     if (S.ui.solo === 'pend' && contado(i.c) && !k(i.c)?.rec) return false;
     if (S.ui.solo === 'rec' && !k(i.c)?.rec) return false;
     if (S.ui.solo === 'cont' && !contado(i.c)) return false;
@@ -1840,13 +1842,13 @@ function vContar() {
       ${S.ui.confRecarga ? `<div class="banner warn"><span class="grow">Hay cantidades escritas que todavía no se guardaron. Si actualizás, se pierden.</span><button class="btn sm danger" data-act="recargarOk">Actualizar igual</button><button class="btn sm" data-act="recargarNo">Cancelar</button></div>` : ''}
       <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${esTactil() ? `<button class="btn xs" data-act="teclado" title="Elegir qué teclado aparece al cargar cajas y unidades">Teclado: <b>${tecladoApp() ? 'chico (de la app)' : 'del celular'}</b></button>` : ''}${S.ui.ultimaFoto ? '<span class="muted">Último código leído: <b class="mono">' + esc(S.ui.ultimaFoto) + '</b></span>' : ''}</div>
       <div class="row" style="justify-content:space-between">${chipsSector(items)}
-        <div class="chips">${[['pend', 'Pendientes', sec.length - hechos + sec.filter(i => contado(i.c) && k(i.c)?.rec).length], ['cont', 'Contados', hechos], ['rec', 'Recontar', rec], ...(verSis ? [['dif', 'Con diferencia', nDif]] : []), ['todos', 'Todos', sec.length]].map(([v, n, c]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}<span class="c">${c}</span></button>`).join('')}</div></div>
+        <div class="chips">${[['pend', 'Pendientes', sec.length - hechos + sec.filter(i => contado(i.c) && k(i.c)?.rec).length], ['cont', 'Contados', hechos], ['dif', 'Con diferencia', nDif], ['todos', 'Todos', sec.length]].map(([v, n, c]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}<span class="c">${c}</span></button>`).join('')}</div></div>
       <div class="row small"><span><b class="mono">${hechos}</b> de <b class="mono">${sec.length}</b> contados</span><div class="prog" style="flex:1;min-width:120px"><i style="width:${pct}%"></i></div></div>
     </div>
     <div id="scanMsg">${scanMsgHtml()}</div>
     ${S.scanLog.length ? `<details class="panel small" id="scanLogDet" ${S.ui.logAbierto ? 'open' : ''}><summary class="muted">Registro de la cámara (solo si hay un problema)</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
     ${S.ui.foco && vis.length ? `<div class="row small" style="justify-content:space-between;align-items:center;margin:2px 0"><span class="muted">Mostrando solo el artículo escaneado.</span><button class="btn sm" data-act="verTodos">Ver todos</button></div>` : ''}
-    <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : S.ui.solo === 'cont' ? 'Todavía no se contó ningún artículo en este sector.' : 'No hay artículos con este filtro.'}</div>`}</div>
+    <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : S.ui.solo === 'cont' ? 'Todavía no se contó ningún artículo en este sector.' : S.ui.solo === 'dif' ? (hayDif ? 'No hay diferencias en este sector: todo lo contado coincide con el sistema.' : 'Todavía no se cargaron los archivos del día en Administración: sin el stock del sistema no se pueden ver las diferencias.') : 'No hay artículos con este filtro.'}</div>`}</div>
   </div>`;
 }
 function buscarCodigo(raw) {
@@ -3117,8 +3119,8 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="hibrido" ${opt('quesoSap') === 'hibrido' ? 'checked' : ''}> <span><b>Híbrida:</b> Yasukawa por variación de su stock, ventana por el archivo de ventanas, y la facturación Ilolay la cargo en la pestaña <b>Quesos</b>; SAP no se usa para quesos</span></label>
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">La variación de Yasukawa (en hormas) se aplica en los tres casos. No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
-      <label class="row" style="gap:8px"><input type="checkbox" id="oAuto" ${opt('autoRec') ? 'checked' : ''}> <span>Marcar para recontar automáticamente cuando el conteo no coincide con el sistema</span></label>
-      <span class="small muted">Con esto activado, depósito se entera de que algo no cerró en cuanto lo guarda. Sin activar, el recuento lo pide administración desde Stock del día.</span>
+      <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
+      <span class="small muted">Lo contado que no coincide con el sistema ya le aparece solo a depósito en <b>Con diferencia</b>. El botón sirve para pedir que vuelvan a contar un artículo puntual aunque no tenga diferencia (aparece en Con diferencia, en amarillo).</span>
       <label class="stack" style="gap:4px"><span class="lbl">Movimientos: margen para resaltar en amarillo (%)</span><input type="number" id="oTol" value="${esc(tolMov())}" min="0" max="100" step="0.5" inputmode="decimal" style="max-width:110px"><span class="small muted">En Movimientos del día se pintan las filas cuya cantidad coincide con la diferencia entre contado y sistema, con este margen de más o de menos. Con 0 solo se pinta la coincidencia exacta.</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Destinatarios del mail de cierre</span><textarea id="oDest" style="min-height:60px">${esc(opt('destinatarios'))}</textarea></label>
       <div class="row"><button class="btn pri" type="submit">Guardar opciones</button></div>
@@ -3231,41 +3233,78 @@ let CLIENTES = new Map(), clientesTs = null;
 const nroCli = s => String(s ?? '').replace(/^'+/, '').trim().replace(/^0+(?=\d)/, '');
 async function cargarClientesSiHace() {
   const meta = S.clientesMeta;
-  if (!meta?.n) { CLIENTES = new Map(); return; }
+  if (!meta?.n) { CLIENTES = new Map(); clientesTs = meta?.ts ?? null; return; }
   if (clientesTs === meta.ts && CLIENTES.size) return;
   try { const L = await API.call('getClientes'); CLIENTES = new Map(L.map(r => [r[0] + '|' + r[1], { cli: r[2], suc: r[3], dom: r[4] }])); clientesTs = meta.ts; }
   catch (e) { /* sin base de clientes: el informe sale con lo que traen los archivos */ }
 }
 // Texto de la "boca": cliente y domicilio (base de clientes); si no está, lo que traen los archivos
 function bocaDe(x) {
-  const r = x.nc ? CLIENTES.get(x.o + '|' + nroCli(x.nc)) : null;
+  const r = x.o === 'I' && x.nc ? CLIENTES.get('I|' + nroCli(x.nc)) : null;
   if (r) {
     const cli = r.cli || r.suc || '', suc = r.suc && r.suc.toUpperCase() !== cli.toUpperCase() ? r.suc : '';
-    return [cli, suc && !cli.toUpperCase().includes(suc.toUpperCase()) ? '(' + suc + ')' : '', r.dom ? '- ' + r.dom : ''].filter(Boolean).join(' ');
+    return [cli, suc && !cli.toUpperCase().includes(suc.toUpperCase()) ? '(' + suc + ')' : '', r.dom ? '- ' + r.dom : ''].filter(Boolean).join(' ') || bocaArchivo(x);
   }
+  return bocaArchivo(x);
+}
+function bocaArchivo(x) {
   const cli = String(x.cliN || x.cli || 'Sin cliente').trim();
-  const det = x.o === 'Y' ? (x.loc || '') : String(x.suc || (x.cliN && x.cli !== x.cliN ? x.cli : '') || '').trim();
+  // Yasukawa: la dirección, si el archivo de facturación trae la columna DOMICILIO o DIRECCION (la localidad no se muestra)
+  const det = x.o === 'Y' ? (x.dom || '') : String(x.suc || (x.cliN && x.cli !== x.cliN ? x.cli : '') || '').trim();
   return det && det.toUpperCase() !== cli.toUpperCase() ? cli + ' - ' + det : cli;
 }
-async function subirClientes(file) {
-  try {
-    toast('Leyendo ' + file.name + '…');
-    const { rows, info } = await fileRows(file);
-    if (info.kind !== 'cli') { toast('Ese archivo no parece la base de clientes (faltan las columnas EMISOR, NRO_CLIENTE y DOMICILIO).'); return; }
-    const d = Core.buildCli(rows, info);
-    if (!d.lista.length) { toast('No encontré clientes de Ilolay (Williner) ni de Yasukawa en el archivo.'); return; }
-    const n = await API.call('cargarClientes', d.lista, { archivo: file.name });
-    S.clientesMeta = { n, ts: Date.now(), archivo: file.name }; clientesTs = null; await cargarClientesSiHace();
-    toast('Base de clientes cargada: ' + n + ' clientes (Ilolay y Yasukawa).'); render();
-  } catch (e) { toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo cargar: ' + e.message); }
+/* Clientes cargados a mano (Configuración → Clientes): número de cliente de Ilolay o Yasukawa, nombre y dirección */
+function clientesSinDir() {
+  const M = movsActuales(); if (!M) return [];
+  const vistos = new Map();
+  for (const x of M.filas || []) {
+    if (!x.nc || x.o !== 'I') continue;
+    const k = x.o + '|' + nroCli(x.nc); if (CLIENTES.has(k) || vistos.has(k)) continue;
+    vistos.set(k, { o: x.o, nro: nroCli(x.nc), nombre: x.o === 'I' ? (x.suc || x.cliN || x.cli || '') : (x.cli || ''), loc: x.loc || '' });
+  }
+  return [...vistos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 function vClientes() {
   if (!S.admin) return '';
-  const m = S.clientesMeta;
-  return `<div style="max-width:760px" id="cliPanel">${secOp('cli', 'Base de clientes', 'Cliente, sucursal y domicilio de cada boca, para el PDF por chofer.')}
-    <span class="small">${m?.n ? `Cargada: <b>${fmt(m.n)} clientes</b> de Ilolay y Yasukawa${m.archivo ? ' · archivo ' + esc(m.archivo) : ''}${m.ts ? ' · ' + new Date(m.ts).toLocaleString('es-AR') : ''}.` : '<b>Todavía no se cargó.</b> Sin la base, el PDF por chofer muestra solo el nombre que traen los archivos (sin domicilio).'}</span>
-    <label class="stack" style="gap:4px"><span class="lbl">Subir la base de clientes (sucu_x_emisor de Yasukawa)</span><input type="file" id="cliFile" accept=".xls,.xlsx,.csv,.htm,.html"><span class="small muted">Reemplaza la anterior. Se toman los clientes de Sucesores de Alfredo Williner (Ilolay) y de Yasukawa, y se cruzan por número de cliente con la facturación de cada uno. También se reconoce si lo cargás junto con los archivos del día.</span></label>
+  if (S.clientesMeta?.n && clientesTs !== S.clientesMeta.ts && !S.ui.cliCargando) { S.ui.cliCargando = true; cargarClientesSiHace().finally(() => { S.ui.cliCargando = false; render(); }); }
+  const F = S.ui.cliF ||= { o: 'I', nro: '', cliente: '', domicilio: '' }; F.o = 'I'; const Q = sinTilde(S.ui.cliQ || '');
+  const lista = [...CLIENTES.entries()].map(([k, v]) => { const [o, nro] = k.split('|'); return { o, nro, ...v }; })
+    .filter(x => x.o === 'I').filter(x => !Q || sinTilde(x.nro + ' ' + x.cli + ' ' + x.dom).includes(Q)).sort((a, b) => a.cli.localeCompare(b.cli, 'es'));
+  const sin = clientesSinDir(), ORG = { I: 'Ilolay', Y: 'Yasukawa' };
+  return `<div style="max-width:760px" id="cliPanel">${secOp('cli', 'Clientes de Ilolay (direcciones)', 'Número, nombre y dirección de las bocas de Ilolay, para el PDF por chofer.')}
+    <span class="small muted">Solo para lo facturado por <b>Ilolay</b>: el número es el "Destinatario de mercadería" de la facturación de Ilolay. Yasukawa y Ventana salen con los datos que traen sus propios archivos. Si una boca de Ilolay no está cargada, sale con el nombre que trae el archivo.</span>
+    <form id="fCli" class="row" style="gap:8px;align-items:end;flex-wrap:wrap">
+      <label class="stack" style="gap:2px"><span class="lbl">N° destinatario</span><input type="text" id="cliNro" data-act="cliF" data-k="nro" inputmode="numeric" class="mono" style="width:120px" value="${esc(F.nro)}" required></label>
+      <label class="stack" style="gap:2px;flex:1;min-width:180px"><span class="lbl">Nombre del cliente / boca</span><input type="text" id="cliNom" data-act="cliF" data-k="cliente" value="${esc(F.cliente)}" required></label>
+      <label class="stack" style="gap:2px;flex:1;min-width:180px"><span class="lbl">Dirección</span><input type="text" id="cliDom" data-act="cliF" data-k="domicilio" value="${esc(F.domicilio)}" placeholder="Calle y número"></label>
+      <button class="btn pri" type="submit">${F.antes ? 'Guardar cambios' : 'Agregar'}</button>${F.antes || F.nro || F.cliente ? '<button class="btn" type="button" data-act="cliLimpiar">Cancelar</button>' : ''}
+    </form>
+    ${sin.length ? `<details class="small" ${S.ui.cliSinAb ? 'open' : ''} id="cliSinDet"><summary><b style="color:var(--warn)">${sin.length} boca${sin.length === 1 ? '' : 's'} de Ilolay de los movimientos de hoy sin dirección</b> · tocá uno para completarlo</summary>
+      <div class="stack" style="margin-top:6px;max-height:260px;overflow:auto">${sin.map(x => `<button class="btn sm" type="button" style="justify-content:flex-start;text-align:left" data-act="cliUsar" data-o="${x.o}" data-nro="${esc(x.nro)}" data-nom="${esc(x.nombre)}"><span class="mono">${esc(x.nro)}</span>&nbsp;${esc(x.nombre)}${x.loc ? ' <span class="muted">· ' + esc(x.loc) + '</span>' : ''}</button>`).join('')}</div></details>` : ''}
+    <div class="row" style="justify-content:space-between;align-items:center"><input type="search" id="cliQ" data-act="cliQ" placeholder="Buscar por número, nombre o dirección" value="${esc(S.ui.cliQ || '')}" style="max-width:320px"><span class="small muted">${fmt(lista.length)} boca${lista.length === 1 ? '' : 's'} cargada${lista.length === 1 ? '' : 's'}${CLIENTES.size ? ` · <button class="link" data-act="cliBorrarTodos" style="color:var(--bad)">${S.ui.cliConfTodos ? '¿Seguro? Tocá de nuevo para borrar todos' : 'Borrar todos'}</button>` : ''}</span></div>
+    ${lista.length ? `<div class="tablebox" style="max-height:360px"><table><thead><tr><th>N° destinatario</th><th>Nombre</th><th>Dirección</th><th></th></tr></thead><tbody>${lista.slice(0, 300).map(x => `<tr><td class="mono">${esc(x.nro)}</td><td>${esc(x.cli)}</td><td>${esc(x.dom)}</td><td style="white-space:nowrap"><button class="btn xs" data-act="cliEditar" data-o="${x.o}" data-nro="${esc(x.nro)}">Editar</button><button class="btn xs" data-act="cliBorrar" data-o="${x.o}" data-nro="${esc(x.nro)}" title="Borrar">✕</button></td></tr>`).join('')}</tbody></table></div>${lista.length > 300 ? '<span class="small muted">Se muestran los primeros 300: buscá para encontrar el resto.</span>' : ''}` : `<span class="small muted">${Q ? 'No hay clientes que coincidan.' : 'Todavía no hay clientes cargados.'}</span>`}
   </div></details></div>`;
+}
+async function guardarClienteForm() {
+  const F = S.ui.cliF || {}, nro = nroCli(F.nro), cliente = String(F.cliente || '').trim(), domicilio = String(F.domicilio || '').trim();
+  if (!nro || !cliente) { toast('Completá el número y el nombre del cliente.'); return; }
+  try {
+    await API.call('guardarCliente', { o: 'I', nro, cliente, domicilio, antes: F.antes || null });
+    if (F.antes) CLIENTES.delete(F.antes.o + '|' + F.antes.nro);
+    CLIENTES.set('I|' + nro, { cli: cliente, suc: '', dom: domicilio });
+    S.clientesMeta = { n: CLIENTES.size, ts: Date.now() }; clientesTs = S.clientesMeta.ts;
+    S.ui.cliF = { o: F.o || 'I', nro: '', cliente: '', domicilio: '' }; toast('Cliente ' + nro + ' guardado.');
+  } catch (e) { toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo guardar: ' + e.message); }
+  render();
+}
+async function borrarCliente(o, nro) {
+  try {
+    await API.call('borrarCliente', o, nro);
+    if (o === 'TODOS') CLIENTES.clear(); else CLIENTES.delete(o + '|' + nro);
+    S.clientesMeta = { n: CLIENTES.size, ts: Date.now() }; clientesTs = S.clientesMeta.ts; S.ui.cliConfTodos = false;
+    toast(o === 'TODOS' ? 'Se borraron todos los clientes.' : 'Cliente ' + nro + ' borrado.');
+  } catch (e) { toast('No se pudo borrar: ' + e.message); }
+  render();
 }
 function armarPdfDifMovs(c, difs, M, t) {
   // Una grilla por chofer: CÓDIGO · DESCRIPCIÓN · BOCA (cliente y domicilio, de la base de clientes) · FAC (unidades)
@@ -3341,12 +3380,6 @@ function armarPdfDifMovs(c, difs, M, t) {
         P.text(X.f + W.f - pad, y + fs + 1, r.q < 0 ? '+' + fmt(-r.q) + ' NC' : fmt(r.q), fs, true, 'r', r.q < 0 ? cfg.cPos : '#000000');
         y += h; if (cfg.sep !== false) P.line(i === rows.length - 1 ? Mg : X.b, y, Mg + ancho, y, cS, gS);
       });
-      if (rows.length > 1) {
-        if (lugar(lh + 2)) cab(ch, true);
-        if (hl(sub)) P.rect(X.b, y, ancho - (X.b - Mg), lh + 2, '#fff3a6');
-        P.text(X.b + pad, y + fs + 1, 'Total ' + l.c + ' · ' + cjun(sub, l.u || 1), fs - 1, true, 'l', '#333333'); P.text(X.f + W.f - pad, y + fs + 1, fmt(sub), fs, true, 'r');
-        y += lh + 2; if (cfg.sep !== false) P.line(Mg, y, Mg + ancho, y, cS, gS);
-      }
     }
     y += 12;
   }
@@ -3487,7 +3520,7 @@ const PDF_DEF = { letra: 8, titulo: 15, apaisado: true, autoPct: 80, ajustarAnch
   cHead: '#e6e6e6', cTit: '#000000', cNeg: '#b3261e', cPos: '#1e7a3c', cZebra: '#f5f5f5', zebra: false,
   secciones: PDF_SECC.map(([k, n]) => ({ k, n, v: k === 'ajDia' || k === 'detalle' })),
   kpis: ['articulos', 'contados', 'conAj', 'valAj'],
-  ajCols: PDF_AJCOLS.map(([k, n]) => ({ k, n, v: k !== 'obs' })),
+  ajCols: PDF_AJCOLS.map(([k, n]) => ({ k, n, v: k !== 'obs' && k !== 'tipo' })), sinTipoAj: true,
   cols: PDF_COLS.map(([k, n]) => ({ k, n, v: k !== 'sector' && k !== 'obs' })), sinObs: true };
 function pdfCfg() {
   const guardada = opt('pdf') || {};
@@ -3498,6 +3531,8 @@ function pdfCfg() {
   c.kpis = (Array.isArray(c.kpis) ? c.kpis : PDF_DEF.kpis).filter(k => PDF_KPIS.some(([x]) => x === k));
   // A pedido: la columna "Obs. / nota de depósito" se quita (también de configuraciones guardadas antes; se puede volver a tildar)
   if (!guardada.sinObs) { const o = c.cols.find(x => x.k === 'obs'); if (o) o.v = false; c.sinObs = true; }
+  // A pedido: en la tabla de Ajustes del día no sale la columna Tipo (se puede volver a tildar)
+  if (!guardada.sinTipoAj) { const o = c.ajCols.find(x => x.k === 'tipo'); if (o) o.v = false; c.sinTipoAj = true; }
   return c;
 }
 function pdfCierre(c, cfgIn, opts = {}) {
@@ -3587,17 +3622,37 @@ function pdfCierre(c, cfgIn, opts = {}) {
     let cols = (cfg.ajCols || []).filter(x => x.v);
     if (!cols.length) cols = PDF_AJCOLS.map(([k, n]) => ({ k, n }));
     cols = cols.map(x => { const d = PDF_AJCOLS.find(([k]) => k === x.k); return { k: x.k, n: x.n || d[1], w: d[2], a: d[3] }; });
-    const sw = cols.reduce((s, x) => s + x.w, 0); let ax = M; cols.forEach(cl => { cl.w = cl.w / sw * anchoTabla; cl.x = ax; ax += cl.w; });
-    const cel = (cl, v, yy, b, col) => { const t = cortar(v, cl.w - pad, fs, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, t, fs, b, 'r', col); else P.text(cl.x + pad / 2, yy, t, fs, b, 'l', col); };
-    const cab = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH - 2, true, '#000000')); y += rowH + 2 + fs + 2; };
     const val = (k, a) => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return { codigo: a.c, descripcion: a.d || '', tipo: TIPOS_AJ[a.t]?.n || a.t || '', motivo: a.m || '', obs: a.o && a.o !== a.m ? a.o : '', unidades: `${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${fmt(sp.cj)} cj ${fmt(sp.un)} u)`, valorizado: a.v === null || a.v === undefined ? '—' : money(a.v), estado: a.est === 'pasado' ? 'pasado' : 'pendiente' }[k]; };
     const colr = (k, a) => k === 'unidades' || k === 'valorizado' ? (a.u < 0 ? cfg.cNeg : cfg.cPos) : k === 'tipo' || k === 'motivo' || k === 'obs' ? '#333333' : k === 'estado' ? '#666666' : '#000000';
+    // Autoajuste al 100 %: cada columna mide lo que necesita su contenido más largo; la descripción se queda con el resto
+    const flexK = cols.find(cl => cl.k === 'descripcion') ? 'descripcion' : (cols.find(cl => cl.k === 'motivo') ? 'motivo' : cols[cols.length - 1].k);
+    for (const cl of cols) {
+      if (cl.k === flexK) continue;
+      const ws = ajDia.map(a => anchoTxt(val(cl.k, a), fs, cl.k === 'unidades'));
+      if (cl.k === 'valorizado') ws.push(anchoTxt(money(vAj), fs, true));
+      cl.w = Math.max(anchoTxt(cl.n, fs, true), ...ws, 0) + pad;
+    }
+    const fc = cols.find(cl => cl.k === flexK), resto = anchoTabla - cols.filter(cl => cl !== fc).reduce((s, cl) => s + cl.w, 0);
+    fc.w = Math.max(90, resto);
+    if (resto < 90) { // no entra: achican las de texto (motivo, observación), que pasan a varios renglones; los números quedan enteros
+      const txt = cols.filter(cl => cl !== fc && ['motivo', 'obs', 'tipo', 'estado'].includes(cl.k)), sobra = 90 - resto, st = txt.reduce((s, cl) => s + cl.w, 0) || 1;
+      txt.forEach(cl => cl.w = Math.max(anchoTxt(cl.n, fs, true) + pad, cl.w - sobra * cl.w / st));
+    }
+    let ax = M; cols.forEach(cl => { cl.x = ax; ax += cl.w; });
+    const cel = (cl, v, yy, b, col) => { const t = cortar(v, cl.w - pad, fs, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, t, fs, b, 'r', col); else P.text(cl.x + pad / 2, yy, t, fs, b, 'l', col); };
+    const cab = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH - 2, true, '#000000')); y += rowH + 2 + fs + 2; };
+    const lhA = Math.round(fs * 1.25);
     cab(); let i = 0;
     for (const a of ajDia) {
-      if (y > P.H - 34) { encabezado(nombre + ' (continuación)'); cab(); }
-      if (cfg.zebra && i++ % 2) P.rect(M, y - fs - 1, anchoTabla, rowH, cfg.cZebra);
-      cols.forEach(cl => cel(cl, val(cl.k, a), y, cl.k === 'unidades', colr(cl.k, a)));
-      sepV(cols.slice(1).map(cl => cl.x), y); sepH(y); y += rowH;
+      // Los textos que no entran siguen en el renglón de abajo (nada queda tapado)
+      const lineas = cols.map(cl => cl.a === 'r' ? [val(cl.k, a)] : partirTxt(val(cl.k, a), cl.w - pad, fs, false));
+      const n = Math.max(...lineas.map(l => l.length)), h = rowH + (n - 1) * lhA;
+      if (y + h - fs > P.H - 34) { encabezado(nombre + ' (continuación)'); cab(); }
+      if (cfg.zebra && i++ % 2) P.rect(M, y - fs - 1, anchoTabla, h, cfg.cZebra);
+      cols.forEach((cl, j) => lineas[j].forEach((s, k) => { if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, y + k * lhA, s, fs, cl.k === 'unidades', 'r', colr(cl.k, a)); else P.text(cl.x + pad / 2, y + k * lhA, s, fs, false, 'l', colr(cl.k, a)); }));
+      if (cfg.sepV) cols.slice(1).forEach(cl => P.line(cl.x, y - fs - 1, cl.x, y - fs - 1 + h, cS, gS));
+      if (cfg.sep !== false) P.line(M, y - fs - 1 + h, M + anchoTabla, y - fs - 1 + h, cS, gS);
+      y += h;
     }
     if (!ajDia.length) { P.text(M + 4, y, 'No hubo ajustes en el día' + (ajExcluidas(cfg).length || cfg.ajExcluirDec !== false ? ' (fuera de los excluidos).' : '.'), fs + 1); y += rowH; }
     else if (cfg.ajTotal !== false) {
@@ -3827,6 +3882,11 @@ document.addEventListener('click', async e => {
     case 'cbCancel': S.ui.cb = null; render(); break;
     case 'cbSel': S.ui.cb.sel = c; render(); break;
     case 'cbT': S.ui.cb.t = v; render(); break;
+    case 'cliUsar': S.ui.cliF = { o: t.dataset.o, nro: t.dataset.nro, cliente: t.dataset.nom, domicilio: '' }; render(); setTimeout(() => $('#cliDom')?.focus(), 0); break;
+    case 'cliEditar': { const x = CLIENTES.get(t.dataset.o + '|' + t.dataset.nro) || {}; S.ui.cliF = { o: t.dataset.o, nro: t.dataset.nro, cliente: x.cli || '', domicilio: x.dom || '', antes: { o: t.dataset.o, nro: t.dataset.nro } }; render(); $('#cliPanel')?.scrollIntoView({ block: 'start' }); break; }
+    case 'cliBorrar': borrarCliente(t.dataset.o, t.dataset.nro); break;
+    case 'cliBorrarTodos': if (S.ui.cliConfTodos) borrarCliente('TODOS'); else { S.ui.cliConfTodos = true; render(); } break;
+    case 'cliLimpiar': S.ui.cliF = { o: (S.ui.cliF || {}).o || 'I', nro: '', cliente: '', domicilio: '' }; render(); break;
     case 'cbConfirmar': cbConfirmar(t.dataset.ean ? [t.dataset.ean] : []); break;
     case 'cbBorrar': cbBorrar(t.dataset.ean); break;
     case 'cbGuardar': case 'cbGuardarOtro': cbGuardar(a === 'cbGuardarOtro'); break;
@@ -3926,6 +3986,8 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'asigQ') { S.ui.asigQ = t.value; const l = $('#asigList'); if (l) l.innerHTML = listaAsignar(t.value); }
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'qIlo') (S.ui.qDraft ||= {})[t.dataset.c] = t.value;
+  if (t.dataset.act === 'cliF') (S.ui.cliF ||= {})[t.dataset.k] = t.value;
+  if (t.dataset.act === 'cliQ') { S.ui.cliQ = t.value; render(); }
   if (t.dataset.act === 'dcnt' || t.dataset.act === 'dsum' || t.dataset.act === 'ddet') pasarAUnidades(t);
   if (t.dataset.act === 'dnota') DD[t.dataset.c + 'nota'] = t.value;
   if (t.dataset.act === 'dsum') { if (/^-/.test(t.value)) t.value = t.value.replace(/^-+/, ''); DD[t.dataset.c + t.dataset.k] = t.value; const el = document.getElementById('ds-' + t.dataset.c); if (el) el.innerHTML = textoSuma(t.dataset.c); }
@@ -3942,7 +4004,7 @@ document.addEventListener('change', async e => {
   if (a === 'borrarCierre') { S.ui.borrar = { cierre: t.checked, conf: false }; render(); return; }
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
   if (t.id === 'armFile' && t.files?.[0]) { armLeer(t.files[0]); t.value = ''; return; }
-  if (t.id === 'cliFile' && t.files?.[0]) { subirClientes(t.files[0]); t.value = ''; return; }
+  if (a === 'cliF') { (S.ui.cliF ||= {})[t.dataset.k] = t.value; render(); return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'valF') { const V = S.ui.val ||= valPeriodo('sem'); V[t.dataset.k] = t.value; V.per = ''; render(); return; }
@@ -4003,6 +4065,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('submit', async e => {
   e.preventDefault();
   if (e.target.id === 'fAcceso') { entrar(e); return; }
+  if (e.target.id === 'fCli') { guardarClienteForm(); return; }
   if (e.target.id === 'fCb') { const v = $('#cbManual').value; $('#cbManual').value = ''; cbLeido(v); return; }
   if (e.target.id === 'fAj') {
     const c = Core.code($('#ajC').value), t = $('#ajT').value; let u = Core.num($('#ajU').value);
@@ -4011,7 +4074,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: $('#oAuto').checked, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
