@@ -244,6 +244,9 @@ input[data-tecla]:focus{outline:3px solid var(--accent,#1d5f86);outline-offset:1
 .tecla button.f{font-size:14px;font-weight:600;background:color-mix(in srgb,var(--surface) 80%,var(--line))}
 .tecla button.ok{grid-row:span 2;height:auto;background:var(--accent,#1d5f86);color:#fff;font-size:15px}
 body.con-tecla{padding-bottom:max(190px,70vh)}
+/* Con el teclado de la app abierto, las barras de arriba dejan de quedar fijas: así la tarjeta del artículo entra entera arriba del teclado (iPhone tiene menos alto visible) */
+body.con-tecla .top,body.con-tecla .scan .bar{position:relative;top:auto}
+@media (max-height:720px){.tecla{gap:4px;padding-top:5px}.tecla button{height:34px}}
 /* aviso grande de guardado */
 .ok-grande{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:rgba(0,0,0,.28);animation:okg-in .15s ease-out}
 .ok-grande.sale{opacity:0;transition:opacity .18s}
@@ -308,7 +311,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb86';
+window.__VERSION = 'sb87';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -331,7 +334,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb86</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb87</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1968,22 +1971,43 @@ function teclaEl() {
 function teclaMostrar(el) {
   const k = teclaEl(); clearTimeout(teclaOcultarT);
   if (k.hidden) { k.hidden = false; document.body.classList.add('con-tecla'); }
-  encuadrar(el); requestAnimationFrame(() => encuadrar(el));
+  encuadrarVarias(el);
 }
 // Acomoda la página para que la tarjeta del artículo (título, cajas y unidades) quede entera entre la barra de arriba y el teclado
 function encuadrar(el) {
   if (!el || !el.isConnected) return;
-  const k = document.getElementById('tecla'), kh = k && !k.hidden ? k.offsetHeight : 0;
-  const vv = window.visualViewport, alto = vv ? vv.height + vv.offsetTop : window.innerHeight;
+  // Se mide el teclado y la parte visible de verdad (en iPhone innerHeight cambia con la barra de Safari y el teclado del celular corre la vista)
+  const k = document.getElementById('tecla'), kTop = k && !k.hidden ? k.getBoundingClientRect().top : Infinity;
+  const vv = window.visualViewport, vTop = vv ? vv.offsetTop : 0, alto = vv ? vv.height + vv.offsetTop : window.innerHeight;
   const card = el.closest('.card') || el, barra = document.querySelector('.scan .bar');
-  const arriba = Math.max($('#top')?.getBoundingClientRect().bottom || 0, barra ? barra.getBoundingClientRect().bottom : 0) + 8;
-  const abajo = Math.min(alto, window.innerHeight - kh) - 8;
+  const arriba = Math.max($('#top')?.getBoundingClientRect().bottom || 0, barra ? barra.getBoundingClientRect().bottom : 0, vTop) + 8;
+  const abajo = Math.min(alto, kTop) - 8;
   const rc = card.getBoundingClientRect(), ri = el.getBoundingClientRect();
   let d = 0;
   if (rc.height <= abajo - arriba) { if (rc.top < arriba) d = rc.top - arriba; else if (rc.bottom > abajo) d = rc.bottom - abajo; }
   else { d = rc.top - arriba; if (ri.bottom - d > abajo) d = ri.bottom - abajo; }
-  if (Math.abs(d) > 1) window.scrollBy({ top: d, behavior: 'auto' });
+  if (Math.abs(d) > 1) desplazar(d);
 }
+// Mueve la página; si window.scrollBy no la mueve (pasa en iPhone con overflow en html/body), se mueve el elemento que hace scroll
+function desplazar(d) {
+  const y0 = window.scrollY;
+  window.scrollBy(0, d);
+  if (Math.abs(window.scrollY - y0) >= 1) return;
+  const se = document.scrollingElement || document.documentElement, a = se.scrollTop; se.scrollTop = a + d;
+  if (Math.abs(se.scrollTop - a) >= 1) return;
+  document.body.scrollTop += d;
+}
+// En iPhone la pantalla se termina de acomodar después (barra de Safari, cámara que se cierra, foco): se vuelve a encuadrar unas veces.
+// Si la persona toca la pantalla para mover la lista, se deja de insistir.
+let encT = [];
+function encuadrarVarias(el) {
+  encT.forEach(clearTimeout);
+  encuadrar(el); requestAnimationFrame(() => encuadrar(el));
+  encT = [90, 220, 450, 800, 1200].map(ms => setTimeout(() => { if (document.activeElement === el) encuadrar(el); }, ms));
+}
+document.addEventListener('touchstart', e => { if (!e.target.closest?.('#tecla') && !esNum(e.target)) { encT.forEach(clearTimeout); encT = []; } }, { passive: true });
+// Teclado del celular (o la barra de Safari) cambia el alto visible: se vuelve a encuadrar el campo activo
+try { window.visualViewport?.addEventListener('resize', () => { const a = document.activeElement; if (esNum(a)) encuadrarVarias(a); }); } catch { }
 function teclaOcultar() { const k = document.getElementById('tecla'); if (k && !k.hidden) { k.hidden = true; document.body.classList.remove('con-tecla'); } }
 function teclaPulsar(v) {
   const el = document.activeElement; if (!esNum(el)) { teclaOcultar(); return; }
@@ -2034,7 +2058,7 @@ document.addEventListener('click', e => { const tr = e.target.closest?.('tr[data
 document.addEventListener('click', e => { const el = e.target; if (esNum(el) && el.readOnly && tecladoApp()) { if (document.activeElement !== el) el.focus(); teclaMostrar(el); } });
 document.addEventListener('focusin', e => {
   if (esNum(e.target) && tecladoApp()) teclaMostrar(e.target);
-  else { if (e.target.matches?.('input, textarea, select')) teclaOcultar(); if (esNum(e.target)) { const el = e.target; setTimeout(() => encuadrar(el), 350); } } // teclado del celular: se espera a que abra
+  else { if (e.target.matches?.('input, textarea, select')) teclaOcultar(); if (esNum(e.target)) { const el = e.target; setTimeout(() => encuadrarVarias(el), 350); } } // teclado del celular: se espera a que abra
 });
 document.addEventListener('focusout', () => { clearTimeout(teclaOcultarT); teclaOcultarT = setTimeout(() => { if (!esNum(document.activeElement)) teclaOcultar(); }, 150); });
 /* Aviso grande de "Guardado" en el centro de la pantalla (depósito) */
