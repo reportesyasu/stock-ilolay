@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb75';
+window.__VERSION = 'sb76';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb75</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb76</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1813,7 +1813,7 @@ function vContar() {
     if (S.ui.solo === 'pend' && contado(i.c) && !k(i.c)?.rec) return false;
     if (S.ui.solo === 'rec' && !k(i.c)?.rec) return false;
     if (S.ui.solo === 'cont' && !contado(i.c)) return false;
-    if (q && !(i.c.includes(q) || (i.d || '').toUpperCase().includes(q) || (i.e || []).includes(q))) return false;
+    if (q && !(i.c.includes(q) || sinTilde(i.d).includes(sinTilde(q)) || sinTilde(i.dc).includes(sinTilde(q)) || (i.e || []).includes(q))) return false;
     return true;
   });
   // Los marcados para recontar van al final: arriba queda lo que todavía no se contó
@@ -1822,7 +1822,7 @@ function vContar() {
     const x = k(i.c), done = contado(i.c);
     const sumando = done && !cerrado && S.ui.yaContado === i.c;
     return `<div class="card ${done ? 'done' : ''} ${x?.rec ? 'rec' : ''} ${S.ui.foco === i.c ? 'focus' : ''} ${sumando ? 'sumando' : ''}" id="card-${esc(i.c)}">
-      <div class="t"><button class="link tit" data-act="artMenu" data-c="${esc(i.c)}" title="Tocá para ver el historial o los movimientos">${esc(i.d)}</button><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
+      <div class="t"><button class="link tit" data-act="artMenu" data-c="${esc(i.c)}" title="${esc(i.d)} · tocá para ver el historial o los movimientos">${esc(i.dc || i.d)}</button><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
       ${sumando ? `<div class="val small muted" style="text-align:right">ya contado</div>${sumarHtml(i)}<div class="ya-contado" style="grid-column:1/-1"><span class="lbl">Ya contado</span> <b class="mono" style="font-size:17px">${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u</b> <span class="small muted">${esc(nom(x.by))} ${hora(x.ts)} · para corregir el total, cambiá Cajas y Unidades</span></div>` : `<div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>`}
       ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" ${IM()} id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" ${IM()} id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
       ${verSis && (S.admin || x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
@@ -1838,9 +1838,9 @@ function vContar() {
     ${cerrado ? `<div class="banner ok"><span class="grow">El stock del ${dm(S.dia)} ya está cerrado. No se pueden cargar más conteos para ese día.</span></div>` : ''}
     ${enMarco() ? `<div class="banner info"><span class="grow">Si la cámara no abre, es porque Google la bloquea dentro de este marco: abrí la app a pantalla completa y escaneá desde ahí.</span><button class="btn pri sm" data-act="pantallaCompleta">Abrir a pantalla completa</button></div>` : ''}
     <div class="scan">
-      <div class="bar"><input type="search" id="scan" data-act="scan" placeholder="Escaneá el código de barras o escribí código / nombre" autocomplete="off" enterkeyhint="search" value="${esc(S.ui.q)}"><button class="btn pri" data-act="escanear" title="Escanear con la cámara en vivo">Escanear</button><button class="btn" data-act="recargar" title="Volver a cargar la página (trae la última versión y los datos al día)">↻ Actualizar</button></div>
+      <div class="bar"><input type="search" id="scan" data-act="scan" placeholder="Buscar artículo" autocomplete="off" enterkeyhint="search" value="${esc(S.ui.q)}"><button class="btn pri" data-act="escanear" title="Escanear con la cámara en vivo">Escanear</button><button class="btn" data-act="recargar" title="Actualizar la página (trae la última versión y los datos al día)" aria-label="Actualizar la página" style="padding-inline:12px;font-size:19px;line-height:1">↻</button></div>
       ${S.ui.confRecarga ? `<div class="banner warn"><span class="grow">Hay cantidades escritas que todavía no se guardaron. Si actualizás, se pierden.</span><button class="btn sm danger" data-act="recargarOk">Actualizar igual</button><button class="btn sm" data-act="recargarNo">Cancelar</button></div>` : ''}
-      <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${esTactil() ? `<button class="btn xs" data-act="teclado" title="Elegir qué teclado aparece al cargar cajas y unidades">Teclado: <b>${tecladoApp() ? 'chico (de la app)' : 'del celular'}</b></button>` : ''}${S.ui.ultimaFoto ? '<span class="muted">Último código leído: <b class="mono">' + esc(S.ui.ultimaFoto) + '</b></span>' : ''}</div>
+      <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${esTactil() ? `<button class="btn xs" data-act="teclado" title="Elegir qué teclado aparece al cargar cajas y unidades">Teclado: <b>${tecladoApp() ? 'chico (de la app)' : 'del celular'}</b></button>` : ''}</div>
       <div class="row" style="justify-content:space-between">${chipsSector(items)}
         <div class="chips">${[['pend', 'Pendientes', sec.length - hechos + sec.filter(i => contado(i.c) && k(i.c)?.rec).length], ['cont', 'Contados', hechos], ['dif', 'Con diferencia', nDif], ['todos', 'Todos', sec.length]].map(([v, n, c]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}<span class="c">${c}</span></button>`).join('')}</div></div>
       <div class="row small"><span><b class="mono">${hechos}</b> de <b class="mono">${sec.length}</b> contados</span><div class="prog" style="flex:1;min-width:120px"><i style="width:${pct}%"></i></div></div>
@@ -1868,6 +1868,8 @@ function buscarCodigo(raw) {
   for (const t of tries) if (eanMap[t]) return eanMap[t];
   return null;
 }
+// Descripción para depósito: la corta si está cargada en Artículos, si no la completa
+const dDep = c => S.maestro[c]?.dc || S.maestro[c]?.d || c;
 function onScan(val) {
   const c = buscarCodigo(val);
   S.ui.okMsg = null; S.ui.asignar = null; S.ui.yaContado = null;
@@ -2066,8 +2068,8 @@ async function sumarDeposito(c) {
   if (res) {
     delete DD[c + 'acj']; delete DD[c + 'aun']; delete DD[c + 'cj']; delete DD[c + 'un'];
     S.ui.yaContado = null; S.ui.foco = null; if (S.ui.modoSuma) delete S.ui.modoSuma[c];
-    S.ui.okMsg = `✓ Actualizado <b>${esc(S.maestro[c]?.d || c)}</b>: ${s.delta >= 0 ? 'se sumaron' : 'se restaron'} ${(() => { const d = Core.split(Math.abs(s.delta), s.u); return (d.cj ? fmt(d.cj) + ' cj ' : '') + (d.un || !d.cj ? fmt(d.un) + ' u' : '') + (d.cj ? ' (' + fmt(Math.abs(s.delta)) + ' u)' : ''); })()} → total <b>${fmt(res.cj)} cj ${fmt(res.un)} u</b>.${res.antes !== undefined && res.antes !== s.antes ? ` <span class="small">(había ${fmt(res.antes)} u guardadas, no ${fmt(s.antes)}: otro celular había contado este artículo)</span>` : ''}`;
-    { const d = Core.split(Math.abs(s.delta), s.u); avisoGuardado(s.delta >= 0 ? 'Sumado' : 'Restado', S.maestro[c]?.d || c, `${s.delta >= 0 ? '+' : '−'} ${d.cj ? fmt(d.cj) + ' cj ' : ''}${d.un || !d.cj ? fmt(d.un) + ' u' : ''}<br>Total: <b>${fmt(res.cj)}</b> cajas · <b>${fmt(res.un)}</b> unidades`, s.delta < 0); }
+    S.ui.okMsg = `✓ Actualizado <b>${esc(dDep(c))}</b>: ${s.delta >= 0 ? 'se sumaron' : 'se restaron'} ${(() => { const d = Core.split(Math.abs(s.delta), s.u); return (d.cj ? fmt(d.cj) + ' cj ' : '') + (d.un || !d.cj ? fmt(d.un) + ' u' : '') + (d.cj ? ' (' + fmt(Math.abs(s.delta)) + ' u)' : ''); })()} → total <b>${fmt(res.cj)} cj ${fmt(res.un)} u</b>.${res.antes !== undefined && res.antes !== s.antes ? ` <span class="small">(había ${fmt(res.antes)} u guardadas, no ${fmt(s.antes)}: otro celular había contado este artículo)</span>` : ''}`;
+    { const d = Core.split(Math.abs(s.delta), s.u); avisoGuardado(s.delta >= 0 ? 'Sumado' : 'Restado', dDep(c), `${s.delta >= 0 ? '+' : '−'} ${d.cj ? fmt(d.cj) + ' cj ' : ''}${d.un || !d.cj ? fmt(d.un) + ' u' : ''}<br>Total: <b>${fmt(res.cj)}</b> cajas · <b>${fmt(res.un)}</b> unidades`, s.delta < 0); }
     document.querySelectorAll('[data-dirty]').forEach(el => delete el.dataset.dirty);
     const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; }
     render(); focoBusqueda();
@@ -2180,7 +2182,7 @@ async function leerFoto(file) {
     if (!code) throw new Error('No encontré ningún código de barras en la foto');
     msg.innerHTML = '';
     S.ui.ultimaFoto = code; S.ui.porFoto = true;
-    const sc = $('#scan'); if (sc) sc.value = code; (scanDestino || onScan)(code);
+    (scanDestino || onScan)(code);
   } catch (e) {
     msg.innerHTML = '<div class="banner warn"><span class="grow">' + esc(e.message || 'No pude leer el código') + '. Probá con el código de barras ocupando buena parte de la foto, derecho y con luz, o escribí el número.<br><span class="small muted">' + esc(pasos.join(' · ')) + '</span></span></div>';
   } finally { URL.revokeObjectURL(url); }
@@ -2292,7 +2294,6 @@ async function abrirEscaner() {
     scanLog('código leído ' + code);
     cerrarEscaner('leído');
     S.ui.ultimaFoto = code; S.ui.porFoto = true; S.ui.porEscaner = true;
-    const sc = $('#scan'); if (sc) sc.value = code;
     (scanDestino || onScan)(code);
   };
   if (detector) {
@@ -2358,6 +2359,7 @@ function vMaestro() {
   const rows = items.map(i => `<tr class="${i.baja ? 'muted' : ''}">
     <td><span class="code">${esc(i.c)}</span></td>
     <td><input type="text" id="m-d-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="d" value="${esc(i.d)}" style="width:100%;min-width:240px"></td>
+    <td><input type="text" id="m-dc-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="dc" value="${esc(i.dc || '')}" placeholder="${esc(String(i.d || '').slice(0, 24))}…" maxlength="40" style="width:100%;min-width:150px" title="Lo que ve depósito. Vacío = la descripción completa"></td>
     <td><select id="m-s-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="s"><option ${i.s === 'FRIO' ? 'selected' : ''}>FRIO</option><option ${i.s === 'SECO' ? 'selected' : ''}>SECO</option></select></td>
     <td class="n"><input type="number" id="m-o-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="o" value="${i.o ?? ''}" style="width:64px"></td>
  <td class="n mono small" style="white-space:nowrap">${sisTxt(i.c)}</td>
@@ -2375,7 +2377,7 @@ function vMaestro() {
     ${hu.length ? `<div class="panel stack"><h3>Con stock en los archivos pero fuera de la lista</h3><div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">SAP</th><th class="n">Yasukawa</th><th></th></tr></thead><tbody>${hu.map(h => `<tr><td class="code">${esc(h.c)}</td><td>${esc(h.d)}</td><td class="n">${fmt(h.sap)}</td><td class="n">${fmt(h.yasu)}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="FRIO">+ Frío</button><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="SECO">+ Seco</button><button class="btn sm" data-act="mignorar" data-c="${esc(h.c)}" title="No tener en cuenta: no se avisa más y no entra en ningún cruce">No tener en cuenta</button></div></td></tr>`).join('')}</tbody></table></div></div>` : ''}
     ${ign.length ? `<div class="panel small row" style="gap:6px"><b>No se tienen en cuenta:</b> ${ign.map(c => `<span class="pill">${esc(c)} <button class="link" data-act="mdesignorar" data-c="${esc(c)}" title="Volver a tenerlo en cuenta">✕</button></span>`).join(' ')}</div>` : ''}
     <div class="panel row"><b>Agregar artículo</b><input type="text" id="nuevoCod" placeholder="Código (ej. 1031)" style="width:140px" class="mono"><select id="nuevoSec"><option>FRIO</option><option>SECO</option></select><button class="btn" data-act="mnuevo">Agregar</button></div>
-    <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th>Sector</th><th class="n">Orden</th><th class="n">Sistema</th><th class="n">Un/caja</th><th class="n" title="Bases por pallet">Bases/pallet</th><th class="n" title="Bultos por base">Bultos/base</th><th class="n" title="Unidades por bulto">Un/bulto</th><th>Códigos de barras</th><th>Cálculo</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="12" class="empty">Sin artículos.</td></tr>'}</tbody></table></div>
+    <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th title="Lo que ve depósito en lugar de la descripción completa">Desc. corta (depósito)</th><th>Sector</th><th class="n">Orden</th><th class="n">Sistema</th><th class="n">Un/caja</th><th class="n" title="Bases por pallet">Bases/pallet</th><th class="n" title="Bultos por base">Bultos/base</th><th class="n" title="Unidades por bulto">Un/bulto</th><th>Códigos de barras</th><th>Cálculo</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="12" class="empty">Sin artículos.</td></tr>'}</tbody></table></div>
   </div>`;
 }
 function editarMaestro(c, k, v) {
@@ -2744,7 +2746,7 @@ function vHistorial() {
 /* ---------- Opciones ---------- */
 /* ---------- Opciones → Base de datos: plantilla, reemplazo y backup ---------- */
 const BD_HOJAS = [
-  ['ARTICULOS', 'articulos', 'Lista de artículos', ['codigo', 'descripcion', 'sector', 'orden', 'uxc', 'ean', 'queso', 'peso', 'baja', 'bases_pallet', 'bultos_base', 'u_bulto']],
+  ['ARTICULOS', 'articulos', 'Lista de artículos', ['codigo', 'descripcion', 'desc_corta', 'sector', 'orden', 'uxc', 'ean', 'queso', 'peso', 'baja', 'bases_pallet', 'bultos_base', 'u_bulto']],
   ['AJUSTES', 'ajustes', 'Ajustes (pendientes y pasados)', ['id', 'codigo', 'unidades', 'tipo', 'motivo', 'fecha', 'estado', 'pasado_ts', 'pasado_por', 'ts']],
   ['CIERRES', 'cierres', 'Historial: un renglón por artículo y día', ['fecha', 'codigo', 'descripcion', 'sector', 'uxc', 'queso', 'sap', 'ya', 'sk', 'pe', 'aj', 'sis', 'cont', 'dif', 'motivo', 'obs', 'nota', 'imp', 'por']],
   ['CIERRES_RESUMEN', 'cierres_resumen', 'Historial: un renglón por día cerrado', ['fecha', 'origen', 'articulos', 'contados', 'con_dif', 'sobra', 'falta', 'importe', 'por', 'ts', 'archivos']],
@@ -3864,7 +3866,7 @@ document.addEventListener('click', async e => {
       S.ui.borrarConf = null;
       for (const k of ['cj', 'un', 'acj', 'aun', 'nota', '_pal', '_bas', '_bul', '_un']) delete DD[c + k];
       const ok = await guardarConteo(c, { cj: null, un: null, rec: false, nota: '', ok: false, sisOk: null });
-      if (ok) { S.ui.yaContado = null; S.ui.okMsg = `Conteo eliminado: <b>${esc(S.maestro[c]?.d || c)}</b> queda sin contar.`; render(); }
+      if (ok) { S.ui.yaContado = null; S.ui.okMsg = `Conteo eliminado: <b>${esc(dDep(c))}</b> queda sin contar.`; render(); }
       break;
     }
     case 'movDia': cerrarMenuArt(); S.ui.det = c; S.ui.detVista = 'mov'; if (!movimientosLocal()) cargarMovsRemoto(); renderSheet(); break;
@@ -3969,9 +3971,9 @@ async function guardarDeposito(c) {
   if (ok) {
     delete DD[c + 'cj']; delete DD[c + 'un']; delete DD[c + 'nota']; for (const k of ['pal', 'bas', 'bul', 'un']) delete DD[c + '_' + k];
     if (S.ui.detAb) delete S.ui.detAb[c];
-    avisoGuardado('Guardado', S.maestro[c]?.d || c, `<b>${fmt(patch.cj)}</b> cajas · <b>${fmt(patch.un)}</b> unidades`);
+    avisoGuardado('Guardado', dDep(c), `<b>${fmt(patch.cj)}</b> cajas · <b>${fmt(patch.un)}</b> unidades`);
     S.ui.yaContado = null; delete DD[c + 'acj']; delete DD[c + 'aun'];
-    S.ui.okMsg = `✓ Guardado <b>${esc(S.maestro[c]?.d || c)}</b>: ${fmt(patch.cj)} cj ${fmt(patch.un)} u. Los ya contados se ven en "Todos".`;
+    S.ui.okMsg = `✓ Guardado <b>${esc(dDep(c))}</b>: ${fmt(patch.cj)} cj ${fmt(patch.un)} u. Los ya contados se ven en "Todos".`;
     S.ui.foco = null;
     document.querySelectorAll('[data-dirty]').forEach(el => delete el.dataset.dirty);
     const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; render(); focoBusqueda(); }
@@ -3992,7 +3994,8 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'dnota') DD[t.dataset.c + 'nota'] = t.value;
   if (t.dataset.act === 'dsum') { if (/^-/.test(t.value)) t.value = t.value.replace(/^-+/, ''); DD[t.dataset.c + t.dataset.k] = t.value; const el = document.getElementById('ds-' + t.dataset.c); if (el) el.innerHTML = textoSuma(t.dataset.c); }
   if (t.dataset.act === 'ddet') { DD[t.dataset.c + '_' + t.dataset.k] = t.value; aplicarDetalle(t.dataset.c); }
-  if (t.dataset.act === 'scan' && !/^\d+$/.test(t.value.trim())) { S.ui.q = t.value; S.ui.foco = null; render(); }
+  // Se filtra mientras escriben; un número largo (código de barras de un lector USB) espera el Enter
+  if (t.dataset.act === 'scan' && !/^\d{8,}$/.test(t.value.trim())) { S.ui.q = t.value; S.ui.foco = null; render(); }
 });
 document.addEventListener('change', async e => {
   const t = e.target, a = t.dataset?.act, c = t.dataset?.c;
