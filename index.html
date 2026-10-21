@@ -67,6 +67,11 @@ h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0}
 .art-menu button{display:grid;gap:1px;text-align:left;background:none;border:0;border-radius:8px;padding:9px 10px;cursor:pointer;color:inherit;font:inherit}
 .art-menu button:hover,.art-menu button:focus-visible{background:var(--sunk,#f1f3f5)}
 .card .t button.tit{display:block;font-weight:600;overflow-wrap:anywhere;text-align:left;padding:0;font-size:inherit}
+/* Celular: textos de ayuda en un renglón (tocándolos se ven enteros) */
+@media (max-width:720px){:root:not([data-vista="pc"]) .ayuda,:root:not([data-vista="pc"]) .opsec-body > .small.muted,:root:not([data-vista="pc"]) h2 + .small.muted{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;cursor:pointer}}
+:root[data-vista="movil"] .ayuda,:root[data-vista="movil"] .opsec-body > .small.muted,:root[data-vista="movil"] h2 + .small.muted{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;cursor:pointer}
+.ayuda.abierta,.opsec-body > .small.muted.abierta,h2 + .small.muted.abierta{-webkit-line-clamp:unset !important;display:block !important}
+.card [id^="ds-"]:empty{display:none}
 .card .ya-contado{border-top:1px dashed var(--line);padding-top:6px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .card.sumando .sumar{background:color-mix(in srgb,var(--ok) 8%,transparent);border-radius:8px;padding:6px}
 td.val{white-space:nowrap;font-family:var(--f-mono)}
@@ -176,6 +181,7 @@ html,body{overflow-x:clip}
 .card .det-in input{width:76px}
 .card .in.sumar{border-top:1px dashed var(--line,#d8dce2);padding-top:6px;flex-wrap:wrap}
 .card .in.sumar input{width:76px}
+@media (max-width:720px){:root:not([data-vista="pc"]) .card .in.sumar input{width:62px}:root:not([data-vista="pc"]) .card .in.sumar .modo{min-width:0 !important;padding-inline:10px}}
 .card .det-in label .small{font-size:11px}
 .card .val{font-family:var(--f-mono);font-size:15px;text-align:right}
 .prog{height:6px;background:var(--sunk);border-radius:99px;overflow:hidden}
@@ -286,7 +292,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb79';
+window.__VERSION = 'sb80';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +315,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb79</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb80</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1823,8 +1829,8 @@ function vContar() {
     const sumando = done && !cerrado && S.ui.yaContado === i.c;
     return `<div class="card ${done ? 'done' : ''} ${x?.rec ? 'rec' : ''} ${S.ui.foco === i.c ? 'focus' : ''} ${sumando ? 'sumando' : ''}" id="card-${esc(i.c)}">
       <div class="t"><button class="link tit" data-act="artMenu" data-c="${esc(i.c)}" title="${esc(i.d)} · tocá para ver el historial o los movimientos">${esc(i.dc || i.d)}</button><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
-      ${sumando ? `<div class="val small muted" style="text-align:right">ya contado</div>${sumarHtml(i)}<div class="ya-contado" style="grid-column:1/-1"><span class="lbl">Ya contado</span> <b class="mono" style="font-size:17px">${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u</b> <span class="small muted">${esc(nom(x.by))} ${hora(x.ts)} · para corregir el total, cambiá Cajas y Unidades</span></div>` : `<div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>`}
-      ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" ${IM()} id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" ${IM()} id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn pri" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end">Guardar</button></div>
+      ${sumando ? `<div class="val"></div><div class="ya-contado" style="grid-column:1/-1"><span class="lbl">Ya contado</span> <b class="mono" style="font-size:17px">${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u</b> <span class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</span></div>${sumarHtml(i)}` : `<div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>`}
+      ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" ${IM()} id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" ${IM()} id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn ${sumando ? '' : 'pri'}" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end" ${sumando ? 'title="Reemplaza el total ya contado por estas cajas y unidades"' : ''}>${sumando ? 'Corregir total' : 'Guardar'}</button></div>
       ${verSis && (S.admin || x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
       ${done && !sumando ? sumarHtml(i) : ''}
       ${done && !cerrado ? (S.ui.borrarConf === i.c ? `<div class="row small" style="grid-column:1/-1;gap:6px;color:var(--bad)">¿Eliminar el conteo? Queda sin contar. <button class="btn xs danger" data-act="dborrarOk" data-c="${esc(i.c)}">Sí, eliminar</button><button class="btn xs" data-act="dborrarNo" data-c="${esc(i.c)}">No</button></div>` : `<div class="row" style="grid-column:1/-1;justify-content:flex-end"><button class="btn xs danger" data-act="dborrar" data-c="${esc(i.c)}">Eliminar conteo</button></div>`) : ''}
@@ -1840,14 +1846,14 @@ function vContar() {
     <div class="scan">
       <div class="bar"><input type="search" id="scan" data-act="scan" placeholder="Buscar artículo" autocomplete="off" enterkeyhint="search" value="${esc(S.ui.q)}"><button class="btn pri" data-act="escanear" title="Escanear con la cámara en vivo">Escanear</button><button class="btn" data-act="recargar" title="Actualizar la página (trae la última versión y los datos al día)" aria-label="Actualizar la página" style="padding-inline:12px;font-size:19px;line-height:1">↻</button></div>
       ${S.ui.confRecarga ? `<div class="banner warn"><span class="grow">Hay cantidades escritas que todavía no se guardaron. Si actualizás, se pierden.</span><button class="btn sm danger" data-act="recargarOk">Actualizar igual</button><button class="btn sm" data-act="recargarNo">Cancelar</button></div>` : ''}
-      <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Después de guardar, volver a escanear</label>${esTactil() ? `<button class="btn xs" data-act="teclado" title="Elegir qué teclado aparece al cargar cajas y unidades">Teclado: <b>${tecladoApp() ? 'chico (de la app)' : 'del celular'}</b></button>` : ''}</div>
+      <div class="row small" style="justify-content:space-between"><label class="row" style="gap:6px"><input type="checkbox" id="contScan" data-act="contScan" ${S.ui.cont ? 'checked' : ''}> Reabrir la cámara al guardar</label>${esTactil() ? `<button class="btn xs" data-act="teclado" title="Elegir qué teclado aparece al cargar cajas y unidades">Teclado: <b>${tecladoApp() ? 'app' : 'celular'}</b></button>` : ''}</div>
       <div class="row" style="justify-content:space-between">${chipsSector(items)}
         <div class="chips">${[['pend', 'Pendientes', sec.length - hechos + sec.filter(i => contado(i.c) && k(i.c)?.rec).length], ['cont', 'Contados', hechos], ['dif', 'Con diferencia', nDif], ['todos', 'Todos', sec.length]].map(([v, n, c]) => `<button class="chip" data-act="solo" data-v="${v}" aria-pressed="${S.ui.solo === v}">${n}<span class="c">${c}</span></button>`).join('')}</div></div>
       <div class="row small"><span><b class="mono">${hechos}</b> de <b class="mono">${sec.length}</b> contados</span><div class="prog" style="flex:1;min-width:120px"><i style="width:${pct}%"></i></div></div>
     </div>
     <div id="scanMsg">${scanMsgHtml()}</div>
-    ${S.scanLog.length ? `<details class="panel small" id="scanLogDet" ${S.ui.logAbierto ? 'open' : ''}><summary class="muted">Registro de la cámara (solo si hay un problema)</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
-    ${S.ui.foco && vis.length ? `<div class="row small" style="justify-content:space-between;align-items:center;margin:2px 0"><span class="muted">Mostrando solo el artículo escaneado.</span><button class="btn sm" data-act="verTodos">Ver todos</button></div>` : ''}
+    ${opt('verLogCam') && S.scanLog.length ? `<details class="panel small" id="scanLogDet" ${S.ui.logAbierto ? 'open' : ''}><summary class="muted">Registro de la cámara</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
+    ${S.ui.foco && vis.length ? `<div class="row small" style="justify-content:space-between;align-items:center;margin:2px 0"><span class="muted">Solo el escaneado</span><button class="btn xs" data-act="verTodos">Ver todos</button></div>` : ''}
     <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : S.ui.solo === 'cont' ? 'Todavía no se contó ningún artículo en este sector.' : S.ui.solo === 'dif' ? (hayDif ? 'No hay diferencias en este sector: todo lo contado coincide con el sistema.' : 'Todavía no se cargaron los archivos del día en Administración: sin el stock del sistema no se pueden ver las diferencias.') : 'No hay artículos con este filtro.'}</div>`}</div>
   </div>`;
 }
@@ -2001,6 +2007,7 @@ function pasarAUnidades(el) {
     if (un) { un.focus(); try { if (!un.readOnly) un.select(); } catch { } }
   }, 1500);
 }
+document.addEventListener('click', e => { const a = e.target.closest?.('.ayuda, .opsec-body > .small.muted, h2 + .small.muted'); if (a && !e.target.closest('button, a, input, select, label')) a.classList.toggle('abierta'); });
 document.addEventListener('click', e => { const tr = e.target.closest?.('tr[data-mk]'); if (tr && !e.target.closest('button, a, input, select')) { movOkToggle(tr.dataset.mk); tr.classList.toggle('okr'); } });
 document.addEventListener('click', e => { const el = e.target; if (esNum(el) && el.readOnly && tecladoApp()) { if (document.activeElement !== el) el.focus(); teclaMostrar(el); } });
 document.addEventListener('focusin', e => {
@@ -2042,8 +2049,8 @@ window.addEventListener('scroll', cerrarMenuArt, { passive: true });
 function sumarHtml(i) {
   const c = i.c, resta = modoSuma(c) === 'restar';
   const campo = (k, n) => `<label>${n}<input type="number" ${IM()} min="0" id="d-${k}-${esc(c)}" data-act="dsum" data-c="${esc(c)}" data-k="${k}" value="${esc(DD[c + k] ?? '')}" placeholder="0"></label>`;
-  return `<div class="in sumar" style="grid-column:1/-1"><button class="btn ${resta ? 'danger' : 'ok'} modo" data-act="dmodo" data-c="${esc(c)}" title="Tocá para cambiar entre sumar y restar" style="align-self:end;min-width:96px">${resta ? '− Restar' : '+ Sumar'}</button>${campo('acj', 'Cajas')}${campo('aun', 'Unidades')}<button class="btn" data-act="dsumar" data-c="${esc(c)}" style="align-self:end">${resta ? 'Guardar resta' : 'Guardar suma'}</button></div>
-    <div class="small muted" id="ds-${esc(c)}" style="grid-column:1/-1">${textoSuma(c) || (resta ? 'Cargá en positivo lo que hay que descontar de lo ya contado.' : 'Cargá en positivo lo que encontraste de más. Tocá el botón para cambiar a Restar.')}</div>`;
+  return `<div class="in sumar" style="grid-column:1/-1"><button class="btn ${resta ? 'danger' : 'ok'} modo" data-act="dmodo" data-c="${esc(c)}" title="Tocá para cambiar entre sumar y restar" style="align-self:end;min-width:96px">${resta ? '− Restar' : '+ Sumar'}</button>${campo('acj', 'Cajas')}${campo('aun', 'Unidades')}<button class="btn" data-act="dsumar" data-c="${esc(c)}" style="align-self:end">Guardar</button></div>
+    <div class="small muted" id="ds-${esc(c)}" style="grid-column:1/-1">${textoSuma(c)}</div>`;
 }
 function sumaDe(c) {
   const kx = S.conteos[c] || {}, u = uxcDe(c);
@@ -3170,6 +3177,7 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">La variación de Yasukawa (en hormas) se aplica en los tres casos. No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
+      <label class="row" style="gap:8px"><input type="checkbox" id="oLogCam" ${opt('verLogCam') ? 'checked' : ''}> <span>Mostrar el <b>registro de la cámara</b> en Depósito (solo para revisar un problema con el escáner)</span></label>
       <span class="small muted">Lo contado que no coincide con el sistema ya le aparece solo a depósito en <b>Con diferencia</b>. El botón sirve para pedir que vuelvan a contar un artículo puntual aunque no tenga diferencia (aparece en Con diferencia, en amarillo).</span>
       <label class="stack" style="gap:4px"><span class="lbl">Movimientos: margen para resaltar en amarillo (%)</span><input type="number" id="oTol" value="${esc(tolMov())}" min="0" max="100" step="0.5" inputmode="decimal" style="max-width:110px"><span class="small muted">En Movimientos del día se pintan las filas cuya cantidad coincide con la diferencia entre contado y sistema, con este margen de más o de menos. Con 0 solo se pinta la coincidencia exacta.</span></label>
       <label class="stack" style="gap:4px"><span class="lbl">Destinatarios del mail de cierre</span><textarea id="oDest" style="min-height:60px">${esc(opt('destinatarios'))}</textarea></label>
@@ -4129,7 +4137,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, verLogCam: $('#oLogCam').checked, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
