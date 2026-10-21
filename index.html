@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb76';
+window.__VERSION = 'sb77';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb76</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb77</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2560,6 +2560,34 @@ function valGrupos(filas) {
   }
   return [...G.values()].sort((a, b) => Math.abs(b.imp) - Math.abs(a.imp)).map(g => ({ ...g, arts: [...g.arts.values()].sort((a, b) => Math.abs(b.imp) - Math.abs(a.imp)) }));
 }
+/* Correos → Cierre de stock en Excel: código, descripción, cajas y unidades de la fecha elegida (hoja FRIO y hoja SECO) */
+function vCierreXls() {
+  const X = S.ui.cxls ||= { fecha: S.cierre?.fecha || S.anteriorFecha || hoyISO() };
+  return `<div class="panel stack"><b>Cierre de stock en Excel</b><span class="small muted">Código, descripción, cajas y unidades del cierre de la fecha que elijas: una hoja para Frío y otra para Seco. Lo no contado sale con el stock del sistema de ese día.</span>
+    <div class="row" style="gap:10px;align-items:end;flex-wrap:wrap"><label class="stack" style="gap:2px"><span class="lbl">Fecha del cierre</span><input type="date" data-act="cxlsF" value="${esc(X.fecha)}" max="${hoyISO()}"></label>
+      <button class="btn pri" data-act="cxlsBajar" ${X.cargando ? 'disabled' : ''}>${X.cargando ? 'Buscando el cierre…' : 'Descargar Excel'}</button></div></div>`;
+}
+async function cierreXls() {
+  const X = S.ui.cxls ||= { fecha: hoyISO() }, f = X.fecha;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f || '')) { toast('Elegí la fecha del cierre.'); return; }
+  X.cargando = true; render();
+  let c = null;
+  try { c = (await API.call('listarCierres', f.slice(0, 7))).find(x => x.fecha === f) || null; }
+  catch (e) { toast('No se pudo buscar el cierre: ' + e.message); }
+  X.cargando = false; render();
+  if (!c) { toast('No hay un cierre guardado del ' + dmy(f) + '.'); return; }
+  const ord = l => S.maestro[l.c]?.o ?? 999;
+  const hoja = sec => [['CODIGO', 'DESCRIPCION', 'CAJAS', 'UNIDADES'], ...(c.lineas || []).filter(l => (l.s || '') === sec)
+    .sort((a, b) => ord(a) - ord(b) || String(a.c).localeCompare(String(b.c), 'es', { numeric: true }))
+    .map(l => { const q = l.cont !== null && l.cont !== undefined ? l.cont : l.sis, sp = Core.split(Core.num(q), l.u || 1); return [l.c, l.d || S.maestro[l.c]?.d || '', sp.cj, sp.un]; })];
+  try {
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('FRIO')), 'FRIO');
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('SECO')), 'SECO');
+    descargar('STOCK ILOLAY ' + dm(f).replace('/', ' ') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    toast('Excel del cierre del ' + dmy(f) + ' descargado.');
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
+}
 function vValorizado() {
   const V = S.ui.val ||= { ...valPeriodo('sem'), per: 'sem' };
   const per = [['sem', 'Semanal'], ['quin', 'Quincenal'], ['mes', 'Mensual']].map(([k, n]) => `<button class="chip" data-act="valPer" data-v="${k}" aria-pressed="${V.per === k}">${n}</button>`).join('');
@@ -2654,6 +2682,7 @@ function vCorreos() {
       ${c ? `<span class="small muted">Stock del ${diaSem(c.fecha)} ${dmy(c.fecha)}, cerrado por ${esc(c.por || '—')}.</span>
       <div class="row"><button class="btn pri" data-act="copiarMail">Copiar resumen para el mail</button><button class="btn" data-act="pdfCierre">Descargar PDF del cierre</button></div>` : `<span class="small muted">El stock del ${dm(S.dia)} todavía no está cerrado. Cuando lo cierres, desde acá copiás el resumen y bajás el PDF. Los cierres anteriores están en <button class="link" data-act="tab" data-v="historial">Historial</button>.</span>`}
     </div>
+    ${vCierreXls()}
     ${vValorizado()}
   </div>`;
 }
@@ -3923,6 +3952,7 @@ document.addEventListener('click', async e => {
     case 'valMail': valCopiar(); break;
     case 'valPdf': valPdf(); break;
     case 'valExcel': valExcel(); break;
+    case 'cxlsBajar': cierreXls(); break;
     case 'qGuardar': guardarQuesos(false); break;
     case 'qBorrar': guardarQuesos(true); break;
     case 'qHibrido': { const data = { ...S.opciones, quesoSap: 'hibrido', ts: Date.now() }; try { await API.call('guardarOpciones', data); S.opciones = data; toast('Modo híbrido de quesos activado.'); } catch (er) { toast('No se pudo guardar: ' + er.message); } recalc(); render(); break; }
@@ -4010,6 +4040,7 @@ document.addEventListener('change', async e => {
   if (a === 'cliF') { (S.ui.cliF ||= {})[t.dataset.k] = t.value; render(); return; }
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
+  if (a === 'cxlsF') { (S.ui.cxls ||= {}).fecha = t.value; render(); return; }
   if (a === 'valF') { const V = S.ui.val ||= valPeriodo('sem'); V[t.dataset.k] = t.value; V.per = ''; render(); return; }
   if (a === 'ajFil') { S.ui.ajFil = t.value; S.ui.ajConfDel = false; render(); return; }
   if (a === 'ajSelFil') { const sel = S.ui.ajSel ||= new Set(), fil = S.ui.ajFil || ''; for (const x of S.ajustes.filter(x => !fil || motivoKey(x.m) === fil)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } S.ui.ajConfDel = false; render(); return; }
