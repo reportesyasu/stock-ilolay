@@ -308,7 +308,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb84';
+window.__VERSION = 'sb85';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -331,7 +331,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb84</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb85</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3253,6 +3253,15 @@ function partirTxt(s, w, size, bold) {
   return out.length ? out : [''];
 }
 /* PDF de diferencias del día (stock sin cerrar): solo código, descripción, sistema, contado, diferencia y un espacio para escribir el motivo */
+// Cajas y unidades en dos valores separados (sin "cj"/"u": lo dice el encabezado de la columna)
+function cjPartes(q, u) {
+  if (q === null || q === undefined || q === '') return ['', ''];
+  const sp = Core.split(Math.abs(q), u || 1), s = q < 0 ? '-' : '';
+  return [(sp.cj ? s : '') + fmt(sp.cj), (sp.un ? s : '') + fmt(sp.un)];
+}
+// Encabezado de dos renglones: arriba el grupo (SISTEMA / CONTADO / DIFERENCIA), abajo CAJAS / UNIDADES
+function gruposDe(cols) { const g = []; for (const cl of cols) { if (!cl.g) continue; const u = g[g.length - 1]; if (u && u.n === cl.g && u.cols[u.cols.length - 1] === cols[cols.indexOf(cl) - 1]) u.cols.push(cl); else g.push({ n: cl.g, cols: [cl] }); } return g; }
+function anchoGrupos(cols, size, pad) { for (const g of gruposDe(cols)) { const w = g.cols.reduce((s, c) => s + c.w, 0), need = anchoTxt(g.n, size, true) + pad; if (w < need) g.cols.forEach(c => c.w += (need - w) / g.cols.length); } }
 function armarPdfDif(c, t) {
   const cfg = S.ui.pdfDraft || pdfCfg();
   const P = pdfDoc(cfg.difApaisado !== false, cfg.difFuente);
@@ -3263,12 +3272,16 @@ function armarPdfDif(c, t) {
   const cols = [
     { k: 'c', n: 'CÓDIGO', v: l => l.c },
     { k: 'd', n: 'DESCRIPCIÓN', v: l => l.d || '' },
-    { k: 'sis', n: 'SISTEMA', a: 'r', v: l => CU(l.sis, l.u) },
-    { k: 'cont', n: 'CONTADO', a: 'r', v: l => CU(l.cont, l.u) },
-    { k: 'dif', n: 'DIFERENCIA', a: 'r', v: l => fmtS(l.dif) + ' U', b: true }
+    { k: 'sc', g: 'SISTEMA', n: 'CAJAS', a: 'r', v: l => cjPartes(l.sis, l.u)[0] },
+    { k: 'su', g: 'SISTEMA', n: 'UNIDADES', a: 'r', v: l => cjPartes(l.sis, l.u)[1] },
+    { k: 'cc', g: 'CONTADO', n: 'CAJAS', a: 'r', v: l => cjPartes(l.cont, l.u)[0] },
+    { k: 'cu', g: 'CONTADO', n: 'UNIDADES', a: 'r', v: l => cjPartes(l.cont, l.u)[1] },
+    { k: 'dif', g: 'DIFERENCIA', n: 'UNIDADES', a: 'r', v: l => fmtS(l.dif), b: true }
   ];
+  const GR = gruposDe(cols), bordes = () => GR.map(g => g.cols[0].x);
   // Anchos: las columnas de números toman lo que necesitan + aire; la descripción se queda con todo el resto (sin columna de motivo)
   for (const cl of cols) cl.w = Math.max(anchoTxt(cl.n, fs - 0.5, true), ...L.map(l => anchoTxt(cl.v(l), fs, !!cl.b))) + pad;
+  anchoGrupos(cols, fs - 0.5, pad);
   const desc = cols[1], fijo = cols.filter(cl => cl !== desc).reduce((s, cl) => s + cl.w, 0);
   desc.w = Math.max(120, ancho - fijo);
   let x = M; cols.forEach(cl => { cl.x = x; x += cl.w; });
@@ -3279,7 +3292,12 @@ function armarPdfDif(c, t) {
     P.nueva(); y = 24 + ft;
     P.text(M + 4, y, cortar('STOCK ILOLAY · Diferencias del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
     P.text(M + 4, y, cortar('Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · ' + L.length + ' artículo' + (L.length === 1 ? '' : 's') + ' con diferencia', ancho - 8, Math.max(6, fs - 1.5)), Math.max(6, fs - 1.5), false, 'l', '#666666'); y += 14;
-    P.rect(M, y, ancho, rowH, cfg.cHead); cols.forEach(cl => cel(cl, cl.n, y + rowH / 2 + fs * 0.35, true, '#000000', fs - 0.5)); y += rowH;
+    const hh = Math.round(fs * 1.7);
+    P.rect(M, y, ancho, hh * 2, cfg.cHead);
+    for (const g of GR) { const x0 = g.cols[0].x, x1 = g.cols[g.cols.length - 1].x + g.cols[g.cols.length - 1].w; P.text((x0 + x1) / 2, y + hh / 2 + fs * 0.35, g.n, fs - 0.5, true, 'c', '#000000'); P.line(x0 + 4, y + hh, x1 - 4, y + hh, '#8a8a8a', 0.5); }
+    cols.forEach(cl => cel(cl, cl.n, cl.g ? y + hh * 1.5 + fs * 0.35 : y + hh + fs * 0.35, true, '#000000', fs - 0.5));
+    bordes().forEach(x => P.line(x, y, x, y + hh * 2, '#8a8a8a', 0.5));
+    y += hh * 2;
   };
   pagina();
   let i = 0;
@@ -3295,6 +3313,7 @@ function armarPdfDif(c, t) {
     y += h;
     if (cfg.sep !== false) P.line(M, y, M + ancho, y, cS, gS);
     if (cfg.sepV) cols.slice(1).forEach(cl => P.line(cl.x, y - h, cl.x, y, cS, gS));
+    else bordes().forEach(x => P.line(x, y - h, x, y, cS, gS)); // siempre se separan sistema, contado y diferencia
   }
   return P.blob();
 }
@@ -3450,7 +3469,7 @@ function armarPdfDifMovs(c, difs, M, t) {
       const l = D.get(code), dif = Math.abs(l.dif), hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
       const rows = [...A.get(code).values()].sort((a, b) => a.boca.localeCompare(b.boca, 'es'));
       const sub = rows.reduce((s, r) => s + r.q, 0);
-      const dLin = partir(l.d || '', W.d - 2 * pad, fs, true), dDif = `Dif. ${fmtS(l.dif)} U · ${cjun(l.dif, l.u || 1)}`;
+      const dLin = partir(l.d || '', W.d - 2 * pad, fs, true), dDif = (() => { const [cj, un] = cjPartes(l.dif, l.u || 1); return `Diferencia: ${fmtS(l.dif)} unidades` + ((l.u || 1) > 1 && Math.abs(l.dif) >= (l.u || 1) ? ` (${cj} cajas y ${un} unidades)` : ''); })();
       rows.forEach((r, i) => {
         const bl = partir(r.boca, W.b - 2 * pad, fs, false);
         const izq = i === 0 ? dLin.length * lh + (lh - 2) : 0, h = Math.max(bl.length * lh, izq) + 4;
@@ -3632,7 +3651,7 @@ function pdfCierre(c, cfgIn, opts = {}) {
   const secc = esCierre ? (cfg.secciones || []).filter(s => s.v) : [{ k: 'dif', n: 'Artículos con diferencia', v: true }];
   const tiene = k => secc.some(s => s.k === k);
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(q, u || 1); return fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
-  const valor = (k, l) => ({ codigo: l.c, descripcion: l.d, sector: l.s === 'FRIO' ? 'Frío' : l.s === 'SECO' ? 'Seco' : (l.s || ''), sistema: cjun(l.sis, l.u), contado: cjun(l.cont, l.u),
+  const valor = (k, l) => ({ codigo: l.c, descripcion: l.d, sector: l.s === 'FRIO' ? 'Frío' : l.s === 'SECO' ? 'Seco' : (l.s || ''), sistema: cjun(l.sis, l.u), contado: cjun(l.cont, l.u), sisCj: cjPartes(l.sis, l.u)[0], sisUn: cjPartes(l.sis, l.u)[1], conCj: cjPartes(l.cont, l.u)[0], conUn: cjPartes(l.cont, l.u)[1],
     dif: l.dif ? fmtS(l.dif) : '0', valorizado: l.dif ? money(l.imp || 0) : '', motivo: l.dif ? (l.m || 'sin motivo') : '', obs: [l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · ') })[k];
   const dif = lin.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
   // Detalle de todo lo contado (con y sin diferencia), en el orden de la lista, separado por sector
@@ -3641,6 +3660,10 @@ function pdfCierre(c, cfgIn, opts = {}) {
   // Columnas visibles y autoajuste: cada columna mide lo que necesita el X % de las filas (X = cfg.autoPct)
   const vis = cfg.cols.filter(x => x.v).map(x => { const d = PDF_COLS.find(([k]) => k === x.k); return { k: x.k, n: x.n || d[1], a: d[2] }; });
   if (!vis.length) vis.push(...PDF_COLS.slice(0, 2).map(([k, n, a]) => ({ k, n, a })));
+  // Sistema y Contado: una columna para cajas y otra para unidades, con el nombre arriba de las dos
+  const ABRE = { sistema: ['sisCj', 'sisUn'], contado: ['conCj', 'conUn'] };
+  for (let i = vis.length - 1; i >= 0; i--) { const x = vis[i], p = ABRE[x.k]; if (p) vis.splice(i, 1, { k: p[0], n: 'Cajas', a: 'r', g: x.n }, { k: p[1], n: 'Unidades', a: 'r', g: x.n }); }
+  const GRc = gruposDe(vis);
   const pct = Math.max(10, Math.min(100, Number(cfg.autoPct) || 80)) / 100, pad = 8;
   const muestra = tiene('detalle') && contados.length ? contados : dif.length ? dif : contados;
   for (const col of vis) {
@@ -3648,6 +3671,7 @@ function pdfCierre(c, cfgIn, opts = {}) {
     const p = ws.length ? ws[Math.min(ws.length - 1, Math.max(0, Math.ceil(ws.length * pct) - 1))] : 0;
     col.w = Math.max(anchoTxt(col.n, fs - 0.5, true), p) + pad;
   }
+  anchoGrupos(vis, fs - 0.5, pad);
   // Si no entra, achican primero las columnas de texto (descripción, obs., motivo); los números conservan su ancho
   const flex = vis.filter(x => ['descripcion', 'obs', 'motivo', 'sector'].includes(x.k));
   const tot = () => vis.reduce((s, x) => s + x.w, 0);
@@ -3679,7 +3703,15 @@ function pdfCierre(c, cfgIn, opts = {}) {
     const t = cortar(txt, col.w - pad, size, bold);
     if (col.a === 'r') P.text(col.x + col.w - pad / 2, yy, t, size, bold, 'r', color); else P.text(col.x + pad / 2, yy, t, size, bold, 'l', color);
   };
-  const cabecera = () => { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); vis.forEach(col => celda(col, col.n, y + rowH - 2, true, '#000000', fs - 0.5)); y += rowH + 2 + fs + 2; };
+  const bordesG = () => GRc.map(g => g.cols[0].x);
+  const cabecera = () => {
+    if (!GRc.length) { P.rect(M, y, anchoTabla, rowH + 2, cfg.cHead); vis.forEach(col => celda(col, col.n, y + rowH - 2, true, '#000000', fs - 0.5)); y += rowH + 2 + fs + 2; return; }
+    P.rect(M, y, anchoTabla, rowH * 2 + 2, cfg.cHead);
+    for (const g of GRc) { const x0 = g.cols[0].x, x1 = g.cols[g.cols.length - 1].x + g.cols[g.cols.length - 1].w; P.text((x0 + x1) / 2, y + rowH - 2, cortar(g.n, x1 - x0 - 4, fs - 0.5, true), fs - 0.5, true, 'c', '#000000'); P.line(x0 + 3, y + rowH + 1, x1 - 3, y + rowH + 1, '#8a8a8a', 0.5); }
+    vis.forEach(col => celda(col, col.n, col.g ? y + rowH * 2 - 2 : y + rowH + fs * 0.4, true, '#000000', fs - 0.5));
+    bordesG().forEach(x => P.line(x, y, x, y + rowH * 2 + 2, '#8a8a8a', 0.5));
+    y += rowH * 2 + 2 + fs + 2;
+  };
   encabezado();
   // Ajustes del día del cierre (filtrados según Opciones: sin decomisos ni rotos)
   const { lista: ajDia, aprox: ajAprox } = esCierre ? ajustesDiaDe(c, cfg) : { lista: [], aprox: false };
@@ -3749,7 +3781,7 @@ function pdfCierre(c, cfgIn, opts = {}) {
     }
   };
   const ajTxt = l => {
-    if (Array.isArray(l.ajd) && l.ajd.length) return l.ajd.map(a => `Ajuste · ${TIPOS_AJ[a.t]?.n || a.t || ''}${a.m ? ' · motivo ' + a.m : ''}${a.o && a.o !== a.m ? ' · ' + a.o : ''}: ${fmtS(a.u)} u (${a.u < 0 ? '-' : '+'}${cjun(Math.abs(a.u), l.u)})${a.f ? ' · cargado el ' + dm(a.f) : ''}`);
+    if (Array.isArray(l.ajd) && l.ajd.length) return l.ajd.map(a => `Ajuste · ${TIPOS_AJ[a.t]?.n || a.t || ''}${a.m ? ' · motivo ' + a.m : ''}${a.o && a.o !== a.m ? ' · ' + a.o : ''}: ${fmtS(a.u)} unidades (${cjPartes(a.u, l.u)[0]} cajas y ${cjPartes(a.u, l.u)[1]} unidades)${a.f ? ' · cargado el ' + dm(a.f) : ''}`);
     return l.aj ? [`Ajustes pendientes incluidos en el sistema: ${fmtS(l.aj)} u`] : [];
   };
   const seccion = (titulo, lista, vacio, conAj) => {
@@ -3765,7 +3797,7 @@ function pdfCierre(c, cfgIn, opts = {}) {
         const color = (col.k === 'dif' || col.k === 'valorizado') && l.dif ? (l.dif < 0 ? cfg.cNeg : cfg.cPos) : col.k === 'dif' ? '#888888' : col.k === 'motivo' && !l.m ? '#888888' : col.k === 'obs' ? '#333333' : '#000000';
         celda(col, v, y, col.k === 'dif' && !!l.dif, color);
       }
-      sepV(vis.slice(1).map(x => x.x), y);
+      if (cfg.sepV) sepV(vis.slice(1).map(x => x.x), y); else bordesG().forEach(x => P.line(x, y - fs - 1, x, bajo(y), cS, gS));
       if (conAj) for (const t of ajTxt(l)) {
         y += Math.round(rowH * 0.85);
         if (y > P.H - 34) { encabezado(titulo + ' (continuación)'); cabecera(); }
@@ -3779,11 +3811,14 @@ function pdfCierre(c, cfgIn, opts = {}) {
     if (y > P.H - 60) encabezado();
     P.text(M + 4, y, nombre + ' (' + sin.length + ')', fs + 3, true, 'l', cfg.cTit); y += rowH + 2;
     if (!sin.length) { P.text(M + 4, y, 'Se contó todo.', fs + 1); y += rowH; return; }
-    const cw = Math.min(ancho, 520);
+    const cw = Math.min(ancho, 520), xU = M + cw - 4, xC = M + cw - 70;
+    const cabS = () => { P.rect(M, y - fs - 1, cw, rowH, cfg.cHead); P.text(M + 4, y, 'Código', fs - 0.5, true); P.text(M + 60, y, 'Descripción', fs - 0.5, true); P.text(xC, y, 'Sistema cajas', fs - 0.5, true, 'r'); P.text(xU, y, 'Unidades', fs - 0.5, true, 'r'); y += rowH; };
+    cabS();
     for (const l of sin) {
-      if (y > P.H - 34) encabezado(nombre + ' (continuación)');
-      P.text(M + 4, y, l.c, fs); P.text(M + 60, y, cortar(l.d, cw - 180, fs), fs); P.text(M + cw, y, 'sistema ' + cjun(l.sis, l.u), fs, false, 'r');
-      sepV([M + 56, M + cw - 116], y); sepH(y, M, cw); y += rowH;
+      if (y > P.H - 34) { encabezado(nombre + ' (continuación)'); cabS(); }
+      const [cj, un] = cjPartes(l.sis, l.u);
+      P.text(M + 4, y, l.c, fs); P.text(M + 60, y, cortar(l.d, cw - 200, fs), fs); P.text(xC, y, cj, fs, false, 'r'); P.text(xU, y, un, fs, false, 'r');
+      sepV([M + 56, M + cw - 136, M + cw - 66], y); sepH(y, M, cw); y += rowH;
     }
   };
   secc.forEach((s, i) => {
