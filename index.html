@@ -280,6 +280,7 @@ table.mini tr.ch td .muted{font-size:11.5px;font-weight:400}
 table.mini th:nth-child(1),table.mini td:nth-child(1){width:auto}
 .sheet .box .tablebox{overflow-x:auto;max-width:100%}
 .calc{font-family:var(--f-mono);font-size:13.5px;background:var(--sunk);border-radius:var(--r);padding:10px 12px;line-height:1.7;overflow-x:auto}
+.sheet .box{grid-auto-rows:max-content} /* que el cálculo y las tablas del detalle no se achiquen ni se corten */
 dl.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
 dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 .bars{display:grid;gap:8px;align-content:start}
@@ -311,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb87';
+window.__VERSION = 'sb88';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -334,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb87</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb88</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1140,7 +1141,11 @@ async function guardarConteo(c, patchIn) {
   // Optimista: se refleja ya en pantalla y se confirma con el servidor
   const prev = S.conteos[c];
   S.conteos[c] = { c, fecha: S.dia, cj: null, un: null, m: '', obs: '', nota: '', rec: false, by: null, ...(prev || {}), ...patch, ts: Date.now() };
-  if ('cj' in patch || 'un' in patch) S.conteos[c].by = S.me.id;
+  if ('cj' in patch || 'un' in patch) {
+    S.conteos[c].by = S.me.id;
+    const e = patch.carga && typeof patch.carga === 'object' ? patch.carga : { k: 'tot', cj: S.conteos[c].cj, un: S.conteos[c].un }, ent = { ...e, by: S.me.id, ts: Date.now() };
+    S.conteos[c].carga = e.k === 'sis' ? [...(Array.isArray(prev?.carga) ? prev.carga : []), ent] : [ent];
+  } else if (prev) S.conteos[c].carga = prev.carga;
   recalc(); render();
   try { await API.call('guardarConteo', S.dia, c, patch); programarRefresco(400); return true; }
   catch (e) { if (prev) S.conteos[c] = prev; else delete S.conteos[c]; recalc(); render(); toast('No se guardó: ' + e.message); return false; }
@@ -1806,6 +1811,7 @@ function renderSheetInner() {
   SHEET_T.innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="Detalle del artículo" data-stop="1">
     <div class="row" style="justify-content:space-between;align-items:start"><div><span class="lbl">${esc(l.s)} · ${esc(c)}</span><h3>${esc(l.d)}</h3></div><button class="btn sm" data-act="cerrarDet">Cerrar</button></div>
     <div class="calc">${calc}</div>
+    ${cargaHtml(c)}
     ${sap || fuera.length ? `<div><span class="lbl">SAP Ilolay</span><div class="tablebox"><table><thead><tr><th>Almacén</th><th>Tipo</th><th class="n">Stock</th><th>UMB</th></tr></thead><tbody>${(sap?.filas || []).map(f => `<tr><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>${esc(f.umb)}</td></tr>`).join('')}${fuera.map(f => `<tr class="muted"><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>excluido</td></tr>`).join('')}</tbody></table></div></div>` : ''}
     ${y ? `<dl class="kv"><dt>Yasukawa STK</dt><dd>${fmt(y.stk)}</dd><dt>Unid. por caja</dt><dd>${fmt(y.cap) || '—'}</dd><dt>Precio compra</dt><dd>${money2(y.precio)}</dd><dt>Código de barras</dt><dd>${esc(y.ean) || '—'}</dd></dl>` : ''}
     <div id="histArt">${histArtHtml(c)}</div>
@@ -2124,8 +2130,11 @@ async function sumarDeposito(c) {
   let res = null;
   try {
     // La suma la hace el servidor sobre lo que hay guardado en ese momento (no sobre lo que ve este celular)
-    res = await API.call('sumarConteo', S.dia, c, s.delta, s.u);
-    S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...(S.conteos[c] || {}), cj: res.cj, un: res.un, rec: false, ok: false, by: S.me.id, ts: Date.now() };
+    const carga = { k: s.signo > 0 ? 'sum' : 'res', cj: Math.abs(Number(DD[c + 'acj']) || 0), un: Math.abs(Number(DD[c + 'aun']) || 0), u: Math.abs(s.delta) };
+    res = await API.call('sumarConteo', S.dia, c, s.delta, s.u, carga);
+    const antes = S.conteos[c] || {};
+    S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...antes, cj: res.cj, un: res.un, rec: false, ok: false, by: S.me.id, ts: Date.now(),
+      carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: Date.now() }] };
     programarRefresco(400);
   } catch (e) {
     if (/desconocida/i.test(e.message)) {
@@ -2144,6 +2153,17 @@ async function sumarDeposito(c) {
     render(); focoBusqueda();
     if (reabrirEscaner) setTimeout(abrirEscaner, 300);
   }
+}
+/* Cómo lo cargó depósito, renglón por renglón y tal cual lo escribieron (pallets, bases, bultos, cajas, unidades; sumas y restas) */
+function cargaHtml(c) {
+  const k = S.conteos[c], L = Array.isArray(k?.carga) ? k.carga : [];
+  if (!L.length) return '';
+  const u = uxcDe(c), N = [['pal', 'pallet', 'pallets'], ['bas', 'base', 'bases'], ['bul', 'bulto', 'bultos'], ['cj', 'caja', 'cajas'], ['un', 'unidad', 'unidades']];
+  const uni = e => e.u !== undefined && e.u !== null ? Number(e.u) : (Number(e.cj) || 0) * u + (Number(e.un) || 0);
+  const que = e => { const p = N.filter(([x]) => Number(e[x])).map(([x, s1, pl]) => `<b>${fmt(e[x])}</b> ${Number(e[x]) === 1 ? s1 : pl}`); return p.join(' + ') || `<b>${fmt(uni(e))}</b> unidades`; };
+  const tit = { tot: 'Cargó', sum: 'Sumó', res: 'Restó', sis: 'Se tomó el sistema' }, sg = e => e.k === 'res' ? '− ' : e.k === 'sum' ? '+ ' : '';
+  const filas = L.map(e => `<tr><td class="small muted" style="white-space:nowrap">${e.ts ? hora(e.ts) : ''}</td><td class="small">${esc(nom(e.by))}</td><td>${tit[e.k] || 'Cargó'}${e.det ? ' <span class="small muted">(detallado)</span>' : ''}</td><td>${sg(e)}${que(e)}</td><td class="n" style="white-space:nowrap">${sg(e)}${fmt(uni(e))} u</td></tr>`).join('');
+  return `<div><span class="lbl">Cómo lo cargó depósito</span><div class="tablebox"><table><tbody>${filas}</tbody></table></div><div class="small muted">Total contado: ${fmt(k.cj ?? 0)} cj ${fmt(k.un ?? 0)} u = ${fmt((Number(k.cj) || 0) * u + (Number(k.un) || 0))} u (x${fmt(u)})</div></div>`;
 }
 function detalleHtml(i) {
   const a = armado(i.c);
@@ -3957,7 +3977,7 @@ document.addEventListener('click', async e => {
     case 'postBackup': bdDescargar(true); S.ui.postCierre = { ...S.ui.postCierre, backup: true }; render(); break;
     case 'postPdf': descargarPdfCierre(S.ui.postCierre?.doc); S.ui.postCierre = { ...S.ui.postCierre, pdf: true }; render(); break;
     case 'mail': copiarMail(); break;
-    case 'igual': { const l = LINES.find(x => x.c === c); if (l) await guardarConteo(c, { cj: l.sisCj, un: l.sisUn, by: S.me.id, rec: false }); break; }
+    case 'igual': { const l = LINES.find(x => x.c === c); if (l) await guardarConteo(c, { cj: l.sisCj, un: l.sisUn, by: S.me.id, rec: false, carga: { k: 'sis', cj: l.sisCj, un: l.sisUn } }); break; }
     case 'reabrirOk': await guardarConteo(c, { ok: false, sisOk: null }); break;
     case 'rec': { const k = S.conteos[c]; await guardarConteo(c, { rec: !(k?.rec) }); break; }
     case 'aStock': case 'aConteo': {
@@ -3967,7 +3987,7 @@ document.addEventListener('click', async e => {
       if (a === 'aConteo' && !motivo && !obs) { toast('Cargá un motivo o una observación antes de crear el ajuste.'); ($('#a-m-' + CSS.escape(c)) || $('#a-o-' + CSS.escape(c)))?.focus(); break; }
       t.disabled = true;
       if (a === 'aStock') {
-        await guardarConteo(c, { cj: l.sisCj, un: l.sisUn, m: motivo, obs: obs || ('Se tomó el stock del sistema; contado ' + fmt(l.contCj) + ' cj ' + fmt(l.contUn) + ' u'), by: S.me.id, rec: false, res: 'stock' });
+        await guardarConteo(c, { cj: l.sisCj, un: l.sisUn, m: motivo, obs: obs || ('Se tomó el stock del sistema; contado ' + fmt(l.contCj) + ' cj ' + fmt(l.contUn) + ' u'), by: S.me.id, rec: false, res: 'stock', carga: { k: 'sis', cj: l.sisCj, un: l.sisUn } });
         toast('Se tomó el stock del sistema para ' + c + '.');
       } else {
         try {
@@ -4115,6 +4135,16 @@ async function guardarDeposito(c) {
   const nota = $('#d-n-' + CSS.escape(c))?.value;
   const patch = { cj: cj === '' ? 0 : Number(cj), un: un === '' ? 0 : Number(un), by: S.me.id, rec: false };
   if (nota !== undefined) patch.nota = nota.trim();
+  // Se guarda tal cual lo cargaron: si usaron "Contar detallado" (y no cambiaron el resultado), los pallets, bases, bultos y unidades
+  patch.carga = { k: 'tot', cj: patch.cj, un: patch.un };
+  const tDet = totalDetalle(c);
+  if (tDet !== null) {
+    const sp = Core.split(tDet, uxcDe(c));
+    if (sp.cj === patch.cj && sp.un === patch.un) {
+      patch.carga = { k: 'tot', det: 1, u: tDet };
+      for (const [k] of armado(c).niveles) { const v = DD[c + '_' + k]; if (v !== undefined && v !== '') patch.carga[k] = Number(v) || 0; }
+    }
+  }
   const ok = await guardarConteo(c, patch);
   if (ok) {
     delete DD[c + 'cj']; delete DD[c + 'un']; delete DD[c + 'nota']; for (const k of ['pal', 'bas', 'bul', 'un']) delete DD[c + '_' + k];
