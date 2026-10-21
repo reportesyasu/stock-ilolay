@@ -286,7 +286,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb77';
+window.__VERSION = 'sb78';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -309,7 +309,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb77</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb78</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2562,9 +2562,11 @@ function valGrupos(filas) {
 }
 /* Correos → Cierre de stock en Excel: código, descripción, cajas y unidades de la fecha elegida (hoja FRIO y hoja SECO) */
 function vCierreXls() {
-  const X = S.ui.cxls ||= { fecha: S.cierre?.fecha || S.anteriorFecha || hoyISO() };
-  return `<div class="panel stack"><b>Cierre de stock en Excel</b><span class="small muted">Código, descripción, cajas y unidades del cierre de la fecha que elijas: una hoja para Frío y otra para Seco. Lo no contado sale con el stock del sistema de ese día.</span>
+  const X = S.ui.cxls ||= { fecha: S.cierre?.fecha || S.anteriorFecha || hoyISO(), soloU: (() => { try { return localStorage.getItem('cxlsU') === '1'; } catch { return false; } })(), pre: (() => { try { return localStorage.getItem('cxlsP') === '1'; } catch { return false; } })() };
+  return `<div class="panel stack"><b>Cierre de stock en Excel</b><span class="small muted">Código, descripción, cajas y unidades del cierre de la fecha que elijas (o todo pasado a unidades): una hoja para Frío y otra para Seco. Lo no contado sale con el stock del sistema de ese día.</span>
     <div class="row" style="gap:10px;align-items:end;flex-wrap:wrap"><label class="stack" style="gap:2px"><span class="lbl">Fecha del cierre</span><input type="date" data-act="cxlsF" value="${esc(X.fecha)}" max="${hoyISO()}"></label>
+      <label class="row small" style="gap:6px;align-self:center"><input type="checkbox" data-act="cxlsU" ${X.soloU ? 'checked' : ''}> Todo en unidades (sin separar cajas)</label>
+      <label class="row small" style="gap:6px;align-self:center"><input type="checkbox" data-act="cxlsP" ${X.pre ? 'checked' : ''}> Código con prefijo <span class="mono">'${esc(opt('prefijo') || '21/')}</span> (ej. <span class="mono">'${esc(opt('prefijo') || '21/')}1031</span>)</label>
       <button class="btn pri" data-act="cxlsBajar" ${X.cargando ? 'disabled' : ''}>${X.cargando ? 'Buscando el cierre…' : 'Descargar Excel'}</button></div></div>`;
 }
 async function cierreXls() {
@@ -2577,14 +2579,15 @@ async function cierreXls() {
   X.cargando = false; render();
   if (!c) { toast('No hay un cierre guardado del ' + dmy(f) + '.'); return; }
   const ord = l => S.maestro[l.c]?.o ?? 999;
-  const hoja = sec => [['CODIGO', 'DESCRIPCION', 'CAJAS', 'UNIDADES'], ...(c.lineas || []).filter(l => (l.s || '') === sec)
+  const soloU = !!X.soloU, cod = c2 => X.pre ? "'" + (opt('prefijo') || '21/') + c2 : c2;
+  const hoja = sec => [soloU ? ['CODIGO', 'DESCRIPCION', 'UNIDADES TOTALES'] : ['CODIGO', 'DESCRIPCION', 'CAJAS', 'UNIDADES'], ...(c.lineas || []).filter(l => (l.s || '') === sec)
     .sort((a, b) => ord(a) - ord(b) || String(a.c).localeCompare(String(b.c), 'es', { numeric: true }))
-    .map(l => { const q = l.cont !== null && l.cont !== undefined ? l.cont : l.sis, sp = Core.split(Core.num(q), l.u || 1); return [l.c, l.d || S.maestro[l.c]?.d || '', sp.cj, sp.un]; })];
+    .map(l => { const q = Core.num(l.cont !== null && l.cont !== undefined ? l.cont : l.sis), sp = Core.split(q, l.u || 1), d = l.d || S.maestro[l.c]?.d || ''; return soloU ? [cod(l.c), d, q] : [cod(l.c), d, sp.cj, sp.un]; })];
   try {
     const wb = XL.utils.book_new();
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('FRIO')), 'FRIO');
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('SECO')), 'SECO');
-    descargar('STOCK ILOLAY ' + dm(f).replace('/', ' ') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    descargar('STOCK ILOLAY ' + dm(f).replace('/', ' ') + (soloU ? ' (unidades)' : '') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel del cierre del ' + dmy(f) + ' descargado.');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
 }
@@ -4041,6 +4044,8 @@ document.addEventListener('change', async e => {
   if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'cxlsF') { (S.ui.cxls ||= {}).fecha = t.value; render(); return; }
+  if (a === 'cxlsP') { (S.ui.cxls ||= {}).pre = t.checked; try { localStorage.setItem('cxlsP', t.checked ? '1' : '0'); } catch { } render(); return; }
+  if (a === 'cxlsU') { (S.ui.cxls ||= {}).soloU = t.checked; try { localStorage.setItem('cxlsU', t.checked ? '1' : '0'); } catch { } render(); return; }
   if (a === 'valF') { const V = S.ui.val ||= valPeriodo('sem'); V[t.dataset.k] = t.value; V.per = ''; render(); return; }
   if (a === 'ajFil') { S.ui.ajFil = t.value; S.ui.ajConfDel = false; render(); return; }
   if (a === 'ajSelFil') { const sel = S.ui.ajSel ||= new Set(), fil = S.ui.ajFil || ''; for (const x of S.ajustes.filter(x => !fil || motivoKey(x.m) === fil)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } S.ui.ajConfDel = false; render(); return; }
