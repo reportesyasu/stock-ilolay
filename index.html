@@ -308,7 +308,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb83';
+window.__VERSION = 'sb84';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -331,7 +331,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb83</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb84</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1455,13 +1455,13 @@ function ponerMain(main, html) {
 }
 function snapshotFocus() {
   const a = document.activeElement;
-  if (!a || !a.id || !/INPUT|SELECT|TEXTAREA/.test(a.tagName)) return null;
+  if (!a || !a.id || !/INPUT|SELECT|TEXTAREA/.test(a.tagName) || /^(file|checkbox|radio|button|submit)$/i.test(a.type || '')) return null;
   return { id: a.id, v: a.value, s: a.selectionStart, e: a.selectionEnd, dirty: a.dataset.dirty === '1' };
 }
 function restoreFocus(k) {
   if (!k) return;
   const el = document.getElementById(k.id); if (!el) return;
-  if (k.dirty || el.tagName !== 'SELECT') { el.value = k.v; if (k.dirty) el.dataset.dirty = '1'; }
+  try { if (k.dirty || el.tagName !== 'SELECT') { el.value = k.v; if (k.dirty) el.dataset.dirty = '1'; } } catch { }
   el.focus({ preventScroll: true });
   try { if (k.s !== null && k.s !== undefined) el.setSelectionRange(k.s, k.e); } catch { }
 }
@@ -4091,9 +4091,9 @@ document.addEventListener('change', async e => {
   if (a === 'cbTipo') { const x = (S.codigosDet || []).find(y => y.ean === t.dataset.ean); if (x) x.t = t.value; try { await API.call('tipoCodigo', t.dataset.ean, t.value); } catch (er) { toast('No se pudo guardar: ' + er.message); } render(); return; }
   if (a === 'borrarCierre') { S.ui.borrar = { cierre: t.checked, conf: false }; render(); return; }
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
-  if (t.id === 'armFile' && t.files?.[0]) { armLeer(t.files[0]); t.value = ''; return; }
+  if (t.id === 'armFile' && t.files?.[0]) { const f = t.files[0]; t.blur(); t.value = ''; armLeer(f).catch(er => { S.ui.arm = { estado: '<span style="color:var(--bad)">No se pudo leer el archivo: ' + esc(er.message) + '</span>' }; try { render(); } catch { } }); return; }
   if (a === 'cliF') { (S.ui.cliF ||= {})[t.dataset.k] = t.value; render(); return; }
-  if (t.id === 'bdFile' && t.files?.[0]) { bdLeerArchivo(t.files[0]); t.value = ''; return; }
+  if (t.id === 'bdFile' && t.files?.[0]) { const f = t.files[0]; t.blur(); t.value = ''; bdLeerArchivo(f).catch(er => { S.ui.bd = { ocupado: false, estado: '<span style="color:var(--bad)">No se pudo leer el archivo: ' + esc(er.message) + '</span>' }; try { render(); } catch { } }); return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'cxlsF') { (S.ui.cxls ||= {}).fecha = t.value; render(); return; }
   if (a === 'cxlsP') { (S.ui.cxls ||= {}).pre = t.checked; try { localStorage.setItem('cxlsP', t.checked ? '1' : '0'); } catch { } render(); return; }
