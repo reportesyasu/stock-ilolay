@@ -72,6 +72,15 @@ h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0}
 :root[data-vista="movil"] .ayuda,:root[data-vista="movil"] .opsec-body > .small.muted,:root[data-vista="movil"] h2 + .small.muted{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;cursor:pointer}
 .ayuda.abierta,.opsec-body > .small.muted.abierta,h2 + .small.muted.abierta{-webkit-line-clamp:unset !important;display:block !important}
 .card [id^="ds-"]:empty{display:none}
+.pdfgrp{border:2px solid var(--line);border-radius:12px;padding:0 14px 14px;margin-top:18px;display:grid;gap:10px;background:var(--surface)}
+.pdfgrp-h{display:flex;gap:12px;align-items:center;margin:0 -14px 2px;padding:12px 14px;border-radius:10px 10px 0 0;border-bottom:1px solid var(--line)}
+.pdfgrp-n{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:17px;color:#fff}
+.pdfgrp-t{font-size:19px;font-weight:700;line-height:1.2}
+.pdfgrp.g1{border-color:#9cc0dc}.pdfgrp.g1 .pdfgrp-h{background:#e6f0f8}.pdfgrp.g1 .pdfgrp-n{background:#1d5f86}
+.pdfgrp.g2{border-color:#e3c27a}.pdfgrp.g2 .pdfgrp-h{background:#fbf1da}.pdfgrp.g2 .pdfgrp-n{background:#a8720f}
+.pdfgrp.g3{border-color:#9fcfae}.pdfgrp.g3 .pdfgrp-h{background:#e5f4ea}.pdfgrp.g3 .pdfgrp-n{background:#1e7a3c}
+.pdfgrp.g4{border-color:#c9ced6}.pdfgrp.g4 .pdfgrp-h{background:#eef0f3}.pdfgrp.g4 .pdfgrp-n{background:#5b6573}
+@media (prefers-color-scheme: dark){.pdfgrp .pdfgrp-h{background:color-mix(in srgb,var(--surface) 85%,#888) !important}}
 .card .ya-contado{border-top:1px dashed var(--line);padding-top:6px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .card.sumando .sumar{background:color-mix(in srgb,var(--ok) 8%,transparent);border-radius:8px;padding:6px}
 td.val{white-space:nowrap;font-family:var(--f-mono)}
@@ -292,7 +301,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb81';
+window.__VERSION = 'sb82';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -315,7 +324,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb81</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb82</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2834,7 +2843,8 @@ function vPdfCfg() {
   const sub = (t, ayuda) => `<div style="margin-top:10px;border-top:1px solid var(--line,#ddd);padding-top:8px"><b>${t}</b>${ayuda ? `<div class="small muted">${ayuda}</div>` : ''}</div>`;
   const fuente = (k, n = 'Fuente') => `<label class="stack" style="gap:2px"><span class="lbl">${n}</span><select data-act="pdfSet" data-k="${k}">${Object.entries(PDF_FUENTES).map(([v, f]) => `<option value="${v}" ${(c[k] || 'Helvetica') === v ? 'selected' : ''}>${f[2]}</option>`).join('')}</select></label>`;
   const kpis = PDF_KPIS.map(([k, n]) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="pdfKpi" data-k="${k}" ${(c.kpis || []).includes(k) ? 'checked' : ''}> ${n}</label>`).join('');
-  return `<div style="max-width:760px" id="pdfPanel">${secOp('pdf', 'PDF (cierre y diferencias)', 'Fuente, letra y tamaños de los PDF de cierre, de diferencias y por chofer; qué partes salen y en qué orden, totales, ajustes del día, columnas, líneas, letra y colores del PDF que se descarga al cerrar y desde Historial.')}
+  return `<div style="max-width:760px" id="pdfPanel">${secOp('pdf', 'PDF (cierre, diferencias y por chofer)', 'Cada PDF en su recuadro: 1 cierre, 2 diferencias del día, 3 por chofer y proveedor; 4 líneas y colores para los tres.')}
+    <div class="pdfgrp g1"><div class="pdfgrp-h"><span class="pdfgrp-n">1</span><div><div class="pdfgrp-t">PDF del cierre</div><div class="small muted">El que se descarga al cerrar el stock y desde Historial (el que va por mail).</div></div></div>
     ${sub('Hoja y letra')}
     <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">
       ${fuente('fuente')}${num('letra', 'Letra de la tabla (pt)', 5, 14)}${num('titulo', 'Letra del título (pt)', 9, 28)}
@@ -2854,16 +2864,23 @@ function vPdfCfg() {
     ${sub('Tablas de artículos (diferencias y detalle de lo contado)')}
     <div class="row" style="gap:16px;flex-wrap:wrap">${chk('ajustarAncho', 'Estirar la tabla al ancho de la hoja')}${chk('porSector', 'Separar por sector (FRÍO / SECO)')}${chk('ajustes', 'En “Artículos con diferencia”, mostrar los ajustes debajo de cada uno')}</div>
     ${lista('cols', PDF_COLS, 'Rótulo en el PDF')}
-    ${sub('Líneas y colores', 'Las líneas también se usan en el PDF por chofer y proveedor.')}
-    <div class="row" style="gap:16px;flex-wrap:wrap;align-items:end">${chk('sep', 'Líneas entre filas')}${chk('sepV', 'Líneas entre columnas')}${num('grosor', 'Grosor de línea', 0.1, 3, '', 0.1)}${color('cSep', 'Color de las líneas')}${chk('zebra', 'Filas alternadas')}</div>
-    <div class="row" style="gap:16px;flex-wrap:wrap">${color('cHead', 'Fondo del encabezado')}${color('cTit', 'Títulos')}${color('cNeg', 'Faltante')}${color('cPos', 'Sobrante')}${color('cZebra', 'Filas alternadas')}</div>
-    ${sub('PDF de diferencias del día', 'El que sale desde Diferencias con el stock sin cerrar: código, descripción (completa, en varios renglones si hace falta), sistema, contado y diferencia.')}
+    <div class="row"><button class="btn" data-act="pdfPrueba">Probar PDF del cierre</button><span class="small muted">Usa el último cierre guardado.</span></div></div>
+    <div class="pdfgrp g2"><div class="pdfgrp-h"><span class="pdfgrp-n">2</span><div><div class="pdfgrp-t">PDF de diferencias del día</div><div class="small muted">Desde Administración → Diferencias, con el stock sin cerrar: código, descripción, sistema, contado y diferencia.</div></div></div>
+    
     <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">${fuente('difFuente')}${num('difLetra', 'Letra (pt)', 6, 18)}${num('difTitulo', 'Letra del título (pt)', 9, 28)}${num('difAlto', 'Alto de renglón', 1.3, 4, 'Veces la letra. Más alto deja lugar para anotar.', 0.1)}
       <div class="stack" style="gap:4px"><span class="lbl">Hoja</span><label class="row small" style="gap:6px"><input type="radio" name="pdfDifOri" data-act="pdfSet" data-k="difApaisado" value="1" ${c.difApaisado !== false ? 'checked' : ''}> Apaisada</label><label class="row small" style="gap:6px"><input type="radio" name="pdfDifOri" data-act="pdfSet" data-k="difApaisado" value="0" ${c.difApaisado === false ? 'checked' : ''}> Vertical</label></div></div>
-    ${sub('PDF por chofer y proveedor', 'Grilla por chofer con código, descripción, boca (cliente y domicilio) y unidades. Sale siempre en hoja vertical.')}
+    <div class="row"><button class="btn" data-act="pdfDif">Probar PDF de diferencias</button><span class="small muted">Necesita los archivos del día y alguna diferencia.</span></div></div>
+    <div class="pdfgrp g3"><div class="pdfgrp-h"><span class="pdfgrp-n">3</span><div><div class="pdfgrp-t">PDF por chofer y proveedor</div><div class="small muted">Desde Administración → Diferencias: grilla por chofer con código, descripción, boca y unidades. Siempre en hoja vertical.</div></div></div>
+    
     <div class="row" style="gap:18px;align-items:start;flex-wrap:wrap">${fuente('chFuente')}${num('chLetra', 'Letra (pt)', 6, 16)}${num('chTitulo', 'Letra del título (pt)', 9, 26)}${num('chAlto', 'Alto de renglón', 1.1, 3, 'Veces la letra.', 0.1)}</div>
-    <div class="row"><button class="btn" data-act="pdfDif">Probar PDF de diferencias</button><button class="btn" data-act="pdfDifMov">Probar PDF por chofer</button><span class="small muted">Usan lo que está en pantalla aunque no lo hayas guardado. Necesitan los archivos del día y alguna diferencia.</span></div>
-    <div class="row" style="margin-top:10px"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfPrueba">Descargar PDF de prueba</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
+    <div class="row"><button class="btn" data-act="pdfDifMov">Probar PDF por chofer</button><span class="small muted">Necesita también los archivos de movimientos.</span></div></div>
+    <div class="pdfgrp g4"><div class="pdfgrp-h"><span class="pdfgrp-n">4</span><div><div class="pdfgrp-t">Líneas y colores</div><div class="small muted">Para los tres PDF.</div></div></div>
+    
+    <div class="row" style="gap:16px;flex-wrap:wrap;align-items:end">${chk('sep', 'Líneas entre filas')}${chk('sepV', 'Líneas entre columnas')}${num('grosor', 'Grosor de línea', 0.1, 3, '', 0.1)}${color('cSep', 'Color de las líneas')}${chk('zebra', 'Filas alternadas')}</div>
+    <div class="row" style="gap:16px;flex-wrap:wrap">${color('cHead', 'Fondo del encabezado')}${color('cTit', 'Títulos')}${color('cNeg', 'Faltante')}${color('cPos', 'Sobrante')}${color('cZebra', 'Filas alternadas')}</div>
+    </div>
+    <span class="small muted">Los botones “Probar” usan lo que está en pantalla aunque no lo hayas guardado.</span>
+    <div class="row" style="margin-top:10px"><button class="btn pri" data-act="pdfGuardar" ${S.ui.pdfDraft ? '' : 'disabled'}>Guardar configuración</button><button class="btn" data-act="pdfReset">Volver a lo original</button>${S.ui.pdfDraft ? '<span class="small" style="color:var(--warn)">Hay cambios sin guardar</span>' : ''}</div>
   </div></details></div>`;
 }
 /* ---------- Opciones → Códigos de barra: escanear y asociar a un artículo ---------- */
