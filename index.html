@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb97';
+window.__VERSION = 'sb98';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb97</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb98</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -4084,7 +4084,7 @@ async function copiarMail() {
   const { lista: aj } = ajustesDiaDe(c);
   const sob = aj.filter(a => a.u > 0), fal = aj.filter(a => a.u < 0), nArt = new Set(aj.map(a => a.c)).size;
   const sum = L => L.reduce((s, a) => s + (a.v || 0), 0), conVal = !!pdfCfg().valorizado;
-  const ln = a => { const sp = Core.split(Math.abs(a.u), a.ux || 1); return `${a.c} ${a.d}: ${fmtS(a.u)} u (${fmt(sp.cj)} cj ${fmt(sp.un)} u)${a.m ? ' · ' + a.m : ''}${a.o && a.o !== a.m ? ' · ' + a.o : ''}${conVal && a.v !== null && a.v !== undefined ? ' · ' + money(a.v) : ''}`; };
+  const ln = a => { return `${a.c} ${S.maestro[a.c]?.dc || a.d}: ${fmtS(a.u)} u${a.m ? ' · ' + a.m : ''}${a.o && a.o !== a.m ? ' · ' + a.o : ''}${conVal && a.v !== null && a.v !== undefined ? ' · ' + money(a.v) : ''}`; };
   const bloque = (t, L) => `${t}:\n${L.map(ln).join('\n') || '-'}${L.length && conVal ? '\nTotal ' + t.toLowerCase() + ': ' + money(sum(L)) : ''}`;
   const txt = `${opt('destinatarios') ? 'Para: ' + opt('destinatarios') + '\n' : ''}Asunto: ${opt('asunto')} ${dmy(c.fecha).replace(/\//g, '.')}\n\nStock Ilolay del ${diaSem(c.fecha)} ${dmy(c.fecha)}: ${c.resumen?.contados ?? ''} artículos contados, ${dif.length} con diferencia, ${nArt} artículo${nArt === 1 ? '' : 's'} con ajustes.\n\n${bloque('SOBRA', sob)}\n\n${bloque('FALTA', fal)}${conVal ? '\n\nValorizado de los ajustes: ' + money(sum(aj)) : ''}`;
   try { await navigator.clipboard.writeText(txt); toast('Resumen copiado. Pegalo en el mail.'); }
