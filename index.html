@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb94';
+window.__VERSION = 'sb95';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb94</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb95</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3440,14 +3440,17 @@ function docActual() {
   const lineas = LINES.map(l => ({ c: l.c, d: l.d, s: l.s, u: l.uxc, q: l.q ? 1 : 0, sap: l.sap, ya: l.yasu, sk: l.sapRaw, pe: l.peso, aj: l.aj, sis: l.sis, cont: l.contado ? l.cont : null, dif: l.contado ? l.dif : 0, m: l.contado && l.dif ? l.motivo : '', obs: l.obs || '', nota: l.nota || '', imp: l.importe || 0, por: l.por || null, ...ajDetalle(l.c) }));
   return { fecha: S.dia, por: S.me.name || S.me.id, ts: Date.now(), lineas, archivos: { sap: S.files.sap?.name || S.remoto?.archivos?.sap || '', yasu: S.files.yasu?.name || S.remoto?.archivos?.yasu || '' }, resumen: { articulos: lineas.length, contados: r.contados, conDif: r.dif, sobra: r.sobra, falta: r.falta, importe: Math.round(r.imp * 100) / 100 } };
 }
+// Sector elegido arriba en Administración (Todos / Frío / Seco): los PDF de diferencias salen solo con ese sector
+const sectorTxt = s => s === 'FRIO' ? 'Frío' : s === 'SECO' ? 'Seco' : s;
+function conSector(c) { const s = S.ui.sector; return !s || s === 'TODOS' ? c : { ...c, sector: s, lineas: (c.lineas || []).filter(l => l.s === s) }; }
 function pdfDiferencias() {
   if (!tieneSistema()) { toast('Todavía no hay stock del sistema: cargá los archivos del día para calcular las diferencias.'); return; }
-  const c = docActual();
+  const c = conSector(docActual());
   const n = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).length;
-  if (!n) { toast('No hay diferencias pendientes.'); return; }
+  if (!n) { toast('No hay diferencias pendientes' + (c.sector ? ' en ' + sectorTxt(c.sector) : '') + '.'); return; }
   try {
     const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
-    descargar('Diferencias stock Ilolay ' + c.fecha + ' ' + hh + '.pdf', armarPdfDif(c, t));
+    descargar('Diferencias stock Ilolay ' + c.fecha + (c.sector ? ' ' + sectorTxt(c.sector) : '') + ' ' + hh + '.pdf', armarPdfDif(c, t));
     toast('PDF con ' + n + ' diferencia' + (n === 1 ? '' : 's') + ' descargado.');
   } catch (e) { toast('No se pudo armar el PDF: ' + e.message); }
 }
@@ -3501,7 +3504,7 @@ function armarPdfDif(c, t) {
   const cel = (cl, txt, yy, b, col, size = fs) => { const s = cortar(txt, cl.w - pad, size, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, s, size, b, 'r', col); else P.text(cl.x + pad / 2, yy, s, size, b, 'l', col); };
   const pagina = () => {
     P.nueva(); y = 24 + ft;
-    P.text(M + 4, y, cortar('STOCK ILOLAY · Diferencias del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(M + 4, y, cortar('STOCK ILOLAY · Diferencias del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha) + (c.sector ? ' · ' + sectorTxt(c.sector).toUpperCase() : ''), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
     P.text(M + 4, y, cortar('Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · ' + L.length + ' artículo' + (L.length === 1 ? '' : 's') + ' con diferencia', ancho - 8, Math.max(6, fs - 1.5)), Math.max(6, fs - 1.5), false, 'l', '#666666'); y += 14;
     const hh = Math.round(fs * 1.7);
     P.rect(M, y, ancho, hh * 2, cfg.cHead);
@@ -3534,13 +3537,13 @@ async function pdfDifMovs() {
   if (!movimientosLocal() && !S.movsRemoto) { toast('Buscando los movimientos del día…'); await cargarMovsRemoto(); }
   const M = movsActuales();
   if (!M || !(M.filas || []).length) { toast('Faltan los archivos de movimientos (Facturación Yasukawa, Facturación Ilolay, Comprobantes o Ventanas). Cargalos en "Archivos del día".'); return; }
-  const c = docActual();
+  const c = conSector(docActual());
   const difs = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
-  if (!difs.length) { toast('No hay diferencias pendientes.'); return; }
+  if (!difs.length) { toast('No hay diferencias pendientes' + (c.sector ? ' en ' + sectorTxt(c.sector) : '') + '.'); return; }
   try {
     const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
     await cargarClientesSiHace();
-    descargar('Diferencias por chofer y proveedor ' + c.fecha + ' ' + hh + '.pdf', armarPdfDifMovs(c, difs, M, t));
+    descargar('Diferencias por chofer y proveedor ' + c.fecha + (c.sector ? ' ' + sectorTxt(c.sector) : '') + ' ' + hh + '.pdf', armarPdfDifMovs(c, difs, M, t));
     toast('PDF por chofer y proveedor descargado (' + difs.length + ' artículo' + (difs.length === 1 ? '' : 's') + ').');
   } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
 }
@@ -3648,7 +3651,7 @@ function armarPdfDifMovs(c, difs, M, t) {
   let y = 0;
   const pagina = () => {
     P.nueva(); y = 24 + ft;
-    P.text(Mg, y, cortar('Diferencias por chofer · ' + diaSem(c.fecha) + ' ' + dmy(c.fecha), ancho, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(Mg, y, cortar('Diferencias por chofer · ' + diaSem(c.fecha) + ' ' + dmy(c.fecha) + (c.sector ? ' · ' + sectorTxt(c.sector).toUpperCase() : ''), ancho, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
     P.text(Mg, y, cortar('STOCK ILOLAY · Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · Movimientos: ' + Object.entries({ fya: 'Fact. Yasukawa', fil: 'Fact. Ilolay', comp: 'Comprobantes', vent: 'Ventanas' }).map(([k, n]) => n + (M.archivos?.[k] ? '' : ' (falta)')).join(', '), ancho, Math.max(6, fs - 2), false), Math.max(6, fs - 2), false, 'l', '#666666'); y += Math.round(fs * 1.2);
     P.text(Mg, y, 'Solo artículos con diferencia. En amarillo: lo que coincide (±' + fmt(tol) + ' %) con la diferencia del artículo.' + (CLIENTES.size ? '' : ' Sin base de clientes: el domicilio no está disponible.'), Math.max(6, fs - 2), false, 'l', '#666666'); y += 10;
   };
