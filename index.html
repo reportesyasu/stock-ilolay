@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb96';
+window.__VERSION = 'sb97';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb96</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb97</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3670,11 +3670,10 @@ function armarPdfDifMovs(c, difs, M, t) {
     if (!D.has(x.c) || x.ms === false) continue;
     const ch = x.ch || 'Sin chofer', A = porCh.get(ch) || new Map(); porCh.set(ch, A);
     const g = A.get(x.c) || new Map(); A.set(x.c, g);
-    const tot = x.o === 'Y', b = tot ? '' : bocaDe(x), k = tot ? 'Y|*' : x.o + '|' + b, r = g.get(k) || { o: x.o, boca: b, q: 0, tot, comps: new Set() };
+    const tot = x.o === 'Y' && !/despacho/i.test(ch), b = tot ? '' : bocaDe(x), k = tot ? 'Y|*' : x.o + '|' + b, r = g.get(k) || { o: x.o, boca: b, q: 0, tot, comps: new Set() };
     r.q += x.q; if (x.comp) r.comps.add(x.comp); g.set(k, r);
   }
-  const ultimo = ch => /^(ventana|sin chofer)/i.test(ch) ? 1 : 0;
-  const choferes = [...porCh.keys()].sort((a, b) => ultimo(a) - ultimo(b) || a.localeCompare(b, 'es'));
+  const choferes = [...porCh.keys()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true }));
   pagina();
   if (!choferes.length) P.text(Mg, y + fs, 'Los artículos con diferencia no tienen movimientos en los archivos cargados.', fs, false, 'l', '#666666');
   for (const ch of choferes) {
@@ -3682,7 +3681,7 @@ function armarPdfDifMovs(c, difs, M, t) {
     lugar(lh * 6); cab(ch);
     for (const code of arts) {
       const l = D.get(code), dif = Math.abs(l.dif), hl = q => dif > 0 && Math.abs(Math.abs(q) - dif) <= dif * tol / 100;
-      const rows = [...A.get(code).values()].sort((a, b) => (b.tot ? 1 : 0) - (a.tot ? 1 : 0) || a.boca.localeCompare(b.boca, 'es'));
+      const rows = [...A.get(code).values()].sort((a, b) => (b.tot ? 1 : 0) - (a.tot ? 1 : 0) || a.boca.localeCompare(b.boca, 'es', { sensitivity: 'base', numeric: true }) || a.o.localeCompare(b.o));
       for (const r of rows) if (r.tot) r.boca = `Total Yasukawa (${r.comps.size || 1} comprobante${r.comps.size === 1 ? '' : 's'})`;
       const sub = rows.reduce((s, r) => s + r.q, 0);
       const dLin = partir(S.maestro[l.c]?.dc || l.d || '', W.d - 2 * pad, fs, true), dDif = (() => { const [cj, un] = cjPartes(l.dif, l.u || 1); return `Diferencia: ${fmtS(l.dif)} unidades` + ((l.u || 1) > 1 && Math.abs(l.dif) >= (l.u || 1) ? ` (${cj} cajas y ${un} unidades)` : ''); })();
