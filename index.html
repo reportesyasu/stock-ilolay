@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb92';
+window.__VERSION = 'sb93';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb92</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb93</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -645,7 +645,7 @@ const Core = (() => {
 
   /* ---- Cálculo ---- */
   const tr = x => (x < 0 ? Math.ceil(x) : Math.floor(x));
-  function split(units, uxc) { const cj = tr(units / uxc); return { cj, un: units - cj * uxc }; }
+  function split(units, uxc) { const cj = tr(units / uxc); return { cj, un: Math.round((units - cj * uxc) * 100) / 100 }; }
 
   function compute({ maestro, sap, yasu, ajustes, conteos, anterior, quesoSap, quesos, ceroAuto }) {
     const aj = {};
@@ -656,12 +656,12 @@ const Core = (() => {
       const m = maestro[c];
       if (m.baja) continue;
       const y = yasu?.by[c];
-      // Miniaturas: 1 unidad de Yasukawa = fy unidades de Ilolay (SAP). Todo se lleva en unidades de Ilolay;
-      // la caja es la cajita de Yasukawa (un/caja de Artículos, o el factor si no está cargado).
+      // Miniaturas: 1 unidad de Yasukawa = fy unidades de Ilolay (SAP). Todo se lleva y se cuenta en unidades de Yasukawa:
+      // lo de SAP se divide por el factor.
       const fy = Number(m.fy) > 1 ? Number(m.fy) : 1;
-      const uxc = fy > 1 ? (m.u > 1 ? m.u : fy) : (y && y.cap > 0) ? y.cap : (m.u > 0 ? m.u : 1);
-      const qSap = sap?.by[c]?.q || 0;
-      const qY = y ? y.stk * fy : 0;
+      const uxc = (y && y.cap > 0) ? y.cap : (m.u > 0 ? m.u : 1);
+      const sapIlo = sap?.by[c]?.q || 0, qSap = fy > 1 ? Math.round(sapIlo / fy * 100) / 100 : sapIlo;
+      const qY = y ? y.stk : 0;
       const qA = aj[c] || 0;
       const prev = anterior?.[c];
       const sapRaw = sap?.by[c]?.raw || 0;
@@ -682,7 +682,7 @@ const Core = (() => {
           base = prevCont + varSap + varYa - qVent - qIlo; metodo = hib ? 'hibrido' : quesoSap === 'manual' ? 'manual' : 'variacion';
         } else { base = prevCont - qVent - qIlo; metodo = 'arrastre'; }
       }
-      const sisVivo = base + qA;
+      const sisVivo = Math.round((base + qA) * 100) / 100;
       const k = conteos?.[c];
       const contadoReal = !!(k && (k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined));
       // Sistema en cero y nadie lo contó: se toma como contado en 0 (sin diferencia). Si depósito cuenta algo, manda lo contado.
@@ -694,10 +694,10 @@ const Core = (() => {
       const s = split(sis, uxc);
       const cont = contadoReal ? num(k.cj) * uxc + num(k.un) : auto ? 0 : null;
       const dif = contado ? cont - sis : null;
-      const precio = y ? y.precio / fy : 0; // precio de compra por unidad de Ilolay
+      const precio = y ? y.precio : 0;
       lines.push({
         c, d: m.d || y?.desc || '', s: m.s, o: m.o, uxc, q: !!m.q, base, metodo, varSap, varYa, qVent, qIlo, sapRaw, peso, prevCont: prev?.cont ?? null, prevSk: prev?.sk ?? null, prevYa: prev?.ya ?? null,
-        sap: qSap, yasu: qY, fy, yasuRaw: y ? y.stk : 0, aj: qA, sis, sisCj: s.cj, sisUn: s.un, ok, okTs: ok ? k.okTs : null, sisVivo, cambio: ok ? sisVivo - sis : 0,
+        sap: qSap, sapIlo, yasu: qY, fy, aj: qA, sis, sisCj: s.cj, sisUn: s.un, ok, okTs: ok ? k.okTs : null, sisVivo, cambio: ok ? sisVivo - sis : 0,
         contado, auto, cont, contCj: contadoReal ? num(k.cj) : auto ? 0 : null, contUn: contadoReal ? num(k.un) : auto ? 0 : null,
         dif, precio, importe: dif ? Math.round(dif * precio * 100) / 100 : 0,
         motivo: k?.m || '', obs: k?.obs || '', nota: k?.nota || '', por: k?.by || null, rec: !!k?.rec,
@@ -1353,16 +1353,14 @@ function movimientosLocal() {
   const filas = [];
   const peso = c => S.maestro[c]?.p || F.yasu?.data.by[c]?.peso || (S.remoto?.items?.[c]?.pe) || 0;
   const fyDe = c => Number(S.maestro[c]?.fy) > 1 ? Number(S.maestro[c].fy) : 1;
-  for (const x of [...(F.fya?.data.filas || []), ...(F.vent?.data.filas || [])]) {
-    if (!S.maestro[x.c]) continue;
-    const fy = fyDe(x.c);
-    filas.push(fy > 1 ? { ...x, q: x.q * fy, cred: (x.cred || 0) * fy, nota: [x.nota, fmt(x.q) + ' en Yasukawa × ' + fmt(fy)].filter(Boolean).join(' · ') } : x);
-  }
+  for (const x of F.fya?.data.filas || []) if (S.maestro[x.c]) filas.push(x);
+  for (const x of F.vent?.data.filas || []) if (S.maestro[x.c]) filas.push(x);
   for (const x of F.fil?.data.filas || []) {
     if (!S.maestro[x.c]) continue;
     const cp = F.comp ? (F.comp.data.by[x.doc] || F.comp.data.porN1[Core.claveComp(x.ref)]) : null;
     let q = x.q, nota = '';
     if (x.um === 'KG') { const p = peso(x.c); if (p > 0) { q = Math.round(x.q / p * 100) / 100; nota = fmt(x.q) + ' kg ÷ ' + fmt(p) + ' kg'; } else nota = 'cantidad en kg'; }
+    else if (fyDe(x.c) > 1) { q = Math.round(x.q / fyDe(x.c) * 100) / 100; nota = fmt(x.q) + ' en Ilolay ÷ ' + fmt(fyDe(x.c)); } // miniaturas: a unidades de Yasukawa
     filas.push({ o: 'I', c: x.c, comp: cp ? (cp.n1 || cp.n) : (x.ref || x.doc), doc: x.doc, cli: x.cli, cliN: x.cliN || cp?.cliN || '', suc: x.suc || cp?.suc || '', nc: x.nc || '', f: x.f, q, nota,
       ch: cp ? (cp.ch || 'Sin chofer') : (F.comp ? 'Sin chofer (no figura en comprobantes)' : 'Sin chofer (falta el archivo de comprobantes)'), viaje: cp?.viaje || '' });
   }
@@ -1919,13 +1917,13 @@ function renderSheetInner() {
         : l.metodo === 'variacion'
         ? `Contado al cierre del ${dm(S.anteriorFecha)}: ${fmt(l.prevCont)} hormas<br>+ variación SAP: (${fmt(l.sapRaw)} kg − ${fmt(l.prevSk)} kg) ÷ ${fmt(l.peso)} kg = ${fmtS(l.varSap)}<br>+ variación Yasukawa: ${fmt(l.yasu)} − ${fmt(l.prevYa)} = ${fmtS(l.varYa)}<br>= ${fmt(l.base)}`
         : `Cierre anterior (${dm(S.anteriorFecha)}) ${fmt(l.base)} <span class="muted">(arrastre: el cierre anterior no tiene los kilos de SAP; desde el próximo cierre se usa la variación)</span>`)
-      : `SAP ${fmt(l.sap)} + Yasukawa ${l.fy > 1 ? `${fmt(l.yasuRaw)} × ${fmt(l.fy)} = ${fmt(l.yasu)}` : fmt(l.yasu)}`) + ` + ajustes ${fmt(l.aj)}<br>= <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>${l.precio ? ' × ' + money2(l.precio) + ' = ' + money(l.importe) : ''}` : ''}`;
+      : `SAP ${l.fy > 1 ? `${fmt(l.sapIlo)} ÷ ${fmt(l.fy)} = ${fmt(l.sap)}` : fmt(l.sap)} + Yasukawa ${fmt(l.yasu)}`) + ` + ajustes ${fmt(l.aj)}<br>= <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>${l.precio ? ' × ' + money2(l.precio) + ' = ' + money(l.importe) : ''}` : ''}`;
   SHEET_T.innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="Detalle del artículo" data-stop="1">
     <div class="row" style="justify-content:space-between;align-items:start"><div><span class="lbl">${esc(l.s)} · ${esc(c)}</span><h3>${esc(l.d)}</h3></div><button class="btn sm" data-act="cerrarDet">Cerrar</button></div>
     <div class="calc">${calc}</div>
     ${cargaHtml(c)}
     ${sap || fuera.length ? `<div><span class="lbl">SAP Ilolay</span><div class="tablebox"><table><thead><tr><th>Almacén</th><th>Tipo</th><th class="n">Stock</th><th>UMB</th></tr></thead><tbody>${(sap?.filas || []).map(f => `<tr><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>${esc(f.umb)}</td></tr>`).join('')}${fuera.map(f => `<tr class="muted"><td>${esc(f.alm)}</td><td>${esc(f.tipo)}</td><td class="n">${fmt(f.raw)}</td><td>excluido</td></tr>`).join('')}</tbody></table></div></div>` : ''}
-    ${y ? `<dl class="kv"><dt>Yasukawa STK</dt><dd>${fmt(y.stk)}${Number(m.fy) > 1 ? ` <span class="small muted">× ${fmt(m.fy)} = ${fmt(y.stk * m.fy)} u de Ilolay (miniatura)</span>` : ''}</dd><dt>Unid. por caja</dt><dd>${fmt(y.cap) || '—'}</dd><dt>Precio compra</dt><dd>${money2(y.precio)}</dd><dt>Código de barras</dt><dd>${esc(y.ean) || '—'}</dd></dl>` : ''}
+    ${y ? `<dl class="kv"><dt>Yasukawa STK</dt><dd>${fmt(y.stk)}${Number(m.fy) > 1 ? ` <span class="small muted">(miniatura: 1 de Yasukawa = ${fmt(m.fy)} de Ilolay)</span>` : ''}</dd><dt>Unid. por caja</dt><dd>${fmt(y.cap) || '—'}</dd><dt>Precio compra</dt><dd>${money2(y.precio)}</dd><dt>Código de barras</dt><dd>${esc(y.ean) || '—'}</dd></dl>` : ''}
     <div id="histArt">${histArtHtml(c)}</div>
     <div><span class="lbl">Ajustes que suman al sistema</span>${aj.length ? `<div class="tablebox"><table><tbody>${aj.map(a => `<tr><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="n">${fmtS(a.u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Ninguno.</div>'}</div>
     <div><span class="lbl">Conteo</span><div class="small">${k && (k.cj !== null || k.un !== null) ? `Contó ${esc(nom(k.by))} a las ${hora(k.ts)}` : 'Sin contar.'}${l.nota ? `<br>Nota de depósito: “${esc(l.nota)}”` : ''}${l.prevDif ? ` · El cierre anterior tuvo ${fmtS(l.prevDif)} u (${esc(l.prevMotivo || 'sin motivo')}).` : ''}</div></div>
@@ -2577,7 +2575,7 @@ function vMaestro() {
     <td class="n"><input type="number" id="m-o-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="o" value="${i.o ?? ''}" style="width:64px"></td>
  <td class="n mono small" style="white-space:nowrap">${sisTxt(i.c)}</td>
     <td class="n"><input type="number" id="m-u-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="u" value="${i.u ?? ''}" style="width:64px"></td>
-    <td class="n"><input type="number" id="m-fy-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="fy" value="${Number(i.fy) > 1 ? i.fy : ''}" min="0" style="width:70px" placeholder="—" title="Miniaturas: cuántas unidades de Ilolay es 1 unidad de Yasukawa (por ejemplo 108). Vacío = la misma unidad"></td>
+    <td class="n"><input type="number" id="m-fy-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="fy" value="${Number(i.fy) > 1 ? i.fy : ''}" min="0" style="width:70px" placeholder="—" title="Miniaturas: cuántas unidades de Ilolay (SAP) es 1 unidad de Yasukawa (por ejemplo 108). Se cuenta en unidades de Yasukawa. Vacío = la misma unidad"></td>
     <td class="n"><input type="number" id="m-bpp-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="bpp" value="${i.bpp || ''}" style="width:70px" placeholder="—" title="Bases por pallet"></td>
     <td class="n"><input type="number" id="m-bpb-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="bpb" value="${i.bpb || ''}" style="width:70px" placeholder="—" title="Bultos por base"></td>
     <td class="n"><input type="number" id="m-upb-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="upb" value="${i.upb || ''}" style="width:70px" placeholder="${i.u || 1}" title="Unidades por bulto (vacío = igual que unidades por caja)"></td>
@@ -4243,7 +4241,7 @@ document.addEventListener('click', async e => {
     }
     case 'mdesdeYasu': {
       const Y = S.files.yasu?.data.by || {}; draft ||= JSON.parse(JSON.stringify(S.maestro)); let n = 0;
-      for (const [code, it] of Object.entries(draft)) { const y = Y[code]; if (!y) continue; if (y.desc && y.desc !== it.d) { it.d = y.desc; n++; } if (y.cap > 0 && y.cap !== it.u && !(Number(it.fy) > 1)) { it.u = y.cap; n++; } if (y.ean && !(it.e || []).includes(y.ean)) { it.e = [...(it.e || []), y.ean]; n++; } }
+      for (const [code, it] of Object.entries(draft)) { const y = Y[code]; if (!y) continue; if (y.desc && y.desc !== it.d) { it.d = y.desc; n++; } if (y.cap > 0 && y.cap !== it.u) { it.u = y.cap; n++; } if (y.ean && !(it.e || []).includes(y.ean)) { it.e = [...(it.e || []), y.ean]; n++; } }
       toast(n ? n + ' datos actualizados. Revisá y guardá.' : 'No había nada para actualizar.'); render(); break;
     }
     case 'ajExcel': excelEgreso(); break;
