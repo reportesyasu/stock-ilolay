@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb90';
+window.__VERSION = 'sb91';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb90</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb91</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1008,8 +1008,11 @@ async function sbRpc(url, key, fn, args, pin) {
 const API = {
   async call(fn, ...args) {
     if (!CFG.url || !CFG.key) throw new Error('Faltan los datos del servidor.');
-    const j = await sbRpc(CFG.url, CFG.key, fn, args, CFG.pin);
-    if (j && j.error) { const err = new Error(j.error); err.codigo = j.codigo; if (j.codigo === 'pin') { CFG.olvidar(); S.pinInvalido = true; pedirAcceso(); } throw err; }
+    let j;
+    try { j = await sbRpc(CFG.url, CFG.key, fn, args, CFG.pin); }
+    catch (e) { if (/No se pudo conectar con el servidor|tardó más de 90 segundos|HTTP 5\d\d/.test(e.message || '')) { e.red = true; marcarRed(false); } throw e; }
+    marcarRed(true);
+    if (j && j.error) { const err = new Error(j.error); err.codigo = j.codigo; err.app = true; if (j.codigo === 'pin') { CFG.olvidar(); S.pinInvalido = true; pedirAcceso(); } throw err; }
     return j ? j.result : null;
   }
 };
@@ -1086,7 +1089,22 @@ async function refrescar(silencioso) {
   refrescando = true;
   if (!S.maestroV) vigilarCarga();
   try {
-    const e = await API.call('getEstado', S.diaPedido || null);
+    if (colaLeer().length) await colaEnviar(true);
+    const pend = colaLeer();
+    const e = await API.call('getEstado', S.diaPedido || null, (S.maestroV ? S.admin : esAdminCache()) ? null : { dev: devId(), pend: pend.length, desde: pend[0]?.ts || null });
+    try { localStorage.setItem('relojDif', String((Number(e.ahora) || Date.now()) - Date.now())); } catch { }
+    estadoCacheGuardar(e); S.desdeCache = null;
+    aplicarEstado(e, silencioso);
+  } catch (err) {
+    if (err.red && !S.maestroV) { const c = estadoCacheLeer(); if (c) { S.offline = true; S.desdeCache = c.ts; aplicarEstado(c.e, silencioso); return; } }
+    S.errorServidor = err.message || String(err);
+    if (!S.maestroV && err.codigo !== 'pin') { S.errorAcceso = S.errorServidor; pedirAcceso(); return; }
+    if (!silencioso && !err.red) toast('No se pudo leer la planilla: ' + S.errorServidor);
+    render();
+  } finally { refrescando = false; }
+}
+function aplicarEstado(e, silencioso) {
+  {
     S.me = { id: e.usuario.email, name: e.usuario.nombre, canEdit: e.usuario.admin };
     S.admin = !!e.usuario.admin;
     S.maestro = e.maestro || {}; S.maestroV = true;
@@ -1094,20 +1112,99 @@ async function refrescar(silencioso) {
     S.dia = e.dia; S.diaDoc = true;
     S.conteos = e.conteos || {}; S.ajustes = e.ajustes || []; S.codigos = e.codigos || {}; S.codigosDet = e.codigosDet || [];
     S.remoto = e.sistema; S.cierre = e.cierre; S.cierreCargado = true; S.apertura = e.apertura || null;
-    S.anterior = e.anterior || {}; S.anteriorFecha = e.anteriorFecha; S.quesosDia = e.quesosDia || {}; S.clientesMeta = e.clientesMeta || null;
+    S.anterior = e.anterior || {}; S.anteriorFecha = e.anteriorFecha; S.quesosDia = e.quesosDia || {}; S.clientesMeta = e.clientesMeta || null; S.latidos = e.latidos || {};
     S.online = true; S.errorServidor = null; S.appUrl = e.appUrl || null;
+    aplicarCola();
     if (e.movs && (!S.movsRemoto || S.movsRemoto.ts !== e.movs.ts)) { S.movsRemoto = null; if (e.movs.fecha === e.dia) S.movsMeta = e.movs; }
     if (!e.movs) { S.movsMeta = null; if (!movimientosLocal()) S.movsRemoto = null; }
     if (!S.ui.tab) S.ui.tab = S.admin ? 'hoy' : 'contar';
     nombres();
     renderSuave = !!silencioso;
     try { recalc(); render(); } finally { renderSuave = false; }
-  } catch (err) {
-    S.errorServidor = err.message || String(err);
-    if (!S.maestroV && err.codigo !== 'pin') { S.errorAcceso = S.errorServidor; pedirAcceso(); return; }
-    if (!silencioso) toast('No se pudo leer la planilla: ' + S.errorServidor);
-    render();
-  } finally { refrescando = false; }
+  }
+}
+/* ================= Sin conexión =================
+   Depósito puede seguir contando sin internet: lo que no se puede enviar queda en este celular (cola) y se manda solo
+   cuando vuelve la conexión, en el mismo orden. El servidor no toma lo que se contó antes de abrir el stock, de borrar lo
+   contado o de un día ya cerrado (stock_priv.validar_offline) y acá se avisa cuáles quedaron afuera. */
+const COLA_K = 'colaConteos', DESC_K = 'colaDescartados', CACHE_K = 'estadoCache';
+const lsLeer = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+const lsGuardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+const colaLeer = () => { const L = lsLeer(COLA_K, []); return Array.isArray(L) ? L : []; };
+const ahoraSrv = () => Date.now() + (Number(lsLeer('relojDif', 0)) || 0);
+const opId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function devId() { let d = lsLeer('devId', ''); if (!d) { d = 'cel-' + opId(); lsGuardar('devId', d); } return d; }
+let esAdmCache = null;
+function esAdminCache() { if (esAdmCache === null) esAdmCache = !!estadoCacheLeer()?.e?.usuario?.admin; return esAdmCache; }
+function estadoCacheGuardar(e) {
+  const d = { pin: CFG.pin, ts: Date.now(), e }; esAdmCache = !!e.usuario?.admin;
+  if (!lsGuardar(CACHE_K, d)) lsGuardar(CACHE_K, { ...d, e: { ...e, sistema: null, movs: null, cierre: null } });
+}
+function estadoCacheLeer() { const c = lsLeer(CACHE_K, null); return c && c.e && c.pin === CFG.pin ? c : null; }
+function colaAgregar(op) {
+  const L = colaLeer(); L.push({ ...op, id: op.id || opId(), ts: op.ts || ahoraSrv(), dia: op.dia || S.dia });
+  lsGuardar(COLA_K, L); S.offline = true;
+}
+// Lo que está en la cola se refleja en pantalla encima de lo que trae el servidor
+function aplicarCola() {
+  for (const op of colaLeer()) {
+    if (op.dia !== S.dia) continue;
+    const k = S.conteos[op.c] = { c: op.c, fecha: op.dia, cj: null, un: null, m: '', obs: '', nota: '', rec: false, ...(S.conteos[op.c] || {}) };
+    const ent = { ...(op.t === 'set' ? (op.patch?.carga || { k: 'tot', cj: op.patch?.cj, un: op.patch?.un }) : op.carga), by: S.me.id, ts: op.ts };
+    if (op.t === 'set') {
+      const { carga, ...resto } = op.patch || {}; Object.assign(k, resto);
+      if ('cj' in resto || 'un' in resto) k.carga = ent.k === 'sis' ? [...(Array.isArray(k.carga) ? k.carga : []), ent] : [ent];
+    } else {
+      const u = Number(op.u) || 1, sp = Core.split((Number(k.cj) || 0) * u + (Number(k.un) || 0) + (Number(op.delta) || 0), u);
+      k.cj = sp.cj; k.un = sp.un; k.ok = false; k.rec = false; k.carga = [...(Array.isArray(k.carga) ? k.carga : []), ent];
+    }
+    k.by = S.me.id; k.pend = true;
+  }
+}
+let colaEnviando = null;
+function colaEnviar(desdeRefresco) {
+  return colaEnviando ||= (async () => {
+    let enviados = 0; const descartados = [];
+    try {
+      for (let L = colaLeer(); L.length; L = colaLeer()) {
+        const op = L[0];
+        try {
+          if (op.t === 'set') await API.call('guardarConteo', op.dia, op.c, { ...op.patch, _ts: op.ts });
+          else await API.call('sumarConteo', op.dia, op.c, op.delta, op.u, op.carga, op.ts);
+          enviados++;
+        } catch (e) {
+          if (!e.app || e.codigo === 'pin') break; // sin conexión (u otro problema): queda en la cola y se reintenta
+          descartados.push({ c: op.c, t: op.t, ts: op.ts, motivo: e.message });
+        }
+        lsGuardar(COLA_K, colaLeer().filter(x => x.id !== op.id));
+      }
+    } finally { colaEnviando = null; }
+    if (descartados.length) { S.ui.okMsg = null; lsGuardar(DESC_K, [...lsLeer(DESC_K, []), ...descartados].slice(-60)); toast(`No se ${descartados.length === 1 ? 'tomó 1 conteo hecho' : 'tomaron ' + descartados.length + ' conteos hechos'} sin conexión. Mirá el aviso arriba.`); }
+    if (enviados) toast(`Se enviaron ${enviados} conteo${enviados === 1 ? '' : 's'} guardado${enviados === 1 ? '' : 's'} sin conexión.`);
+    if ((enviados || descartados.length) && !desdeRefresco) programarRefresco(300);
+    if (enviados || descartados.length) render();
+  })();
+}
+function marcarRed(ok) {
+  const antes = !!S.offline; S.offline = !ok;
+  if (antes && ok && colaLeer().length) setTimeout(() => colaEnviar(), 0);
+  if (antes !== S.offline && S.maestroV) setTimeout(() => render(), 0);
+}
+window.addEventListener('online', () => refrescar(true));
+window.addEventListener('offline', () => { S.offline = true; if (S.maestroV) render(); });
+function bannerRed() {
+  const n = colaLeer().length, D = lsLeer(DESC_K, []), h = [], s = n === 1 ? '' : 's';
+  if (S.offline || S.desdeCache) h.push(`<div class="banner bad"><span class="grow"><b>Sin conexión.</b> ${n ? `<b>${n} conteo${s} guardado${s} en este celular</b>: se envían solos cuando vuelva internet. No cierres la app ni borres los datos del navegador.` : 'Podés seguir contando: se guarda en este celular y se envía cuando vuelva internet.'}${S.desdeCache ? ` <span class="small">Lista y conteos del ${new Date(S.desdeCache).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/\.+$/, '')}</span>` : ''}</span></div>`);
+  else if (n) h.push(`<div class="banner warn"><span class="grow">Enviando ${n} conteo${s} guardado${s} sin conexión…</span></div>`);
+  if (D.length) h.push(`<div class="banner warn"><span class="grow"><b>No se ${D.length === 1 ? 'tomó 1 conteo hecho' : 'tomaron ' + D.length + ' conteos hechos'} sin conexión</b>: ${esc(String(D[D.length - 1].motivo || '').replace(/^Descartado: /, '').replace(/\.$/, ''))}. Volvé a contar: ${[...new Set(D.map(d => d.c))].slice(0, 10).map(c => '<b>' + esc(c) + '</b> ' + esc(dDep(c))).join(', ')}${new Set(D.map(d => d.c)).size > 10 ? '…' : ''}</span><button class="btn sm" data-act="descOk">Entendido</button></div>`);
+  return h.join('');
+}
+// Administración: celulares de depósito que pueden tener conteos sin enviar (para revisar antes de cerrar)
+function celularesPendientes() {
+  const ahora = ahoraSrv();
+  return Object.values(S.latidos || {}).filter(x => x && x.dia === S.dia && x.by !== S.me.id && (Number(x.pend) > 0 || ahora - Number(x.ts) > 3 * 60000))
+    .map(x => Number(x.pend) > 0 ? `<b>${esc(nom(x.by))}</b>: tiene <b>${fmt(x.pend)} conteo${Number(x.pend) === 1 ? '' : 's'} sin enviar</b>${x.desde ? ' desde las ' + hora(x.desde) : ''}`
+      : `<b>${esc(nom(x.by))}</b>: último contacto a las ${hora(x.ts)} (hace ${Math.round((ahora - Number(x.ts)) / 60000)} min)`);
 }
 function programarRefresco(ms) { clearTimeout(refT); refT = setTimeout(() => refrescar(true), ms || 600); }
 async function chequearVersion() {
@@ -1136,7 +1233,7 @@ function nombres() {
 const nom = id => !id ? '' : (id === S.me.id ? 'vos' : (S.nombres[id] || String(id).split('@')[0] || 'otra persona'));
 
 async function guardarConteo(c, patchIn) {
-  let patch = patchIn;
+  let patch = patchIn; const ts0 = ahoraSrv();
   if (('cj' in patch || 'un' in patch) && !('ok' in patch)) patch = { ...patch, ok: false, sisOk: null };
   // Optimista: se refleja ya en pantalla y se confirma con el servidor
   const prev = S.conteos[c];
@@ -1147,8 +1244,14 @@ async function guardarConteo(c, patchIn) {
     S.conteos[c].carga = e.k === 'sis' ? [...(Array.isArray(prev?.carga) ? prev.carga : []), ent] : [ent];
   } else if (prev) S.conteos[c].carga = prev.carga;
   recalc(); render();
+  const op = { t: 'set', c, dia: S.dia, patch, ts: ts0 };
+  // Si ya hay cosas esperando en el celular, esta va detrás (para respetar el orden)
+  if (colaLeer().length) { colaAgregar(op); S.conteos[c].pend = true; render(); colaEnviar(); return 'cola'; }
   try { await API.call('guardarConteo', S.dia, c, patch); programarRefresco(400); return true; }
-  catch (e) { if (prev) S.conteos[c] = prev; else delete S.conteos[c]; recalc(); render(); toast('No se guardó: ' + e.message); return false; }
+  catch (e) {
+    if (e.red) { colaAgregar(op); S.conteos[c].pend = true; recalc(); render(); return 'cola'; }
+    if (prev) S.conteos[c] = prev; else delete S.conteos[c]; recalc(); render(); toast('No se guardó: ' + e.message); return false;
+  }
 }
 let loteEnCurso = false;
 async function guardarLote(lote) {
@@ -1569,6 +1672,7 @@ function vHoy() {
   if (hu.length) avisos.push(`<div class="banner warn"><span class="grow">${hu.length} artículo${hu.length > 1 ? 's' : ''} con stock en los archivos no ${hu.length > 1 ? 'están' : 'está'} en la lista de artículos: ${hu.slice(0, 4).map(h => esc(h.c)).join(', ')}${hu.length > 4 ? '…' : ''}</span><button class="btn sm" data-act="tab" data-v="maestro">Revisar</button></div>`);
   const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['cont', 'Contados', r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ...(opt('btnRecontar') || r.rec ? [['rec', 'Recontar', r.rec]] : [])];
   return `<div class="stack">
+    ${bannerRed()}
     ${cerrado ? '' : vFiles()}
     ${S.ui.postCierre ? `<div class="confirm stack" style="border-color:var(--ok)"><b style="color:var(--ok)">✓ Cierre del ${dm(S.ui.postCierre.doc.fecha)} guardado en la base.</b>
       <span class="small">Descargá el PDF para mandarlo por mail. ¿Querés guardar también un backup completo de las bases en esta computadora o dispositivo?</span>
@@ -1655,6 +1759,7 @@ function vConfirmCierre(r) {
   return `<div class="confirm"><b>Cerrar el stock del ${diaSem(S.dia)} ${dm(S.dia)}</b>
     ${fuentes().faltan.length ? `<span class="small" style="color:var(--bad)"><b>Atención:</b> el cruce es parcial (falta ${fuentes().faltan.map(k => NOMBRE_ARCH[k]).join(' y ')}). Se va a guardar así en el historial.</span>` : ''}
     <span class="small">${r.contados} de ${r.total} artículos contados. ${sin ? `<b>${sin} sin contar</b> quedan guardados como "no contado". ` : ''}${r.dif} con diferencia${r.sinMot ? `, <b>${r.sinMot} sin motivo</b>` : ''}. Valorizado: ${money(r.imp)}.</span>
+    ${(() => { const P = celularesPendientes(); return P.length ? `<span class="small" style="color:var(--bad)"><b>Celulares de depósito</b> · ${P.join(' · ')}<br>Si estuvieron sin señal pueden tener conteos sin enviar: confirmá con depósito antes de cerrar (lo que llegue después del cierre no se toma).</span>` : ''; })()}
     <span class="small muted">Se guarda el cierre con stock del sistema, contado y diferencias de cada artículo (los verificados conservan el sistema del momento en que se verificaron). Los ajustes "del día" (ingresos y ventas de quesos) se borran.</span>
     <div class="row"><button class="btn pri" data-act="cerrarOk">Confirmar cierre</button><button class="btn" data-act="cancel">Cancelar</button></div></div>`;
 }
@@ -1856,7 +1961,7 @@ function vContar() {
     const x = k(i.c), done = contado(i.c);
     const sumando = done && !cerrado && S.ui.yaContado === i.c;
     return `<div class="card ${done ? 'done' : ''} ${x?.rec ? 'rec' : ''} ${S.ui.foco === i.c ? 'focus' : ''} ${sumando ? 'sumando' : ''}" id="card-${esc(i.c)}">
-      <div class="t"><button class="link tit" data-act="artMenu" data-c="${esc(i.c)}" title="${esc(i.d)} · tocá para ver el historial o los movimientos">${esc(i.dc || i.d)}</button><div class="meta"><span class="mono">${esc(i.c)}</span><span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
+      <div class="t"><button class="link tit" data-act="artMenu" data-c="${esc(i.c)}" title="${esc(i.d)} · tocá para ver el historial o los movimientos">${esc(i.dc || i.d)}</button><div class="meta"><span class="mono">${esc(i.c)}</span>${x?.pend ? '<span class="pill warn" title="Guardado en este celular: se envía cuando vuelva internet">sin enviar</span>' : ''}<span>x${i.u || 1} por caja</span><span class="pill ${i.s === 'FRIO' ? 'frio' : 'seco'}">${i.s === 'FRIO' ? 'Frío' : 'Seco'}</span>${x?.rec ? '<span class="pill warn">Volver a contar</span>' : ''}</div></div>
       ${sumando ? `<div class="val"></div><div class="ya-contado" style="grid-column:1/-1"><span class="lbl">Ya contado</span> <b class="mono" style="font-size:17px">${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u</b> <span class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</span></div>${sumarHtml(i)}` : `<div class="val">${done ? `${fmt(x.cj ?? 0)} cj ${fmt(x.un ?? 0)} u<div class="small muted">${esc(nom(x.by))} ${hora(x.ts)}</div>` : '<span class="muted small">sin contar</span>'}${cerrado && x?.nota ? `<div class="small">“${esc(x.nota)}”</div>` : ''}</div>`}
       ${cerrado ? '' : `<div class="in"><label>Cajas<input type="number" ${IM()} id="d-cj-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="cj" value="${esc(DD[i.c + 'cj'] ?? x?.cj ?? '')}"></label><label>Unidades<input type="number" ${IM()} id="d-un-${esc(i.c)}" data-act="dcnt" data-c="${esc(i.c)}" data-k="un" value="${esc(DD[i.c + 'un'] ?? x?.un ?? '')}"></label><button class="btn ${sumando ? '' : 'pri'}" data-act="dsave" data-c="${esc(i.c)}" style="align-self:end" ${sumando ? 'title="Reemplaza el total ya contado por estas cajas y unidades"' : ''}>${sumando ? 'Corregir total' : 'Guardar'}</button></div>
       ${verSis && (S.admin || x?.rec || conDif(i.c)) ? (() => { const l = lin(i.c); return l ? `<div class="small mono" style="grid-column:1/-1;font-size:14px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">diferencia</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)} u</b>` : ''}</div>` : ''; })() : ''}
@@ -1868,6 +1973,7 @@ function vContar() {
   };
   const pct = sec.length ? Math.round(hechos / sec.length * 100) : 0;
   return `<div class="stack">
+    ${bannerRed()}
     ${!cerrado && !S.admin && opt('verSisDep') && !tieneSistema() ? `<div class="banner info"><span class="grow">Administración habilitó ver la existencia del sistema, pero todavía no cargó los archivos del ${dm(S.dia)}. Aparece apenas los cargue.</span></div>` : ''}
     ${cerrado ? `<div class="banner ok"><span class="grow">El stock del ${dm(S.dia)} ya está cerrado. No se pueden cargar más conteos para ese día.</span></div>` : ''}
     ${enMarco() ? `<div class="banner info"><span class="grow">Si la cámara no abre, es porque Google la bloquea dentro de este marco: abrí la app a pantalla completa y escaneá desde ahí.</span><button class="btn pri sm" data-act="pantallaCompleta">Abrir a pantalla completa</button></div>` : ''}
@@ -2130,12 +2236,23 @@ async function sumarDeposito(c) {
   let res = null;
   try {
     // La suma la hace el servidor sobre lo que hay guardado en ese momento (no sobre lo que ve este celular)
-    const carga = { k: s.signo > 0 ? 'sum' : 'res', cj: Math.abs(Number(DD[c + 'acj']) || 0), un: Math.abs(Number(DD[c + 'aun']) || 0), u: Math.abs(s.delta) };
-    res = await API.call('sumarConteo', S.dia, c, s.delta, s.u, carga);
-    const antes = S.conteos[c] || {};
-    S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...antes, cj: res.cj, un: res.un, rec: false, ok: false, by: S.me.id, ts: Date.now(),
-      carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: Date.now() }] };
-    programarRefresco(400);
+    const carga = { k: s.signo > 0 ? 'sum' : 'res', cj: Math.abs(Number(DD[c + 'acj']) || 0), un: Math.abs(Number(DD[c + 'aun']) || 0), u: Math.abs(s.delta), id: opId() };
+    const op = { t: 'sum', c, dia: S.dia, delta: s.delta, u: s.u, carga, ts: ahoraSrv() };
+    // Sin conexión: queda en el celular y se suma acá; el servidor la suma cuando llega
+    const enCelular = () => {
+      colaAgregar(op); const sp = Core.split(s.total, s.u), antes = S.conteos[c] || {};
+      S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...antes, cj: sp.cj, un: sp.un, rec: false, ok: false, by: S.me.id, ts: Date.now(), pend: true,
+        carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: op.ts }] };
+      res = { cj: sp.cj, un: sp.un, antes: s.antes, total: s.total, cola: true }; recalc();
+    };
+    if (colaLeer().length) { enCelular(); colaEnviar(); }
+    else try {
+      res = await API.call('sumarConteo', S.dia, c, s.delta, s.u, carga);
+      const antes = S.conteos[c] || {};
+      S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...antes, cj: res.cj, un: res.un, rec: false, ok: false, by: S.me.id, ts: Date.now(),
+        carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: Date.now() }] };
+      programarRefresco(400);
+    } catch (e) { if (e.red) enCelular(); else throw e; }
   } catch (e) {
     if (/desconocida/i.test(e.message)) {
       // servidor sin actualizar: se calcula acá como antes
@@ -2147,7 +2264,7 @@ async function sumarDeposito(c) {
     delete DD[c + 'acj']; delete DD[c + 'aun']; delete DD[c + 'cj']; delete DD[c + 'un'];
     S.ui.yaContado = null; S.ui.foco = null; if (S.ui.modoSuma) delete S.ui.modoSuma[c];
     S.ui.okMsg = `✓ Actualizado <b>${esc(dDep(c))}</b>: ${s.delta >= 0 ? 'se sumaron' : 'se restaron'} ${(() => { const d = Core.split(Math.abs(s.delta), s.u); return (d.cj ? fmt(d.cj) + ' cj ' : '') + (d.un || !d.cj ? fmt(d.un) + ' u' : '') + (d.cj ? ' (' + fmt(Math.abs(s.delta)) + ' u)' : ''); })()} → total <b>${fmt(res.cj)} cj ${fmt(res.un)} u</b>.${res.antes !== undefined && res.antes !== s.antes ? ` <span class="small">(había ${fmt(res.antes)} u guardadas, no ${fmt(s.antes)}: otro celular había contado este artículo)</span>` : ''}`;
-    { const d = Core.split(Math.abs(s.delta), s.u); avisoGuardado(s.delta >= 0 ? 'Sumado' : 'Restado', dDep(c), `${s.delta >= 0 ? '+' : '−'} ${d.cj ? fmt(d.cj) + ' cj ' : ''}${d.un || !d.cj ? fmt(d.un) + ' u' : ''}<br>Total: <b>${fmt(res.cj)}</b> cajas · <b>${fmt(res.un)}</b> unidades`, s.delta < 0); }
+    { const d = Core.split(Math.abs(s.delta), s.u); avisoGuardado((s.delta >= 0 ? 'Sumado' : 'Restado') + (res.cola ? ' sin conexión' : ''), dDep(c), `${s.delta >= 0 ? '+' : '−'} ${d.cj ? fmt(d.cj) + ' cj ' : ''}${d.un || !d.cj ? fmt(d.un) + ' u' : ''}<br>Total: <b>${fmt(res.cj)}</b> cajas · <b>${fmt(res.un)}</b> unidades`, s.delta < 0); }
     document.querySelectorAll('[data-dirty]').forEach(el => delete el.dataset.dirty);
     const sc = $('#scan'); if (sc) { sc.value = ''; S.ui.q = ''; }
     render(); focoBusqueda();
@@ -3990,6 +4107,7 @@ document.addEventListener('click', async e => {
     case 'artMenu': abrirMenuArt(t, c); break;
     case 'det': cerrarMenuArt(); S.ui.det = c; S.ui.detVista = null; if (!HART[c] || HART[c].error) cargarHistArt(c); renderSheet(); break;
     case 'hart': cerrarMenuArt(); S.ui.det = c; S.ui.detVista = 'hist'; cargarHistArt(c); renderSheet(); break;
+    case 'descOk': lsGuardar(DESC_K, []); render(); break;
     case 'cerrarDet': S.ui.det = null; S.ui.detVista = null; sheetUltimo = null; $('#sheet').innerHTML = ''; break;
     case 'cerrar': S.ui.confirm = 'cerrar'; render(); break;
     case 'reabrir': S.ui.confirm = 'reabrir'; render(); break;
@@ -4186,7 +4304,7 @@ async function guardarDeposito(c) {
   if (ok) {
     delete DD[c + 'cj']; delete DD[c + 'un']; delete DD[c + 'nota']; for (const k of ['pal', 'bas', 'bul', 'un']) delete DD[c + '_' + k];
     if (S.ui.detAb) delete S.ui.detAb[c];
-    avisoGuardado('Guardado', dDep(c), `<b>${fmt(patch.cj)}</b> cajas · <b>${fmt(patch.un)}</b> unidades`);
+    avisoGuardado(ok === 'cola' ? 'Guardado sin conexión' : 'Guardado', dDep(c), `<b>${fmt(patch.cj)}</b> cajas · <b>${fmt(patch.un)}</b> unidades`);
     S.ui.yaContado = null; delete DD[c + 'acj']; delete DD[c + 'aun'];
     S.ui.okMsg = `✓ Guardado <b>${esc(dDep(c))}</b>: ${fmt(patch.cj)} cj ${fmt(patch.un)} u. Los ya contados se ven en "Todos".`;
     S.ui.foco = null;
@@ -4312,6 +4430,8 @@ S.ui.tab = null;
 try { S.ui.cont = !!localStorage.getItem('contScan'); const vv = localStorage.getItem('vista'); if (vv && vv !== 'auto') document.documentElement.dataset.vista = vv; } catch { }
 render();
 refrescar().then(iniciarSondeo);
+// La página queda guardada en el teléfono para abrir aunque no haya internet (sw.js); con internet siempre trae la última versión
+try { if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => { }); } catch { }
 if (!CFG.url || !CFG.pin) pedirAcceso();
 
 /* acceso para diagnóstico desde la consola */
