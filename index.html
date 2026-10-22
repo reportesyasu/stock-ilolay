@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb93';
+window.__VERSION = 'sb94';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb93</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb94</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1863,11 +1863,15 @@ function histArtHtml(c) {
   const ci = h.cierres || [], aj = h.ajustes || [];
   const m = S.maestro[c] || {}, u = m.u || 1;
   const cjun = x => { if (x === null || x === undefined) return '<span class="muted">no contado</span>'; const sp = Core.split(x, u); return `${fmt(x)} u <span class="muted small">(${fmt(sp.cj)} cj ${fmt(sp.un)} u)</span>`; };
-  const conDif = ci.filter(x => x.dif).length, neto = ci.reduce((s, x) => s + (x.dif || 0), 0);
+  // En lugar de la diferencia: lo ajustado ese día (suma de los ajustes del artículo con esa fecha, pendientes y pasados)
+  const ajDia = f => aj.filter(a => a.f === f), ajU = f => ajDia(f).reduce((s, a) => s + (Core.num(a.u) || 0), 0);
+  const ajTxt = f => [...new Set(ajDia(f).map(a => [TIPOS_AJ[a.t]?.n || a.t || '', a.m || '', a.o && a.o !== a.m ? a.o : ''].filter(Boolean).join(' · ')))].join('; ');
+  const conDif = ci.filter(x => ajDia(x.fecha).length).length, neto = ci.reduce((s, x) => s + ajU(x.fecha), 0);
   const verSis = S.admin || !!opt('verSisDep');
   return `<span class="lbl">Historial · últimos ${ci.length} cierres</span>
-    ${ci.length ? `<div class="small" style="margin:2px 0 6px">${conDif ? `Con diferencia en <b>${conDif}</b> de ${ci.length} cierres · neto <b style="color:${neto < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(neto)} u</b>` : 'Sin diferencias en estos cierres.'}</div>
-    <div class="tablebox"><table><thead><tr><th>Día</th>${verSis ? '<th class="n">Sistema</th>' : ''}<th class="n">Contado</th><th class="n">Dif.</th><th>Motivo / obs.</th></tr></thead><tbody>${ci.map(x => `<tr class="${x.dif < 0 ? 'difneg' : x.dif > 0 ? 'difpos' : ''}"><td>${diaSem(x.fecha).slice(0, 3)} ${dm(x.fecha)}</td>${verSis ? `<td class="n">${fmt(x.sis)}</td>` : ''}<td class="n">${cjun(x.cont)}</td><td class="n dif">${x.dif ? fmtS(x.dif) : '<span class="muted">0</span>'}</td><td class="small">${esc(x.m || '')}${x.obs ? ' · ' + esc(x.obs) : ''}${x.nota ? ` <span style="color:var(--warn)">“${esc(x.nota)}”</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Este artículo todavía no tiene cierres guardados.</div>'}
+    ${ci.length ? `<div class="small" style="margin:2px 0 6px">${conDif ? `Con ajustes en <b>${conDif}</b> de ${ci.length} cierres · neto ajustado <b style="color:${neto < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(neto)} u</b>` : 'Sin ajustes en los días de estos cierres.'}</div>
+    <div class="tablebox"><table><thead><tr><th>Día</th>${verSis ? '<th class="n">Sistema</th>' : ''}<th class="n">Contado</th><th class="n" title="Suma de los ajustes del artículo con fecha de ese día (pendientes y pasados al sistema)">Ajuste</th><th>Motivo / obs.</th></tr></thead><tbody>${ci.map(x => { const u = ajU(x.fecha), hay = ajDia(x.fecha).length, t = hay ? ajTxt(x.fecha) : [x.m || '', x.obs || ''].filter(Boolean).join(' · ');
+      return `<tr class="${u < 0 ? 'difneg' : u > 0 ? 'difpos' : ''}"><td>${diaSem(x.fecha).slice(0, 3)} ${dm(x.fecha)}</td>${verSis ? `<td class="n">${fmt(x.sis)}</td>` : ''}<td class="n">${cjun(x.cont)}</td><td class="n dif">${hay ? fmtS(u) : '<span class="muted">—</span>'}</td><td class="small">${esc(t)}${x.nota ? ` <span style="color:var(--warn)">“${esc(x.nota)}”</span>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="small muted">Este artículo todavía no tiene cierres guardados.</div>'}
     <span class="lbl" style="margin-top:10px;display:block">Ajustes del artículo</span>
     ${aj.length ? `<div class="tablebox"><table><thead><tr><th>Desde</th><th>Tipo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th>Estado</th></tr></thead><tbody>${aj.map(a => `<tr><td class="small">${a.f ? dm(a.f) : ''}</td><td>${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="small">${a.estado === 'pasado' ? `<span class="muted">pasado ${a.pts ? dm(new Date(a.pts).toLocaleDateString('sv-SE')) : ''}</span>` : '<b>pendiente</b>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Sin ajustes pendientes ni pasados en los últimos 30 días.</div>'}`;
 }
