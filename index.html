@@ -92,6 +92,11 @@ summary.pdfgrp-h::after{content:'▸';position:absolute;right:16px;top:50%;trans
 .ajBarra{position:sticky;top:var(--topH,58px);z-index:15;background:var(--bg);padding:6px 0;gap:8px;box-shadow:0 6px 8px -8px rgba(0,0,0,.25)}
 .ajBarra + datalist + .tablebox{max-height:calc(100dvh - var(--topH,58px) - var(--ajBarH,0px) - 24px)}
 .ajArriba > summary{cursor:pointer}
+/* Ajustes: filtro por varios motivos (lista desplegable con tildes) */
+.ajMulti{position:relative}
+.ajMulti > summary{list-style:none;min-width:200px;justify-content:space-between;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ajMulti > summary::-webkit-details-marker{display:none}
+.ajMultiBox{position:absolute;z-index:30;top:calc(100% + 4px);left:0;min-width:260px;max-height:340px;overflow:auto;display:grid;gap:6px;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r,8px);box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .card .ya-contado{border-top:1px dashed var(--line);padding-top:6px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .card.sumando .sumar{background:color-mix(in srgb,var(--ok) 8%,transparent);border-radius:8px;padding:6px}
 td.val{white-space:nowrap;font-family:var(--f-mono)}
@@ -316,7 +321,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb100';
+window.__VERSION = 'sb101';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -339,7 +344,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb100</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb101</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2328,7 +2333,7 @@ function aplicarDetalle(c) {
   const a = document.getElementById('d-cj-' + c), b = document.getElementById('d-un-' + c);
   if (a) { a.value = sp.cj; a.dataset.dirty = '1'; } if (b) { b.value = sp.un; b.dataset.dirty = '1'; }
 }
-document.addEventListener('toggle', e => { if (e.target && e.target.id === 'ajPasDet') S.ui.ajPasAb = e.target.open; }, true);
+document.addEventListener('toggle', e => { if (e.target && e.target.id === 'ajPasDet') S.ui.ajPasAb = e.target.open; if (e.target && e.target.id === 'ajFilDet') S.ui.ajFilAb = e.target.open; }, true);
 document.addEventListener('toggle', e => { const t = e.target; if (t && t.classList && t.classList.contains('movorg')) { S.ui.movAb ||= {}; S.ui.movAb[t.dataset.o] = t.open; } }, true);
 document.addEventListener('toggle', e => { const t = e.target; if (t && t.id && t.id.startsWith('det-')) { S.ui.detAb ||= {}; S.ui.detAb[t.id.slice(4)] = t.open; } }, true);
 function scanMsgHtml() {
@@ -2656,12 +2661,15 @@ async function ajEditar(ids, cambios) {
   try { const n = await API.call('editarAjustes', ids, cambios); toast(n ? `${n} ajuste${n === 1 ? '' : 's'} corregido${n === 1 ? '' : 's'}. Quedó registrado el cambio.` : 'No había nada para cambiar.'); programarRefresco(200); }
   catch (e) { S.ajustes = prev; recalc(); render(); toast('No se pudo corregir: ' + (/desconocida/i.test(e.message) ? 'falta correr el 1_estructura.sql nuevo en Supabase' : e.message)); }
 }
+// Filtro de ajustes por uno o varios motivos (vacío = todos)
+const ajPasaFil = a => { const f = S.ui.ajFils || []; return !f.length || f.includes(motivoKey(a.m)); };
 function vAjustes() {
   // Filtro por motivo (independiente del agrupado): junta un mismo motivo de todas las fechas para el PDF, el Excel o marcarlos como pasados
-  const todosAj = [...S.ajustes], fil = S.ui.ajFil || '';
+  const todosAj = [...S.ajustes], fils = S.ui.ajFils ||= [], fil = fils.length ? '1' : '';
   const motivos = {}; for (const a of todosAj) { const k = motivoKey(a.m); motivos[k] = (motivos[k] || 0) + 1; }
-  if (fil && !(fil in motivos)) { S.ui.ajFil = ''; return vAjustes(); } // el motivo filtrado ya no tiene pendientes: vuelve a Todos
-  const list = fil ? todosAj.filter(a => motivoKey(a.m) === fil) : todosAj;
+  // los motivos elegidos que ya no tienen pendientes se sacan del filtro
+  if (fils.some(k => !(k in motivos))) { S.ui.ajFils = fils.filter(k => k in motivos); return vAjustes(); }
+  const list = todosAj.filter(ajPasaFil);
   const tot = {}; for (const a of todosAj) tot[a.c] = (tot[a.c] || 0) + Core.num(a.u);
   const sel = S.ui.ajSel ||= new Set();
   for (const id of [...sel]) if (!todosAj.some(a => a.id === id)) sel.delete(id);
@@ -2698,7 +2706,11 @@ function vAjustes() {
     </form>
     </div></details>
     <div class="ajBarra stack">
-    <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><span class="small muted">Filtrar por motivo</span><select data-act="ajFil" aria-label="Filtrar por motivo" style="min-width:200px"><option value="">Todos (${todosAj.length})</option>${Object.entries(motivos).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `<option value="${esc(k)}" ${k === fil ? 'selected' : ''}>${esc(k || 'Sin motivo')} (${n})</option>`).join('')}</select>${fil || list.length ? `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajSelFil" ${todosFil ? 'checked' : ''}> Tildar ${fil ? 'todos los de este motivo' : 'todos'} (${list.length})</label>` : ''}${fil ? `<span class="small muted">${list.length} ajuste${list.length === 1 ? '' : 's'} · ${fmtS(list.reduce((s, a) => s + Core.num(a.u), 0))} u${selFil ? ` · <b>${selFil} tildado${selFil > 1 ? 's' : ''}</b>` : ''}</span>` : ''}</div>
+    <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><span class="small muted">Filtrar por motivo</span><details class="ajMulti" id="ajFilDet" ${S.ui.ajFilAb ? 'open' : ''}><summary class="btn" title="Elegí uno o varios motivos">${fils.length ? esc(fils.map(k => k || 'Sin motivo').join(', ')) : 'Todos'} (${list.length}) ▾</summary>
+      <div class="ajMultiBox"><label class="row small" style="gap:6px"><input type="checkbox" data-act="ajFilTodos" ${fils.length ? '' : 'checked'}> <b>Todos</b> (${todosAj.length})</label>
+      ${Object.entries(motivos).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajFilM" data-v="${esc(k)}" ${fils.includes(k) ? 'checked' : ''}> ${esc(k || 'Sin motivo')} (${n})</label>`).join('')}
+      <button class="btn sm" data-act="ajFilCerrar" style="margin-top:4px">Listo</button></div></details>
+      <button class="btn" data-act="ajExcelFil" ${list.length ? '' : 'disabled'} title="Excel totalizado por artículo (código, descripción, unidades y observación) con todos los pendientes de los motivos elegidos, sin necesidad de tildarlos">Excel de lo filtrado (${list.length})</button>${fil || list.length ? `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajSelFil" ${todosFil ? 'checked' : ''}> Tildar ${fil ? 'todos los filtrados' : 'todos'} (${list.length})</label>` : ''}${fil ? `<span class="small muted">${list.length} ajuste${list.length === 1 ? '' : 's'} · ${fmtS(list.reduce((s, a) => s + Core.num(a.u), 0))} u${selFil ? ` · <b>${selFil} tildado${selFil > 1 ? 's' : ''}</b>` : ''}</span>` : ''}</div>
     <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Motivo'], ['tipo', 'Tipo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
       <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajPdf" ${sel.size ? '' : 'disabled'} title="PDF con los ajustes tildados, totalizado por artículo (sirve para juntar un motivo de varias fechas)">PDF${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajEdLote" ${sel.size ? '' : 'disabled'} title="Cambiar tipo, motivo u observación de los tildados (queda registro)">Corregir${sel.size ? ' ' + sel.size : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
     ${S.ui.ajEdLote && sel.size ? `<div class="confirm stack"><b>Corregir ${sel.size} ajuste${sel.size > 1 ? 's' : ''} tildado${sel.size > 1 ? 's' : ''}</b>
@@ -2718,10 +2730,29 @@ function vAjustes() {
     </details>
   </div>`;
 }
+/* Excel de lo filtrado: pendientes de los motivos elegidos, totalizados por artículo:
+   CODIGO · DESCRIPCION · UNIDADES (suma total, en unidades) · OBSERVACION (detalle) */
+function excelFiltrado(lista, etiqueta) {
+  if (!lista.length) { toast('No hay ajustes pendientes con esos motivos.'); return; }
+  const por = new Map();
+  for (const a of lista) {
+    const g = por.get(a.c) || { c: a.c, u: 0, obs: [] };
+    g.u += Core.num(a.u); const o = String(a.o || '').trim(); if (o && !g.obs.includes(o)) g.obs.push(o); por.set(a.c, g);
+  }
+  const filas = [...por.values()].sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true }))
+    .map(g => [g.c, S.maestro[g.c]?.d || LINES.find(x => x.c === g.c)?.d || '', g.u, g.obs.join(' / ')]);
+  const total = filas.reduce((s, f) => s + f[2], 0);
+  try {
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'UNIDADES', 'OBSERVACION'], ...filas, [], ['', 'TOTAL (' + filas.length + ' artículos)', total, '']]), 'AJUSTES');
+    descargar('Ajustes ' + String(etiqueta || 'todos').replace(/[\\/:*?"<>|]/g, '-').slice(0, 60) + ' ' + dm(S.dia).replace('/', '-') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    toast('Excel descargado: ' + filas.length + ' artículo' + (filas.length === 1 ? '' : 's') + ' (' + lista.length + ' ajustes).');
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
+}
 /* Excel para egreso: los ajustes tildados, totalizados por artículo */
-function excelEgreso() {
-  const ids = S.ui.ajSel || new Set(), sel = S.ajustes.filter(a => ids.has(a.id));
-  if (!sel.length) { toast('Tildá los ajustes que querés incluir.'); return; }
+function excelEgreso(lista, etiqueta) {
+  const ids = S.ui.ajSel || new Set(), sel = lista || S.ajustes.filter(a => ids.has(a.id));
+  if (!sel.length) { toast(lista ? 'No hay ajustes pendientes con esos motivos.' : 'Tildá los ajustes que querés incluir.'); return; }
   const por = new Map();
   for (const a of sel) {
     const g = por.get(a.c) || { c: a.c, u: 0, n: 0, mot: new Set() };
@@ -2735,7 +2766,7 @@ function excelEgreso() {
   try {
     const wb = XL.utils.book_new();
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'UXC', 'UNIDADES', 'CAJAS', 'UNID. SUELTAS', 'AJUSTES', 'MOTIVOS'], ...filas, [], ['', 'TOTAL (' + filas.length + ' artículos)', '', total]]), 'EGRESO');
-    descargar('Egreso ajustes ' + dm(S.dia).replace('/', '-') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    descargar('Egreso ajustes ' + (etiqueta ? etiqueta.replace(/[\\/:*?"<>|]/g, '-').slice(0, 60) + ' ' : '') + dm(S.dia).replace('/', '-') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel descargado: ' + filas.length + ' artículo' + (filas.length === 1 ? '' : 's') + ' (' + sel.length + ' ajustes).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
 }
@@ -4309,6 +4340,8 @@ document.addEventListener('click', async e => {
       toast(n ? n + ' datos actualizados. Revisá y guardá.' : 'No había nada para actualizar.'); render(); break;
     }
     case 'ajExcel': excelEgreso(); break;
+    case 'ajExcelFil': { const f = S.ui.ajFils || []; excelFiltrado(S.ajustes.filter(ajPasaFil), f.length ? f.map(k => k || 'Sin motivo').join(' + ') : 'todos'); break; }
+    case 'ajFilCerrar': S.ui.ajFilAb = false; render(); break;
     case 'ajPdf': pdfAjustesSel(); break;
     case 'valPer': calcularValorizado(v); break;
     case 'valCalc': calcularValorizado(); break;
@@ -4431,11 +4464,12 @@ document.addEventListener('change', async e => {
   if (a === 'cxlsP') { (S.ui.cxls ||= {}).pre = t.checked; try { localStorage.setItem('cxlsP', t.checked ? '1' : '0'); } catch { } render(); return; }
   if (a === 'cxlsU') { (S.ui.cxls ||= {}).soloU = t.checked; try { localStorage.setItem('cxlsU', t.checked ? '1' : '0'); } catch { } render(); return; }
   if (a === 'valF') { const V = S.ui.val ||= valPeriodo('sem'); V[t.dataset.k] = t.value; V.per = ''; render(); return; }
-  if (a === 'ajFil') { S.ui.ajFil = t.value; S.ui.ajConfDel = false; render(); return; }
-  if (a === 'ajSelFil') { const sel = S.ui.ajSel ||= new Set(), fil = S.ui.ajFil || ''; for (const x of S.ajustes.filter(x => !fil || motivoKey(x.m) === fil)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } S.ui.ajConfDel = false; render(); return; }
+  if (a === 'ajFilM') { const f = S.ui.ajFils ||= [], k = t.dataset.v; S.ui.ajFils = t.checked ? [...new Set([...f, k])] : f.filter(x => x !== k); S.ui.ajConfDel = false; S.ui.ajFilAb = true; render(); return; }
+  if (a === 'ajFilTodos') { S.ui.ajFils = []; S.ui.ajConfDel = false; S.ui.ajFilAb = true; render(); return; }
+  if (a === 'ajSelFil') { const sel = S.ui.ajSel ||= new Set(), fil = S.ui.ajFil || ''; for (const x of S.ajustes.filter(ajPasaFil)) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } S.ui.ajConfDel = false; render(); return; }
   if (a === 'ajSel' || a === 'ajSelGrupo') S.ui.ajConfDel = false;
   if (a === 'ajSel') { const sel = S.ui.ajSel ||= new Set(); if (t.checked) sel.add(t.dataset.id); else sel.delete(t.dataset.id); render(); return; }
-  if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => grupoAj(x) === t.dataset.v && (!S.ui.ajFil || motivoKey(x.m) === S.ui.ajFil))) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
+  if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => grupoAj(x) === t.dataset.v && ajPasaFil(x))) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
   if (a === 'cnt') {
     delete t.dataset.dirty;
     const other = $(`#a-${t.dataset.k === 'cj' ? 'un' : 'cj'}-${CSS.escape(c)}`);
