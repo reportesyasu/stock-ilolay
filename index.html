@@ -321,7 +321,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb103';
+window.__VERSION = 'sb104';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -344,7 +344,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb103</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb104</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -710,7 +710,7 @@ const Core = (() => {
         contado, auto, cont, contCj: contadoReal ? num(k.cj) : auto ? 0 : null, contUn: contadoReal ? num(k.un) : auto ? 0 : null,
         dif, precio, importe: dif ? Math.round(dif * precio * 100) / 100 : 0,
         motivo: k?.m || '', obs: k?.obs || '', nota: k?.nota || '', por: k?.by || null, rec: !!k?.rec,
-        prevDif: prev ? prev.dif : null, prevMotivo: prev ? prev.m : '',
+        prevDif: prev ? prev.dif : null, prevMotivo: prev ? prev.m : '', prevAj: prev && prev.aj !== undefined ? Number(prev.aj) || 0 : null, prevAjM: prev?.ajm || '',
         faltaYasu: !y, faltaSap: !sap?.by[c]
       });
     }
@@ -1791,7 +1791,8 @@ function tablaHoy(lines, sis, cerrado) {
     const cls = [l.contado && l.dif < 0 ? 'difneg' : '', l.contado && l.dif > 0 ? 'difpos' : '', l.rec ? 'rec' : ''].join(' ');
     const inCj = cerrado ? fmt(l.contCj) : `<input type="number" inputmode="numeric" class="cj" id="a-cj-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="cj" value="${l.contCj ?? ''}" aria-label="Cajas contadas ${esc(l.c)}">`;
     const inUn = cerrado ? fmt(l.contUn) : `<input type="number" inputmode="numeric" class="un" id="a-un-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="un" value="${l.contUn ?? ''}" aria-label="Unidades contadas ${esc(l.c)}">`;
-    const ayer = l.prevDif ? `<span class="${l.prevDif < 0 ? 'pill bad' : 'pill ok'}" title="${esc(l.prevMotivo)}">${fmtS(l.prevDif)}</span>` : '';
+    // Ayer: suma de los ajustes con fecha del cierre anterior (pendientes y pasados al sistema)
+    const ayer = l.prevAj ? `<span class="${l.prevAj < 0 ? 'pill bad' : 'pill ok'}" title="Ajustes del ${esc(dm(S.anteriorFecha || ''))}${l.prevAjM ? ': ' + esc(l.prevAjM) : ''}">${fmtS(l.prevAj)}</span>` : '';
     rows += `<tr class="${cls}">
       <td><span class="code">${esc(l.c)}</span></td>
       <td class="desc"><button class="link" data-act="artMenu" data-c="${esc(l.c)}" title="Tocá para ver el detalle, el historial o los movimientos">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : l.metodo === 'hibrido' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa, menos ventana (archivo) y menos facturación Ilolay (pestaña Quesos)">queso · híbrido</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.auto ? ' · <span title="El sistema está en 0 y nadie lo contó: se toma como contado en 0. Si depósito cuenta algo, aparece la diferencia.">sistema en 0 · contado 0 automático</span>' : ''}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}</td>
@@ -1805,7 +1806,7 @@ function tablaHoy(lines, sis, cerrado) {
       <td class="n val">${sis && l.contado && l.dif ? money(l.importe) : ''}</td>
     </tr>`;
   }
-  return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n hide-sm">Sistema</th><th class="n">Contado</th><th class="n">Dif. u</th><th class="n hide-sm">Ayer</th><th></th><th>Motivo</th><th class="hide-sm">Obs.</th><th class="n">Valorizado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n hide-sm">Sistema</th><th class="n">Contado</th><th class="n">Dif. u</th><th class="n hide-sm" title="Suma de los ajustes con fecha del cierre anterior (pendientes y pasados al sistema)">Ajustes ayer</th><th></th><th>Motivo</th><th class="hide-sm">Obs.</th><th class="n">Valorizado</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 /* bloque 3 */
