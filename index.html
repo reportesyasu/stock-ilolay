@@ -321,7 +321,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb102';
+window.__VERSION = 'sb103';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -344,7 +344,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb102</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb103</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1501,6 +1501,8 @@ function lineasVista() {
   });
   return LINES;
 }
+// Orden del PDF de diferencias: sector (Frío, Seco) y código de fábrica de menor a mayor
+const ordenPdfDif = (a, b) => (a.s || '').localeCompare(b.s || '') || String(a.c).localeCompare(String(b.c), 'es', { numeric: true });
 function filtrar(lines) {
   const q = S.ui.q.trim().toUpperCase();
   const hayStock = !!S.cierre || tieneSistema();
@@ -1674,6 +1676,7 @@ function vHoy() {
   if (!Object.keys(S.maestro).length && !cerrado) return vFiles() + `<div class="panel empty">Todavía no hay artículos cargados. Agregalos en <button class="link" data-act="tab" data-v="maestro">Artículos</button>.</div>`;
   const r = resumen(all);
   const lines = filtrar(all);
+  if (S.ui.filtro === 'dif' || S.ui.filtro === 'sinmot') lines.sort(ordenPdfDif);
   const sis = cerrado || tieneSistema();
   const hu = !cerrado && S.files.sap && S.files.yasu ? Core.huerfanos({ maestro: S.maestro, sap: S.files.sap.data, yasu: S.files.yasu.data }).filter(h => !ignorado(h.c)) : [];
   const avisos = [];
@@ -1975,7 +1978,8 @@ function vContar() {
     return true;
   });
   // Los marcados para recontar van al final: arriba queda lo que todavía no se contó
-  vis.sort((a, b) => (k(a.c)?.rec ? 1 : 0) - (k(b.c)?.rec ? 1 : 0));
+  if (S.ui.solo === 'dif') vis.sort(ordenPdfDif);
+  else vis.sort((a, b) => (k(a.c)?.rec ? 1 : 0) - (k(b.c)?.rec ? 1 : 0));
   const card = i => {
     const x = k(i.c), done = contado(i.c);
     const sumando = done && !cerrado && S.ui.yaContado === i.c;
