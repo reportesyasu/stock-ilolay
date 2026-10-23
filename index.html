@@ -88,6 +88,10 @@ summary.pdfgrp-h::after{content:'▸';position:absolute;right:16px;top:50%;trans
 .pdfgrp.g3{border-color:#9fcfae}.pdfgrp.g3 .pdfgrp-h{background:#e5f4ea}.pdfgrp.g3 .pdfgrp-n{background:#1e7a3c}
 .pdfgrp.g4{border-color:#c9ced6}.pdfgrp.g4 .pdfgrp-h{background:#eef0f3}.pdfgrp.g4 .pdfgrp-n{background:#5b6573}
 @media (prefers-color-scheme: dark){.pdfgrp .pdfgrp-h{background:color-mix(in srgb,var(--surface) 85%,#888) !important}}
+/* Ajustes: filtro, agrupado y botones de los tildados quedan fijos arriba al bajar por la lista */
+.ajBarra{position:sticky;top:var(--topH,58px);z-index:15;background:var(--bg);padding:6px 0;gap:8px;box-shadow:0 6px 8px -8px rgba(0,0,0,.25)}
+.ajBarra + datalist + .tablebox{max-height:calc(100dvh - var(--topH,58px) - var(--ajBarH,0px) - 24px)}
+.ajArriba > summary{cursor:pointer}
 .card .ya-contado{border-top:1px dashed var(--line);padding-top:6px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .card.sumando .sumar{background:color-mix(in srgb,var(--ok) 8%,transparent);border-radius:8px;padding:6px}
 td.val{white-space:nowrap;font-family:var(--f-mono)}
@@ -312,7 +316,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb99';
+window.__VERSION = 'sb100';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +339,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb99</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb100</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1547,6 +1551,7 @@ function renderAhora() {
   renderSheet();
   restoreFocus(keep);
   document.documentElement.style.setProperty('--topH', $('#top').offsetHeight + 'px');
+  { const ab = document.querySelector('.ajBarra'); document.documentElement.style.setProperty('--ajBarH', (ab ? ab.offsetHeight : 0) + 'px'); }
 }
 /* Reemplaza la pantalla sin perder dónde estaba cada barra de desplazamiento.
    En la actualización automática (cada 15 s), si no cambió nada no se toca la pantalla. */
@@ -2676,8 +2681,11 @@ function vAjustes() {
     return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="9">${esc(nombre)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
   }).join('');
   const P = S.ui.ajPasados;
+  const arribaAb = !!S.ui.ajPre || (() => { try { return localStorage.getItem('ajArribaAb') !== '0'; } catch { return true; } })();
   return `<div class="stack">
-    <div class="row" style="justify-content:space-between"><div><h2>Ajustes pendientes</h2><div class="small muted">Movimientos que todavía no están cargados en SAP o en Yasukawa: se suman o restan al stock del sistema hasta que los marques como <b>pasados al sistema</b>. Ahí dejan de contar y quedan como registro abajo.</div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
+    <details class="panel ajArriba" data-recordar="ajArribaAb" ${arribaAb ? 'open' : ''}><summary><h2 style="display:inline;font-size:1.15em">Ajustes pendientes</h2> <span class="small muted">· ${todosAj.length} pendiente${todosAj.length === 1 ? '' : 's'} · cargar ajustes y ayuda</span></summary>
+    <div class="stack" style="margin-top:8px">
+    <div class="row" style="justify-content:space-between"><div><div class="small muted">Movimientos que todavía no están cargados en SAP o en Yasukawa: se suman o restan al stock del sistema hasta que los marques como <b>pasados al sistema</b>. Ahí dejan de contar y quedan como registro abajo.</div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
     ${S.ui.ajPre && LINES.find(x => x.c === S.ui.ajPre) ? (() => { const l = LINES.find(x => x.c === S.ui.ajPre); return `<div class="banner info"><span class="grow"><b class="mono">${esc(l.c)}</b> ${esc(l.d)}: sistema ${fmt(l.sis)} u, contado ${l.contado ? fmt(l.cont) + ' u' : 'sin contar'}${l.contado ? ', diferencia <b>' + fmtS(l.dif) + ' u</b>' : ''}. Al volver a Administración, la existencia se recalcula con el ajuste que cargues.</span></div>`; })() : ''}
     ${opt('quesoSap') === 'manual' ? `<div class="banner info"><span class="grow">Modo manual de quesos: cargá acá las hormas facturadas por Ilolay en el día como <b>Venta del día</b> (se restan) y los ingresos de camión como <b>Ingreso del día</b>. Se borran al cerrar.</span></div>` : ''}
     <form class="panel row" id="fAj">
@@ -2688,6 +2696,8 @@ function vAjustes() {
       <input type="text" id="ajO" placeholder="Observación (opcional)" style="flex:1;min-width:160px" value="${esc(S.ui.ajPreO || '')}">
       <button class="btn pri" type="submit">Agregar</button>
     </form>
+    </div></details>
+    <div class="ajBarra stack">
     <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><span class="small muted">Filtrar por motivo</span><select data-act="ajFil" aria-label="Filtrar por motivo" style="min-width:200px"><option value="">Todos (${todosAj.length})</option>${Object.entries(motivos).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `<option value="${esc(k)}" ${k === fil ? 'selected' : ''}>${esc(k || 'Sin motivo')} (${n})</option>`).join('')}</select>${fil || list.length ? `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajSelFil" ${todosFil ? 'checked' : ''}> Tildar ${fil ? 'todos los de este motivo' : 'todos'} (${list.length})</label>` : ''}${fil ? `<span class="small muted">${list.length} ajuste${list.length === 1 ? '' : 's'} · ${fmtS(list.reduce((s, a) => s + Core.num(a.u), 0))} u${selFil ? ` · <b>${selFil} tildado${selFil > 1 ? 's' : ''}</b>` : ''}</span>` : ''}</div>
     <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Motivo'], ['tipo', 'Tipo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
       <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajPdf" ${sel.size ? '' : 'disabled'} title="PDF con los ajustes tildados, totalizado por artículo (sirve para juntar un motivo de varias fechas)">PDF${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajEdLote" ${sel.size ? '' : 'disabled'} title="Cambiar tipo, motivo u observación de los tildados (queda registro)">Corregir${sel.size ? ' ' + sel.size : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
@@ -2698,6 +2708,7 @@ function vAjustes() {
         <label class="stack" style="gap:2px;flex:2;min-width:180px"><span class="lbl">Observación</span><input type="text" id="ajLtO" data-act="ajEdV" placeholder="vacío = sin cambiar" value="${esc(ajV('ajLtO', ''))}"></label>
         <button class="btn pri" data-act="ajEdLoteOk">Aplicar a ${sel.size}</button><button class="btn" data-act="ajEdNo">Cancelar</button>
       </div><span class="small muted">Solo se cambia lo que completes. Las unidades no se tocan y en cada ajuste queda registrado cómo estaba.</span></div>` : ''}
+    </div>
     <datalist id="ajMotList">${[...new Set([...(opt('motivos') || []), ...todosAj.map(a => a.m).filter(Boolean)])].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
     <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>Tipo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
     ${bloques || `<tr><td colspan="10" class="empty">${fil ? 'No hay ajustes pendientes con ese motivo.' : 'No hay ajustes pendientes.'}</td></tr>`}
