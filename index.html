@@ -12,7 +12,7 @@
 :root{
   --bg:#f3f5f6; --surface:#ffffff; --sunk:#e8ecee; --line:#d3dadd; --ink:#15232d; --muted:#5a6a73;
   --accent:#1d5f86; --accent-ink:#ffffff; --frio:#1d6f95; --seco:#9a6b1f;
-  --ok:#2f7d4f; --ok-bg:#e3f1e8; --bad:#b3362c; --bad-bg:#f8e4e1; --warn:#946200; --warn-bg:#fbefd2; --info-bg:#e2eef5;
+  --ok:#2f7d4f; --ok-bg:#e3f1e8; --bad:#b3362c; --bad-bg:#f8e4e1; --warn:#946200; --warn-bg:#fbefd2; --info-bg:#e2eef5; --coin:#6b3fb8; --coin-bg:#eee6fb;
   --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
@@ -21,11 +21,11 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f171c; --surface:#16222a; --sunk:#1c2b34; --line:#2a3b45; --ink:#e3eaee; --muted:#93a4ad;
   --accent:#5fa9d6; --accent-ink:#071219; --frio:#6cb6dd; --seco:#d9a654;
-  --ok:#6cc792; --ok-bg:#163a26; --bad:#f08a7f; --bad-bg:#43201c; --warn:#e6b84e; --warn-bg:#3d3113; --info-bg:#173244; color-scheme:dark}}
+  --ok:#6cc792; --ok-bg:#163a26; --bad:#f08a7f; --bad-bg:#43201c; --warn:#e6b84e; --warn-bg:#3d3113; --info-bg:#173244; --coin:#c6a9f7; --coin-bg:#2f2248; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f171c; --surface:#16222a; --sunk:#1c2b34; --line:#2a3b45; --ink:#e3eaee; --muted:#93a4ad;
   --accent:#5fa9d6; --accent-ink:#071219; --frio:#6cb6dd; --seco:#d9a654;
-  --ok:#6cc792; --ok-bg:#163a26; --bad:#f08a7f; --bad-bg:#43201c; --warn:#e6b84e; --warn-bg:#3d3113; --info-bg:#173244; color-scheme:dark}
+  --ok:#6cc792; --ok-bg:#163a26; --bad:#f08a7f; --bad-bg:#43201c; --warn:#e6b84e; --warn-bg:#3d3113; --info-bg:#173244; --coin:#c6a9f7; --coin-bg:#2f2248; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.4}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
@@ -40,7 +40,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .dia{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
 .pill.open{background:var(--info-bg);color:var(--accent)} .pill.closed{background:var(--ok-bg);color:var(--ok)}
-.pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.coin{background:var(--coin-bg);color:var(--coin);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--coin) 45%,transparent);font-weight:700} .pill.ok{background:var(--ok-bg);color:var(--ok)}
 .pill.frio{background:var(--info-bg);color:var(--frio)} .pill.seco{background:var(--warn-bg);color:var(--seco)}
 .tabs{display:flex;gap:2px;margin-left:auto;overflow-x:auto;max-width:100%}
 .tabs button{border:0;background:none;padding:7px 12px;border-radius:var(--r);cursor:pointer;font-weight:600;color:var(--muted);white-space:nowrap}
@@ -321,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb104';
+window.__VERSION = 'sb105';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -344,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb104</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb105</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1791,14 +1792,17 @@ function tablaHoy(lines, sis, cerrado) {
     const cls = [l.contado && l.dif < 0 ? 'difneg' : '', l.contado && l.dif > 0 ? 'difpos' : '', l.rec ? 'rec' : ''].join(' ');
     const inCj = cerrado ? fmt(l.contCj) : `<input type="number" inputmode="numeric" class="cj" id="a-cj-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="cj" value="${l.contCj ?? ''}" aria-label="Cajas contadas ${esc(l.c)}">`;
     const inUn = cerrado ? fmt(l.contUn) : `<input type="number" inputmode="numeric" class="un" id="a-un-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="un" value="${l.contUn ?? ''}" aria-label="Unidades contadas ${esc(l.c)}">`;
-    // Ayer: suma de los ajustes con fecha del cierre anterior (pendientes y pasados al sistema)
-    const ayer = l.prevAj ? `<span class="${l.prevAj < 0 ? 'pill bad' : 'pill ok'}" title="Ajustes del ${esc(dm(S.anteriorFecha || ''))}${l.prevAjM ? ': ' + esc(l.prevAjM) : ''}">${fmtS(l.prevAj)}</span>` : '';
+    // Ayer: suma de los ajustes con fecha del cierre anterior (pendientes y pasados al sistema).
+    // En violeta cuando esa suma es igual (en cantidad) a la diferencia de hoy: puede ser el mismo ajuste que todavía no impactó o que se pasó dos veces.
+    const coin = !!(sis && l.contado && l.dif && l.prevAj && Math.round(Math.abs(l.prevAj) * 100) === Math.round(Math.abs(l.dif) * 100));
+    const coinTxt = coin ? ` · coincide con la diferencia de hoy (${Math.sign(l.prevAj) === Math.sign(l.dif) ? 'mismo signo' : 'signo contrario'})` : '';
+    const ayer = l.prevAj ? `<span class="pill ${coin ? 'coin' : l.prevAj < 0 ? 'bad' : 'ok'}" title="Ajustes del ${esc(dm(S.anteriorFecha || ''))}${l.prevAjM ? ': ' + esc(l.prevAjM) : ''}${coinTxt}">${fmtS(l.prevAj)}</span>` : '';
     rows += `<tr class="${cls}">
       <td><span class="code">${esc(l.c)}</span></td>
       <td class="desc"><button class="link" data-act="artMenu" data-c="${esc(l.c)}" title="Tocá para ver el detalle, el historial o los movimientos">${esc(l.d)}</button>${l.q ? (l.metodo === 'variacion' ? ' <span class="pill seco" title="Contado al cierre anterior más la variación de SAP y Yasukawa desde entonces">queso · variación</span>' : l.metodo === 'manual' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa y la facturación Ilolay cargada a mano">queso · manual</span>' : l.metodo === 'hibrido' ? ' <span class="pill seco" title="Contado al cierre anterior más variación de Yasukawa, menos ventana (archivo) y menos facturación Ilolay (pestaña Quesos)">queso · híbrido</span>' : ' <span class="pill seco" title="Se parte del cierre anterior; falta el dato de kilos del cierre para usar la variación">queso · arrastre</span>') : ''}${l.rec ? ' <span class="pill warn">recontar</span>' : ''}<div class="small muted">x${l.uxc}${l.auto ? ' · <span title="El sistema está en 0 y nadie lo contó: se toma como contado en 0. Si depósito cuenta algo, aparece la diferencia.">sistema en 0 · contado 0 automático</span>' : ''}${l.por ? ' · contó ' + esc(nom(l.por)) : ''}${l.ok ? ` · <span style="color:var(--ok)">✓ verificado ${hora(l.okTs)}</span>` : ''}${l.ok && l.cambio ? ` · sistema ahora ${fmtS(l.cambio)} u (${fmt(Core.split(l.sisVivo, l.uxc).cj)} cj ${fmt(Core.split(l.sisVivo, l.uxc).un)} u)` : ''}</div>${sis ? `<div class="only-sm mono" style="font-size:13.5px"><span class="muted">Sistema</span> <b>${fmt(l.sisCj)}</b> cj <b>${fmt(l.sisUn)}</b> u${l.contado && l.dif ? ` · <span class="muted">dif</span> <b style="color:${l.dif < 0 ? 'var(--bad)' : 'var(--ok)'}">${fmtS(l.dif)}</b>` : ''}</div>` : ''}${l.nota ? `<div style="color:var(--warn);font-size:15px;font-weight:500">Depósito: “${esc(l.nota)}”</div>` : ''}</td>
       <td class="n hide-sm">${sis ? `${fmt(l.sisCj)} <span class="muted">cj</span> ${fmt(l.sisUn)} <span class="muted">u</span>` : '<span class="muted small" title="Faltan los archivos del día">sin archivos</span>'}</td>
       <td class="n"><span class="cnt">${inCj}<span>cj</span>${inUn}<span>u</span></span></td>
-      <td class="n dif">${sis && l.contado ? (l.dif ? fmtS(l.dif) : '<span class="muted">0</span>') : ''}</td>
+      <td class="n dif">${sis && l.contado ? (l.dif ? (coin ? `<span class="pill coin" title="Igual a los ajustes del ${esc(dm(S.anteriorFecha || ''))}${coinTxt}">${fmtS(l.dif)}</span>` : fmtS(l.dif)) : '<span class="muted">0</span>') : ''}</td>
       <td class="n hide-sm">${ayer}</td>
       <td class="acc">${cerrado ? '' : `<div class="row acc-btns">${sis && !l.contado ? `<button class="btn sm" data-act="igual" data-c="${esc(l.c)}" title="Cargar el contado igual al sistema">= sist.</button>` : ''}${sis && l.contado && l.dif ? `<button class="btn sm" data-act="aStock" data-c="${esc(l.c)}" title="Dar por bueno el stock del sistema: el contado pasa a ser igual al sistema">Stock</button><button class="btn sm" data-act="aConteo" data-c="${esc(l.c)}" title="Dar por bueno el conteo: crea un ajuste para que el sistema quede igual a lo contado">Conteo</button><button class="btn sm" data-act="aAjuste" data-c="${esc(l.c)}" title="Ir a Ajustes con este artículo">Ajuste</button>` : ''}${opt('btnRecontar') || l.rec ? `<button class="btn sm" data-act="rec" data-c="${esc(l.c)}" aria-pressed="${l.rec}" title="Pedir al depósito que lo vuelva a contar">${l.rec ? 'Quitar recuento' : 'Recontar'}</button>` : ''}</div>`}</td>
       <td>${l.contado && l.dif ? motivoSel('a-m-' + l.c, l.motivo, false).replace('data-act="motivo"', `data-act="motivo" data-c="${esc(l.c)}"`) : ''}</td>
@@ -1969,6 +1973,9 @@ function vContar() {
   const nDif = sec.filter(enDif).length;
   if (S.ui.solo === 'rec') S.ui.solo = 'dif';
   // Después de escanear se muestra solo ese artículo, para no cargar la cantidad en otro por error
+  const filtraExist = !!q && !/^\d+$/.test(q) && !S.ui.verSinExist && tieneSistema() && !cerrado;
+  const conExist = c => (lin(c)?.sisVivo ?? lin(c)?.sis ?? 0) > 0 || contado(c);
+  let sinExist = 0;
   const vis = sec.filter(i => {
     if (S.ui.foco) return S.ui.foco === i.c;
     if (S.ui.solo === 'dif' && !enDif(i)) return false;
@@ -1976,6 +1983,8 @@ function vContar() {
     if (S.ui.solo === 'rec' && !k(i.c)?.rec) return false;
     if (S.ui.solo === 'cont' && !contado(i.c)) return false;
     if (q && !(i.c.includes(q) || sinTilde(i.d).includes(sinTilde(q)) || sinTilde(i.dc).includes(sinTilde(q)) || (i.e || []).includes(q))) return false;
+    // Búsqueda por descripción: solo los que tienen existencia en el sistema (o que ya se contaron). Por código o escaneo se ven todos.
+    if (filtraExist && !conExist(i.c)) { sinExist++; return false; }
     return true;
   });
   // Los marcados para recontar van al final: arriba queda lo que todavía no se contó
@@ -2012,6 +2021,7 @@ function vContar() {
     <div id="scanMsg">${scanMsgHtml()}</div>
     ${opt('verLogCam') && S.scanLog.length ? `<details class="panel small" id="scanLogDet" ${S.ui.logAbierto ? 'open' : ''}><summary class="muted">Registro de la cámara</summary><pre id="scanLogBox" class="mono" style="white-space:pre-wrap;margin:8px 0 0;font-size:12px">${esc(S.scanLog.join('\n'))}</pre><button class="btn sm" data-act="copiarLog">Copiar registro</button></details>` : ''}
     ${S.ui.foco && vis.length ? `<div class="row small" style="justify-content:space-between;align-items:center;margin:2px 0"><span class="muted">Solo el escaneado</span><button class="btn xs" data-act="verTodos">Ver todos</button></div>` : ''}
+    ${sinExist ? `<div class="small muted row" style="gap:8px;align-items:center">Mostrando solo artículos con existencia · ${sinExist} sin existencia oculto${sinExist === 1 ? '' : 's'}<button class="btn xs" data-act="verSinExist">Ver también sin existencia</button></div>` : q && S.ui.verSinExist && !/^\d+$/.test(q) ? `<div class="small muted row" style="gap:8px;align-items:center">Mostrando también los sin existencia<button class="btn xs" data-act="verSinExist">Solo con existencia</button></div>` : ''}
     <div class="cards">${vis.length ? vis.map(card).join('') : `<div class="panel empty">${S.ui.solo === 'pend' ? 'No queda nada pendiente en este sector.' : S.ui.solo === 'cont' ? 'Todavía no se contó ningún artículo en este sector.' : S.ui.solo === 'dif' ? (hayDif ? 'No hay diferencias en este sector: todo lo contado coincide con el sistema.' : 'Todavía no se cargaron los archivos del día en Administración: sin el stock del sistema no se pueden ver las diferencias.') : 'No hay artículos con este filtro.'}</div>`}</div>
   </div>`;
 }
@@ -4368,6 +4378,7 @@ document.addEventListener('click', async e => {
       break;
     }
     case 'ajDelSel': S.ui.ajConfDel = true; render(); break;
+    case 'verSinExist': S.ui.verSinExist = !S.ui.verSinExist; render(); break;
     case 'ajEd': S.ui.ajEd = S.ui.ajEd === t.dataset.id ? null : t.dataset.id; S.ui.ajEdLote = false; S.ui.ajEdV = {}; render(); break;
     case 'ajEdNo': S.ui.ajEd = null; S.ui.ajEdLote = false; S.ui.ajEdV = {}; render(); break;
     case 'ajEdLote': S.ui.ajEdLote = !S.ui.ajEdLote; S.ui.ajEd = null; S.ui.ajEdV = {}; render(); break;
