@@ -312,7 +312,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb98';
+window.__VERSION = 'sb99';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -335,7 +335,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb98</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb99</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2614,6 +2614,43 @@ async function guardarMaestro() {
 
 /* ---------- Ajustes ---------- */
 function motivoKey(m) { return String(m || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+/* Corregir tipo, motivo y observación de ajustes pendientes (las unidades y el artículo no se cambian). Cada cambio queda registrado. */
+const ajV = (id, def) => { const v = S.ui.ajEdV?.[id]; return v === undefined ? def : v; };
+const tipoOpts = (sel, vacio) => (vacio ? `<option value="">${vacio}</option>` : '') + Object.entries(TIPOS_AJ).map(([k, t]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${t.n}</option>`).join('');
+function ajHistHtml(a) {
+  const H = Array.isArray(a.h) ? a.h : []; if (!H.length) return '<div class="small muted">Sin correcciones todavía.</div>';
+  const tn = t => TIPOS_AJ[t]?.n || t || '—', q = s => s ? '“' + esc(s) + '”' : '(vacío)';
+  return `<div class="small"><b>Registro de correcciones</b><ul style="margin:4px 0 0 18px;padding:0">${H.slice().reverse().map(x => {
+    const A = x.antes || {}, D = x.despues || {}, c = [];
+    if (A.t !== D.t) c.push(`tipo ${esc(tn(A.t))} → <b>${esc(tn(D.t))}</b>`);
+    if ((A.m || '') !== (D.m || '')) c.push(`motivo ${q(A.m)} → <b>${q(D.m)}</b>`);
+    if ((A.o || '') !== (D.o || '')) c.push(`obs. ${q(A.o)} → <b>${q(D.o)}</b>`);
+    return `<li>${x.ts ? new Date(x.ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''} · ${esc(nom(x.por))}: ${c.join('; ') || 'sin cambios'}</li>`;
+  }).join('')}</ul></div>`;
+}
+function ajEdFila(a) {
+  return `<tr class="ajed"><td></td><td colspan="9" style="background:color-mix(in srgb,var(--accent,#1d5f86) 6%,transparent)">
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:end">
+      <label class="stack" style="gap:2px"><span class="lbl">Tipo</span><select id="ajEdT" data-act="ajEdV">${tipoOpts(ajV('ajEdT', a.t))}</select></label>
+      <label class="stack" style="gap:2px;flex:1;min-width:140px"><span class="lbl">Motivo</span><input type="text" id="ajEdM" data-act="ajEdV" list="ajMotList" value="${esc(ajV('ajEdM', a.m || ''))}"></label>
+      <label class="stack" style="gap:2px;flex:2;min-width:180px"><span class="lbl">Observación</span><input type="text" id="ajEdO" data-act="ajEdV" value="${esc(ajV('ajEdO', a.o || ''))}"></label>
+      <button class="btn pri sm" data-act="ajEdOk" data-id="${esc(a.id)}">Guardar corrección</button><button class="btn sm" data-act="ajEdNo">Cancelar</button>
+    </div>
+    <div class="small muted" style="margin:4px 0">Las unidades y el artículo no se cambian: si están mal, borrá el ajuste y cargalo de nuevo.</div>
+    ${ajHistHtml(a)}</td></tr>`;
+}
+async function ajEditar(ids, cambios) {
+  if (!ids.length) return;
+  const prev = JSON.parse(JSON.stringify(S.ajustes));
+  for (const a of S.ajustes) if (ids.includes(a.id)) {
+    const d = { t: cambios.t || a.t, m: 'm' in cambios ? cambios.m : a.m, o: 'o' in cambios ? cambios.o : a.o };
+    if (d.t === a.t && d.m === a.m && (d.o || '') === (a.o || '')) continue;
+    a.h = [...(a.h || []), { ts: Date.now(), por: S.me.id, antes: { t: a.t, m: a.m, o: a.o || '' }, despues: d }]; Object.assign(a, d);
+  }
+  S.ui.ajEd = null; S.ui.ajEdLote = false; S.ui.ajEdV = {}; recalc(); render();
+  try { const n = await API.call('editarAjustes', ids, cambios); toast(n ? `${n} ajuste${n === 1 ? '' : 's'} corregido${n === 1 ? '' : 's'}. Quedó registrado el cambio.` : 'No había nada para cambiar.'); programarRefresco(200); }
+  catch (e) { S.ajustes = prev; recalc(); render(); toast('No se pudo corregir: ' + (/desconocida/i.test(e.message) ? 'falta correr el 1_estructura.sql nuevo en Supabase' : e.message)); }
+}
 function vAjustes() {
   // Filtro por motivo (independiente del agrupado): junta un mismo motivo de todas las fechas para el PDF, el Excel o marcarlos como pasados
   const todosAj = [...S.ajustes], fil = S.ui.ajFil || '';
@@ -2630,7 +2667,7 @@ function vAjustes() {
   const grupos = {};
   for (const a of list) (grupos[grupoAj(a)] ||= []).push(a);
   const claves = Object.keys(grupos).sort(porDet ? ((x, y) => (x === '' ? 1 : y === '' ? -1 : 0) || grupos[y].length - grupos[x].length || x.localeCompare(y)) : ((x, y) => (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99)));
-  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td class="small muted">${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td><button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>`;
+  const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td class="small muted">${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}${a.h?.length ? ` <span class="pill warn" style="cursor:pointer" data-act="ajEd" data-id="${esc(a.id)}" title="Corregido ${a.h.length} vez${a.h.length > 1 ? 'es' : ''}: tocá para ver el registro">editado</span>` : ''}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td style="white-space:nowrap"><button class="btn sm" data-act="ajEd" data-id="${esc(a.id)}" aria-pressed="${S.ui.ajEd === a.id}" title="Corregir tipo, motivo u observación (queda registro)">Editar</button> <button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>${S.ui.ajEd === a.id ? ajEdFila(a) : ''}`;
   const bloques = claves.map(k => {
     const g = grupos[k].sort((a, b) => (a.c || '').localeCompare(b.c || ''));
     const todos = g.every(a => sel.has(a.id));
@@ -2653,7 +2690,15 @@ function vAjustes() {
     </form>
     <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><span class="small muted">Filtrar por motivo</span><select data-act="ajFil" aria-label="Filtrar por motivo" style="min-width:200px"><option value="">Todos (${todosAj.length})</option>${Object.entries(motivos).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `<option value="${esc(k)}" ${k === fil ? 'selected' : ''}>${esc(k || 'Sin motivo')} (${n})</option>`).join('')}</select>${fil || list.length ? `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajSelFil" ${todosFil ? 'checked' : ''}> Tildar ${fil ? 'todos los de este motivo' : 'todos'} (${list.length})</label>` : ''}${fil ? `<span class="small muted">${list.length} ajuste${list.length === 1 ? '' : 's'} · ${fmtS(list.reduce((s, a) => s + Core.num(a.u), 0))} u${selFil ? ` · <b>${selFil} tildado${selFil > 1 ? 's' : ''}</b>` : ''}</span>` : ''}</div>
     <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Motivo'], ['tipo', 'Tipo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
-      <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajPdf" ${sel.size ? '' : 'disabled'} title="PDF con los ajustes tildados, totalizado por artículo (sirve para juntar un motivo de varias fechas)">PDF${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
+      <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajPdf" ${sel.size ? '' : 'disabled'} title="PDF con los ajustes tildados, totalizado por artículo (sirve para juntar un motivo de varias fechas)">PDF${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajEdLote" ${sel.size ? '' : 'disabled'} title="Cambiar tipo, motivo u observación de los tildados (queda registro)">Corregir${sel.size ? ' ' + sel.size : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
+    ${S.ui.ajEdLote && sel.size ? `<div class="confirm stack"><b>Corregir ${sel.size} ajuste${sel.size > 1 ? 's' : ''} tildado${sel.size > 1 ? 's' : ''}</b>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:end">
+        <label class="stack" style="gap:2px"><span class="lbl">Tipo</span><select id="ajLtT" data-act="ajEdV">${tipoOpts(ajV('ajLtT', ''), '— sin cambiar —')}</select></label>
+        <label class="stack" style="gap:2px;flex:1;min-width:140px"><span class="lbl">Motivo</span><input type="text" id="ajLtM" data-act="ajEdV" list="ajMotList" placeholder="vacío = sin cambiar" value="${esc(ajV('ajLtM', ''))}"></label>
+        <label class="stack" style="gap:2px;flex:2;min-width:180px"><span class="lbl">Observación</span><input type="text" id="ajLtO" data-act="ajEdV" placeholder="vacío = sin cambiar" value="${esc(ajV('ajLtO', ''))}"></label>
+        <button class="btn pri" data-act="ajEdLoteOk">Aplicar a ${sel.size}</button><button class="btn" data-act="ajEdNo">Cancelar</button>
+      </div><span class="small muted">Solo se cambia lo que completes. Las unidades no se tocan y en cada ajuste queda registrado cómo estaba.</span></div>` : ''}
+    <datalist id="ajMotList">${[...new Set([...(opt('motivos') || []), ...todosAj.map(a => a.m).filter(Boolean)])].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
     <div class="tablebox"><table><thead><tr><th style="width:32px"></th><th>Código</th><th>Artículo</th><th>Tipo</th><th>Motivo</th><th>Observación</th><th class="n">Unidades</th><th class="n">Total art.</th><th>Desde</th><th></th></tr></thead><tbody>
     ${bloques || `<tr><td colspan="10" class="empty">${fil ? 'No hay ajustes pendientes con ese motivo.' : 'No hay ajustes pendientes.'}</td></tr>`}
     </tbody></table></div>
@@ -3030,7 +3075,7 @@ function vHistorial() {
 /* ---------- Opciones → Base de datos: plantilla, reemplazo y backup ---------- */
 const BD_HOJAS = [
   ['ARTICULOS', 'articulos', 'Lista de artículos', ['codigo', 'descripcion', 'desc_corta', 'sector', 'orden', 'uxc', 'factor_ya', 'ean', 'queso', 'peso', 'baja', 'bases_pallet', 'bultos_base', 'u_bulto']],
-  ['AJUSTES', 'ajustes', 'Ajustes (pendientes y pasados)', ['id', 'codigo', 'unidades', 'tipo', 'motivo', 'fecha', 'estado', 'pasado_ts', 'pasado_por', 'ts']],
+  ['AJUSTES', 'ajustes', 'Ajustes (pendientes y pasados)', ['id', 'codigo', 'unidades', 'tipo', 'motivo', 'obs', 'fecha', 'estado', 'pasado_ts', 'pasado_por', 'ts', 'historial']],
   ['CIERRES', 'cierres', 'Historial: un renglón por artículo y día', ['fecha', 'codigo', 'descripcion', 'sector', 'uxc', 'queso', 'sap', 'ya', 'sk', 'pe', 'aj', 'sis', 'cont', 'dif', 'motivo', 'obs', 'nota', 'imp', 'por']],
   ['CIERRES_RESUMEN', 'cierres_resumen', 'Historial: un renglón por día cerrado', ['fecha', 'origen', 'articulos', 'contados', 'con_dif', 'sobra', 'falta', 'importe', 'por', 'ts', 'archivos']],
   ['CODIGOS', 'codigos', 'Códigos de barras asignados desde depósito', ['ean', 'codigo', 'por', 'ts']]
@@ -4274,6 +4319,19 @@ document.addEventListener('click', async e => {
       break;
     }
     case 'ajDelSel': S.ui.ajConfDel = true; render(); break;
+    case 'ajEd': S.ui.ajEd = S.ui.ajEd === t.dataset.id ? null : t.dataset.id; S.ui.ajEdLote = false; S.ui.ajEdV = {}; render(); break;
+    case 'ajEdNo': S.ui.ajEd = null; S.ui.ajEdLote = false; S.ui.ajEdV = {}; render(); break;
+    case 'ajEdLote': S.ui.ajEdLote = !S.ui.ajEdLote; S.ui.ajEd = null; S.ui.ajEdV = {}; render(); break;
+    case 'ajEdOk': {
+      const id = t.dataset.id; if (!S.ajustes.some(a => a.id === id)) break;
+      await ajEditar([id], { t: $('#ajEdT').value, m: $('#ajEdM').value.trim(), o: $('#ajEdO').value.trim() }); break;
+    }
+    case 'ajEdLoteOk': {
+      const ids = [...(S.ui.ajSel || [])], cambios = {}, tt = $('#ajLtT').value, mm = $('#ajLtM').value.trim(), oo = $('#ajLtO').value.trim();
+      if (tt) cambios.t = tt; if (mm) cambios.m = mm; if (oo) cambios.o = oo;
+      if (!Object.keys(cambios).length) { toast('Elegí un tipo o escribí un motivo u observación.'); break; }
+      await ajEditar(ids, cambios); break;
+    }
     case 'ajDelSelNo': S.ui.ajConfDel = false; render(); break;
     case 'ajDelSelOk': {
       const ids = [...(S.ui.ajSel || [])]; S.ui.ajConfDel = false; if (!ids.length) { render(); break; }
@@ -4336,6 +4394,7 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'qIlo') (S.ui.qDraft ||= {})[t.dataset.c] = t.value;
   if (t.dataset.act === 'cliF') (S.ui.cliF ||= {})[t.dataset.k] = t.value;
+  if (t.dataset.act === 'ajEdV') (S.ui.ajEdV ||= {})[t.id] = t.value;
   if (t.dataset.act === 'cliQ') { S.ui.cliQ = t.value; render(); }
   if (t.dataset.act === 'dcnt' || t.dataset.act === 'dsum' || t.dataset.act === 'ddet') pasarAUnidades(t);
   if (t.dataset.act === 'dnota') DD[t.dataset.c + 'nota'] = t.value;
