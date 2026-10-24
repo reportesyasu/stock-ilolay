@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb106';
+window.__VERSION = 'sb107';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb106</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb107</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3077,6 +3077,31 @@ function armarPdfControl(t, sector, conCero) {
   }
   return { n: total, blob: total ? P.blob() : null };
 }
+/* ---------- Correos → Para pedir a Ilolay: Excel con sistema (cajas y unidades), stock de Yasukawa y unidades por bulto ---------- */
+function vPedidoIlolay() {
+  const sis = tieneSistema();
+  return `<div class="panel stack"><b>Para pedir a Ilolay</b>
+    <span class="small muted">Excel con código, descripción, existencia del sistema en cajas y unidades, unidades totales del stock de Yasukawa y unidades por bulto. Frío primero y después Seco, por código de menor a mayor.</span>
+    <div class="row"><button class="btn pri" data-act="xlsPedidoIlolay" ${sis ? '' : 'disabled'}>Descargar Excel para el pedido</button></div>
+    ${sis ? '' : `<span class="small" style="color:var(--warn)">Hace falta cargar los archivos del día (SAP y Yasukawa) en Administración.</span>`}
+  </div>`;
+}
+function xlsPedidoIlolay() {
+  if (!tieneSistema()) { toast('Cargá primero los archivos del día (SAP y Yasukawa).'); return; }
+  const L = [...LINES].sort(ordenPdfDif);
+  const filas = L.map(l => {
+    const ex = Number(l.sisVivo ?? l.sis) || 0, sp = Core.split(ex, l.uxc || 1), m = S.maestro[l.c] || {};
+    const upb = Number(m.upb) > 0 ? Number(m.upb) : (l.uxc || 1);
+    return [l.c, l.d || m.d || '', sp.cj, sp.un, Number(l.yasu) || 0, upb];
+  });
+  try {
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'SISTEMA CAJAS', 'SISTEMA UNIDADES', 'STOCK YASUKAWA (UNIDADES)', 'UNIDADES POR BULTO'], ...filas]), 'PEDIDO ILOLAY');
+    const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
+    descargar('Para pedir a Ilolay ' + S.dia + ' ' + hh + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    toast('Excel descargado (' + filas.length + ' artículos).');
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
+}
 function vCorreos() {
   if (!S.admin) return '';
   const c = S.cierre;
@@ -3086,6 +3111,7 @@ function vCorreos() {
       ${c ? `<span class="small muted">Stock del ${diaSem(c.fecha)} ${dmy(c.fecha)}, cerrado por ${esc(c.por || '—')}.</span>
       <div class="row"><button class="btn pri" data-act="copiarMail">Copiar resumen para el mail</button><button class="btn" data-act="pdfCierre">Descargar PDF del cierre</button></div>` : `<span class="small muted">El stock del ${dm(S.dia)} todavía no está cerrado. Cuando lo cierres, desde acá copiás el resumen y bajás el PDF. Los cierres anteriores están en <button class="link" data-act="tab" data-v="historial">Historial</button>.</span>`}
     </div>
+    ${vPedidoIlolay()}
     ${vControlExist()}
     ${vCierreXls()}
     ${vValorizado()}
@@ -4463,6 +4489,7 @@ document.addEventListener('click', async e => {
     }
     case 'ajDelSel': S.ui.ajConfDel = true; render(); break;
     case 'pdfControl': pdfControl(); break;
+    case 'xlsPedidoIlolay': xlsPedidoIlolay(); break;
     case 'verSinExist': S.ui.verSinExist = !S.ui.verSinExist; render(); break;
     case 'ajEd': S.ui.ajEd = S.ui.ajEd === t.dataset.id ? null : t.dataset.id; S.ui.ajEdLote = false; S.ui.ajEdV = {}; render(); break;
     case 'ajEdNo': S.ui.ajEd = null; S.ui.ajEdLote = false; S.ui.ajEdV = {}; render(); break;
