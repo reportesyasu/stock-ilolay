@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb110';
+window.__VERSION = 'sb111';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb110</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb111</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2617,6 +2617,38 @@ async function toggleLinterna() {
 /* ---------- Artículos (maestro) ---------- */
 let draft = null;
 const ignorado = c => (opt('ignorar') || []).includes(c);
+/* Artículos → "No se tienen en cuenta": desplegable con la grilla de códigos ignorados y un buscador para agregar más */
+function datosArchivo(c) {
+  const y = S.files.yasu?.data.by[c], sp = S.files.sap?.data.by[c], r = S.remoto?.items?.[c];
+  return { d: y?.desc || sp?.filas?.[0]?.desc || S.maestro[c]?.d || '', sap: sp ? sp.q : (r ? r.sap : null), ya: y ? y.stk : (r ? r.ya : null) };
+}
+function ignCandidatos(q) {
+  const Q = sinTilde(String(q || '').trim()).toUpperCase(); if (!Q) return [];
+  const cods = new Set([...Object.keys(S.files.sap?.data.by || {}), ...Object.keys(S.files.yasu?.data.by || {}), ...Object.keys(S.remoto?.items || {})]);
+  const ign = new Set(opt('ignorar') || []);
+  return [...cods].filter(c => !S.maestro[c] && !ign.has(c)).map(c => ({ c, ...datosArchivo(c) }))
+    .filter(x => x.c.toUpperCase().includes(Q) || sinTilde(x.d).toUpperCase().includes(Q))
+    .sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true })).slice(0, 40);
+}
+function ignResHtml(q) {
+  if (!String(q || '').trim()) return '<div class="small muted">Escribí un código o parte de la descripción. Se buscan los códigos de los archivos del día (SAP y Yasukawa) que no están en la lista de artículos.</div>';
+  const L = ignCandidatos(q), Q = String(q).trim();
+  const libre = /^[\w./-]+$/.test(Q) && /\d/.test(Q) && !L.some(x => x.c === Q) && !(opt('ignorar') || []).includes(Q) && !S.maestro[Q];
+  return (L.length ? `<div class="tablebox" style="max-height:260px"><table><tbody>${L.map(x => `<tr><td class="code">${esc(x.c)}</td><td>${esc(x.d || '—')}</td><td class="n small muted">${x.sap !== null ? 'SAP ' + fmt(x.sap) : ''}</td><td class="n small muted">${x.ya !== null ? 'Yasu ' + fmt(x.ya) : ''}</td><td><button class="btn sm" data-act="mignorar" data-c="${esc(x.c)}">No tener en cuenta</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">No se encontró en los archivos del día.</div>')
+    + (libre ? `<div class="row small" style="margin-top:6px">¿No aparece? <button class="btn sm" data-act="mignorar" data-c="${esc(Q)}">Agregar el código ${esc(Q)} igual</button></div>` : '');
+}
+function vIgnorados(ign) {
+  const ab = (() => { try { return localStorage.getItem('ignAb') === '1'; } catch { return false; } })();
+  const filas = [...ign].sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true })).map(c => { const x = datosArchivo(c);
+    return `<tr><td class="code">${esc(c)}</td><td>${esc(x.d || '—')}</td><td class="n">${x.sap !== null ? fmt(x.sap) : '<span class="muted">—</span>'}</td><td class="n">${x.ya !== null ? fmt(x.ya) : '<span class="muted">—</span>'}</td><td><button class="btn sm" data-act="mdesignorar" data-c="${esc(c)}" title="Vuelve a aparecer en 'Con stock en los archivos pero fuera de la lista'">Volver a tener en cuenta</button></td></tr>`; }).join('');
+  return `<details class="panel" data-recordar="ignAb" ${ab ? 'open' : ''}><summary><b>No se tienen en cuenta</b> <span class="small muted">(${ign.length} código${ign.length === 1 ? '' : 's'} · no aparecen en "fuera de la lista")</span></summary>
+    <div class="stack" style="margin-top:8px">
+      <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span class="small muted">Agregar:</span><input type="search" id="ignQ" data-act="ignQ" placeholder="Buscar código o descripción" value="${esc(S.ui.ignQ || '')}" autocomplete="off" style="min-width:260px;flex:1"></div>
+      <div id="ignRes">${ignResHtml(S.ui.ignQ)}</div>
+      ${ign.length ? `<div class="tablebox" style="max-height:360px"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">SAP</th><th class="n">Yasukawa</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>` : '<div class="small muted">Todavía no hay códigos que no se tengan en cuenta.</div>'}
+    </div></details>`;
+}
+
 async function cambiarIgnorados(c, si) {
   const set = new Set(opt('ignorar') || []); if (si) set.add(c); else set.delete(c);
   const data = { ...S.opciones, ignorar: [...set], ts: Date.now() };
@@ -2649,7 +2681,7 @@ function vMaestro() {
     <div class="row">${tieneSistema() || S.files.yasu ? '<button class="btn" data-act="mdesdeYasu">Completar desde Yasukawa</button>' : ''}<button class="btn pri" data-act="mguardar" ${draft ? '' : 'disabled'}>Guardar cambios</button>${draft ? '<button class="btn" data-act="mdescartar">Descartar</button>' : ''}</div></div>
     ${(() => { const pend = codigosPend(); return pend.length ? `<div class="banner warn"><span class="grow"><b>${pend.length} código${pend.length === 1 ? '' : 's'} de barra a revisar</b>, aprendido${pend.length === 1 ? '' : 's'} desde depósito. Están marcados en amarillo en la columna de códigos: confirmalos con ✓ o quitalos con ✕.</span><button class="btn sm" data-act="cbConfirmar">Confirmar todos</button></div>` : ''; })()}
     ${hu.length ? `<div class="panel stack"><h3>Con stock en los archivos pero fuera de la lista</h3><div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">SAP</th><th class="n">Yasukawa</th><th></th></tr></thead><tbody>${hu.map(h => `<tr><td class="code">${esc(h.c)}</td><td>${esc(h.d)}</td><td class="n">${fmt(h.sap)}</td><td class="n">${fmt(h.yasu)}</td><td><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="FRIO">+ Frío</button><button class="btn sm" data-act="madd" data-c="${esc(h.c)}" data-s="SECO">+ Seco</button><button class="btn sm" data-act="mignorar" data-c="${esc(h.c)}" title="No tener en cuenta: no se avisa más y no entra en ningún cruce">No tener en cuenta</button></div></td></tr>`).join('')}</tbody></table></div></div>` : ''}
-    ${ign.length ? `<div class="panel small row" style="gap:6px"><b>No se tienen en cuenta:</b> ${ign.map(c => `<span class="pill">${esc(c)} <button class="link" data-act="mdesignorar" data-c="${esc(c)}" title="Volver a tenerlo en cuenta">✕</button></span>`).join(' ')}</div>` : ''}
+    ${vIgnorados(ign)}
     <div class="panel row"><b>Agregar artículo</b><input type="text" id="nuevoCod" placeholder="Código (ej. 1031)" style="width:140px" class="mono"><select id="nuevoSec"><option>FRIO</option><option>SECO</option></select><button class="btn" data-act="mnuevo">Agregar</button></div>
     <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th title="Lo que ve depósito en lugar de la descripción completa">Desc. corta (depósito)</th><th>Sector</th><th class="n">Orden</th><th class="n">Sistema</th><th class="n">Un/caja</th><th class="n" title="Miniaturas: cuántas unidades de Ilolay es 1 unidad de Yasukawa. Vacío = la misma unidad">Factor Yasukawa</th><th class="n" title="Bases por pallet">Bases/pallet</th><th class="n" title="Bultos por base">Bultos/base</th><th class="n" title="Unidades por bulto">Un/bulto</th><th>Códigos de barras</th><th>Cálculo</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="13" class="empty">Sin artículos.</td></tr>'}</tbody></table></div>
   </div>`;
@@ -4608,6 +4640,7 @@ document.addEventListener('input', e => {
   t.dataset.dirty = '1';
   if (t.dataset.act === 'buscar') { S.ui.q = t.value; render(); }
   if (t.dataset.act === 'cbQ' && S.ui.cb) { S.ui.cb.q = t.value; const l = $('#cbList'); if (l) l.innerHTML = cbLista(t.value); }
+  if (t.dataset.act === 'ignQ') { S.ui.ignQ = t.value; const l = $('#ignRes'); if (l) l.innerHTML = ignResHtml(t.value); }
   if (t.dataset.act === 'asigQ') { S.ui.asigQ = t.value; const l = $('#asigList'); if (l) l.innerHTML = listaAsignar(t.value); }
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'qIlo') (S.ui.qDraft ||= {})[t.dataset.c] = t.value;
