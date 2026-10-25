@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb107';
+window.__VERSION = 'sb108';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb107</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb108</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1504,6 +1504,28 @@ function lineasVista() {
 }
 // Orden del PDF de diferencias: sector (Frío, Seco) y código de fábrica de menor a mayor
 const ordenPdfDif = (a, b) => (a.s || '').localeCompare(b.s || '') || String(a.c).localeCompare(String(b.c), 'es', { numeric: true });
+// Grilla de Administración: lo escrito en Cajas espera a que se salga de Unidades para guardar
+const CNT_BORR = {}, CNT_PEND = {};
+const cntBorrador = (c, k, def) => { const b = CNT_BORR[c]; return b && k in b ? b[k] : (def ?? ''); };
+async function guardarCnt(c) {
+  delete CNT_PEND[c];
+  const a = $('#a-cj-' + CSS.escape(c)), b = $('#a-un-' + CSS.escape(c));
+  const vc = a ? a.value : cntBorrador(c, 'cj', ''), vu = b ? b.value : cntBorrador(c, 'un', '');
+  delete CNT_BORR[c];
+  const cj = vc === '' ? null : Number(vc), un = vu === '' ? null : Number(vu);
+  const k = S.conteos[c] || {};
+  if (cj === (k.cj ?? null) && un === (k.un ?? null)) return; // no cambió nada
+  const patch = { cj, un, by: S.me.id };
+  if (cj !== null && un === null) patch.un = 0;
+  if (un !== null && cj === null) patch.cj = 0;
+  await guardarConteo(c, patch);
+}
+document.addEventListener('input', e => { const t = e.target; if (t.dataset?.act === 'cnt' && t.dataset.c) (CNT_BORR[t.dataset.c] ||= {})[t.dataset.k] = t.value; });
+// Si sale de Unidades sin cambiar nada pero había cajas cargadas, se guarda igual
+document.addEventListener('focusout', e => {
+  const t = e.target; if (t.dataset?.act !== 'cnt' || t.dataset.k !== 'un') return;
+  const c = t.dataset.c; setTimeout(() => { if (CNT_PEND[c] && document.activeElement?.id !== 'a-cj-' + c) guardarCnt(c); }, 0);
+});
 function filtrar(lines) {
   const q = S.ui.q.trim().toUpperCase();
   const hayStock = !!S.cierre || tieneSistema();
@@ -1790,8 +1812,8 @@ function tablaHoy(lines, sis, cerrado) {
   for (const l of lines) {
     if (l.s !== sec) { sec = l.s; rows += `<tr class="sec"><td colspan="10">${sec === 'FRIO' ? 'FRÍO' : esc(sec || 'SIN SECTOR')}</td></tr>`; }
     const cls = [l.contado && l.dif < 0 ? 'difneg' : '', l.contado && l.dif > 0 ? 'difpos' : '', l.rec ? 'rec' : ''].join(' ');
-    const inCj = cerrado ? fmt(l.contCj) : `<input type="number" inputmode="numeric" class="cj" id="a-cj-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="cj" value="${l.contCj ?? ''}" aria-label="Cajas contadas ${esc(l.c)}">`;
-    const inUn = cerrado ? fmt(l.contUn) : `<input type="number" inputmode="numeric" class="un" id="a-un-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="un" value="${l.contUn ?? ''}" aria-label="Unidades contadas ${esc(l.c)}">`;
+    const inCj = cerrado ? fmt(l.contCj) : `<input type="number" inputmode="numeric" class="cj" id="a-cj-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="cj" value="${esc(cntBorrador(l.c, 'cj', l.contCj))}" aria-label="Cajas contadas ${esc(l.c)}">`;
+    const inUn = cerrado ? fmt(l.contUn) : `<input type="number" inputmode="numeric" class="un" id="a-un-${esc(l.c)}" data-act="cnt" data-c="${esc(l.c)}" data-k="un" value="${esc(cntBorrador(l.c, 'un', l.contUn))}" aria-label="Unidades contadas ${esc(l.c)}">`;
     // Ayer: suma de los ajustes con fecha del cierre anterior (pendientes y pasados al sistema).
     // En violeta cuando esa suma es igual (en cantidad) a la diferencia de hoy: puede ser el mismo ajuste que todavía no impactó o que se pasó dos veces.
     const coin = !!(sis && l.contado && l.dif && l.prevAj && Math.round(Math.abs(l.prevAj) * 100) === Math.round(Math.abs(l.dif) * 100));
@@ -4602,13 +4624,11 @@ document.addEventListener('change', async e => {
   if (a === 'ajSelGrupo') { const sel = S.ui.ajSel ||= new Set(); for (const x of S.ajustes.filter(x => grupoAj(x) === t.dataset.v && ajPasaFil(x))) { if (t.checked) sel.add(x.id); else sel.delete(x.id); } render(); return; }
   if (a === 'cnt') {
     delete t.dataset.dirty;
-    const other = $(`#a-${t.dataset.k === 'cj' ? 'un' : 'cj'}-${CSS.escape(c)}`);
-    const v = t.value === '' ? null : Number(t.value);
-    const o = other?.value === '' ? null : Number(other?.value);
-    const patch = { [t.dataset.k]: v, by: S.me.id };
-    if (v !== null && o === null) patch[t.dataset.k === 'cj' ? 'un' : 'cj'] = 0;
-    if (v === null && o === null) { patch.cj = null; patch.un = null; }
-    await guardarConteo(c, patch);
+    if (t.dataset.k === 'cj') {
+      // De Cajas se pasa a Unidades: se guarda (y se recalcula la diferencia) recién al salir de Unidades
+      CNT_PEND[c] = true;
+      setTimeout(() => { if (document.activeElement?.id !== 'a-un-' + c && CNT_PEND[c]) guardarCnt(c); }, 0);
+    } else await guardarCnt(c);
   }
   if (a === 'motivo' && c) {
     if (S.cierre) await corregirCierre(c, { m: t.value }); else await guardarConteo(c, { m: t.value });
@@ -4647,7 +4667,12 @@ document.addEventListener('keydown', e => {
     if (t.dataset.k === 'acj') document.getElementById('d-aun-' + t.dataset.c)?.focus();
     else sumarDeposito(t.dataset.c);
   }
-  if (t.dataset?.act === 'cnt') { e.preventDefault(); t.blur(); }
+  if (t.dataset?.act === 'cnt') { e.preventDefault(); if (t.dataset.k === 'cj') $('#a-un-' + CSS.escape(t.dataset.c))?.focus(); else t.blur(); }
+  if (t.dataset?.act === 'ddet') {
+    e.preventDefault();
+    const c = t.dataset.c, campos = [...document.querySelectorAll(`#card-${CSS.escape(c)} input[data-act="ddet"]`)], i = campos.indexOf(t);
+    (campos[i + 1] || document.getElementById('d-cj-' + c))?.focus();
+  }
 });
 document.addEventListener('submit', async e => {
   e.preventDefault();
