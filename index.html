@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb108';
+window.__VERSION = 'sb109';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb108</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb109</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1474,6 +1474,7 @@ function recalc() {
   const maestro = S.maestro;
   const f = fuentes();
   LINES = Core.compute({ maestro, sap: f.sap, yasu: f.yasu, ajustes: S.ajustes, conteos: S.conteos, anterior: S.anterior || {}, quesoSap: opt('quesoSap'), quesos: S.quesosDia || {}, ceroAuto: opt('ceroAuto') !== false });
+  LINES.sort(cmpArt);
   // Verificación automática: contado igual al sistema → se congela ese sistema (solo desde administración con cruce disponible)
   if (S.admin && !S.cierre && tieneSistema() && S.online) {
     clearTimeout(okT);
@@ -1503,7 +1504,17 @@ function lineasVista() {
   return LINES;
 }
 // Orden del PDF de diferencias: sector (Frío, Seco) y código de fábrica de menor a mayor
-const ordenPdfDif = (a, b) => (a.s || '').localeCompare(b.s || '') || String(a.c).localeCompare(String(b.c), 'es', { numeric: true });
+// Orden de los artículos en toda la app (Configuración → "Orden de los artículos"): primero Frío y después Seco;
+// dentro de cada sector, por el orden manual de Artículos o por código de fábrica ascendente / descendente
+function cmpArt(a, b) {
+  const sa = a.s ?? S.maestro[a.c]?.s ?? '', sb = b.s ?? S.maestro[b.c]?.s ?? '';
+  const sec = String(sa).localeCompare(String(sb)); if (sec) return sec;
+  const modo = opt('ordenArt') || 'codAsc';
+  if (modo === 'orden') { const oa = Number(S.maestro[a.c]?.o ?? 99999), ob = Number(S.maestro[b.c]?.o ?? 99999); if (oa !== ob) return oa - ob; }
+  const k = String(a.c).localeCompare(String(b.c), 'es', { numeric: true });
+  return modo === 'codDesc' ? -k : k;
+}
+const ordenPdfDif = cmpArt;
 // Grilla de Administración: lo escrito en Cajas espera a que se salga de Unidades para guardar
 const CNT_BORR = {}, CNT_PEND = {};
 const cntBorrador = (c, k, def) => { const b = CNT_BORR[c]; return b && k in b ? b[k] : (def ?? ''); };
@@ -1980,7 +1991,7 @@ function renderSheetInner() {
 /* ---------- Contar (depósito) ---------- */
 function vContar() {
   const cerrado = !!S.cierre;
-  const items = Object.entries(S.maestro).filter(([, m]) => !m.baja).map(([c, m]) => ({ c, ...m })).sort((a, b) => (a.s || '').localeCompare(b.s || '') || (a.o ?? 999) - (b.o ?? 999));
+  const items = Object.entries(S.maestro).filter(([, m]) => !m.baja).map(([c, m]) => ({ c, ...m })).sort(cmpArt);
   if (!items.length) return `<div class="panel empty">Todavía no hay artículos para contar. ${S.admin ? 'Agregalos en <button class="link" data-act="tab" data-v="maestro">Artículos</button>.' : 'Avisale a administración.'}</div>`;
   const q = S.ui.q.trim().toUpperCase();
   const k = c => S.conteos[c];
@@ -2623,7 +2634,7 @@ function vMaestro() {
     <td><input type="text" id="m-d-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="d" value="${esc(i.d)}" style="width:100%;min-width:240px"></td>
     <td><input type="text" id="m-dc-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="dc" value="${esc(i.dc || '')}" placeholder="${esc(String(i.d || '').slice(0, 24))}…" maxlength="40" style="width:100%;min-width:150px" title="Lo que ve depósito. Vacío = la descripción completa"></td>
     <td><select id="m-s-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="s"><option ${i.s === 'FRIO' ? 'selected' : ''}>FRIO</option><option ${i.s === 'SECO' ? 'selected' : ''}>SECO</option></select></td>
-    <td class="n"><input type="number" id="m-o-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="o" value="${i.o ?? ''}" style="width:64px"></td>
+    <td class="n" style="white-space:nowrap"><span class="mono small muted" style="display:inline-block;min-width:22px">${i.o ?? '—'}</span> <button class="btn xs" data-act="mSubir" data-c="${esc(i.c)}" title="Subir un lugar">▲</button><button class="btn xs" data-act="mBajar" data-c="${esc(i.c)}" title="Bajar un lugar">▼</button></td>
  <td class="n mono small" style="white-space:nowrap">${sisTxt(i.c)}</td>
     <td class="n"><input type="number" id="m-u-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="u" value="${i.u ?? ''}" style="width:64px"></td>
     <td class="n"><input type="number" id="m-fy-${esc(i.c)}" data-act="mset" data-c="${esc(i.c)}" data-k="fy" value="${Number(i.fy) > 1 ? i.fy : ''}" min="0" style="width:70px" placeholder="—" title="Miniaturas: cuántas unidades de Ilolay (SAP) es 1 unidad de Yasukawa (por ejemplo 108). Se cuenta en unidades de Yasukawa. Vacío = la misma unidad"></td>
@@ -2651,6 +2662,18 @@ function editarMaestro(c, k, v) {
   else if (k === 'e') it.e = v.split(/[\s,;]+/).filter(Boolean);
   else if (k === 'q') { if (v) it.q = 1; else delete it.q; }
   else it[k] = v;
+}
+// Mueve un artículo un lugar dentro de su sector y renumera el orden de todo el sector (1, 2, 3…)
+function moverArt(c, dir) {
+  draft ||= JSON.parse(JSON.stringify(S.maestro));
+  const it = draft[c]; if (!it) return;
+  const lista = Object.entries(draft).filter(([, m]) => (m.s || '') === (it.s || ''))
+    .sort((a, b) => (Number(a[1].o ?? 99999) - Number(b[1].o ?? 99999)) || String(a[0]).localeCompare(String(b[0]), 'es', { numeric: true })).map(([k]) => k);
+  const i = lista.indexOf(c), j = i + dir; if (i < 0 || j < 0 || j >= lista.length) return;
+  [lista[i], lista[j]] = [lista[j], lista[i]];
+  lista.forEach((k, n) => { draft[k].o = n + 1; });
+  render();
+  setTimeout(() => document.querySelector(`button[data-act="${dir < 0 ? 'mSubir' : 'mBajar'}"][data-c="${CSS.escape(c)}"]`)?.focus({ preventScroll: false }), 0);
 }
 async function guardarMaestro() {
   if (!draft) return;
@@ -2776,7 +2799,7 @@ function excelFiltrado(lista, etiqueta) {
     const g = por.get(a.c) || { c: a.c, u: 0, obs: [] };
     g.u += Core.num(a.u); const o = String(a.o || '').trim(); if (o && !g.obs.includes(o)) g.obs.push(o); por.set(a.c, g);
   }
-  const filas = [...por.values()].sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true }))
+  const filas = [...por.values()].sort(cmpArt)
     .map(g => [g.c, S.maestro[g.c]?.d || LINES.find(x => x.c === g.c)?.d || '', g.u, g.obs.join(' / ')]);
   const total = filas.reduce((s, f) => s + f[2], 0);
   try {
@@ -2795,7 +2818,7 @@ function excelEgreso(lista, etiqueta) {
     const g = por.get(a.c) || { c: a.c, u: 0, n: 0, mot: new Set() };
     g.u += Core.num(a.u); g.n++; const m = [a.m, a.o && a.o !== a.m ? a.o : ''].filter(Boolean).join(' · '); if (m) g.mot.add(m); por.set(a.c, g);
   }
-  const filas = [...por.values()].sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true })).map(g => {
+  const filas = [...por.values()].sort(cmpArt).map(g => {
     const l = LINES.find(x => x.c === g.c), ux = l?.uxc || S.maestro[g.c]?.u || 1, sp = Core.split(Math.abs(g.u), ux), sg = g.u < 0 ? -1 : 1;
     return [g.c, l?.d || S.maestro[g.c]?.d || '', ux, g.u, sg * sp.cj, sg * sp.un, g.n, [...g.mot].join(' / ')];
   });
@@ -2921,7 +2944,7 @@ async function cierreXls() {
   const ord = l => S.maestro[l.c]?.o ?? 999;
   const soloU = !!X.soloU, cod = c2 => X.pre ? "'" + (opt('prefijo') || '21/') + c2 : c2;
   const hoja = sec => [soloU ? ['CODIGO', 'DESCRIPCION', 'UNIDADES TOTALES'] : ['CODIGO', 'DESCRIPCION', 'CAJAS', 'UNIDADES'], ...(c.lineas || []).filter(l => (l.s || '') === sec)
-    .sort((a, b) => ord(a) - ord(b) || String(a.c).localeCompare(String(b.c), 'es', { numeric: true }))
+    .sort(cmpArt)
     .map(l => { const q = Core.num(l.cont !== null && l.cont !== undefined ? l.cont : l.sis), sp = Core.split(q, l.u || 1), d = l.d || S.maestro[l.c]?.d || ''; return soloU ? [cod(l.c), d, q] : [cod(l.c), d, sp.cj, sp.un]; })];
   try {
     const wb = XL.utils.book_new();
@@ -3073,7 +3096,7 @@ function armarPdfControl(t, sector, conCero) {
     y += hh * 2;
   };
   for (const s of secs) {
-    const L = LINES.filter(l => l.s === s && (conCero || exist(l) !== 0)).sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true }));
+    const L = LINES.filter(l => l.s === s && (conCero || exist(l) !== 0)).sort(cmpArt);
     if (!L.length) continue;
     total += L.length;
     encabezado(s, L.length);
@@ -3146,7 +3169,7 @@ function pdfAjustesSel() {
   const cfg = pdfCfg(), P = pdfDoc(false, cfg.fuente), fs = 9, ft = 15, rowH = Math.round(fs * 2), M = 28, ancho = P.W - 2 * M, pad = 12;
   const por = new Map();
   for (const a of sel) { const g = por.get(a.c) || { c: a.c, u: 0, n: 0, f: new Set(), mot: new Set() }; g.u += Core.num(a.u); g.n++; if (a.f) g.f.add(a.f); if (a.m) g.mot.add(a.m); por.set(a.c, g); }
-  const L = [...por.values()].sort((a, b) => String(a.c).localeCompare(String(b.c), 'es', { numeric: true }));
+  const L = [...por.values()].sort(cmpArt);
   const motivos = [...new Set(sel.map(a => a.m).filter(Boolean))], fechas = [...new Set(sel.map(a => a.f).filter(Boolean))].sort();
   const CU = (q, u) => { const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
   const cols = [{ n: 'CÓDIGO', w: 0.10 }, { n: 'DESCRIPCIÓN', w: 0.40 }, { n: 'FECHAS', w: 0.17 }, { n: 'AJ.', w: 0.06, a: 'r' }, { n: 'UNIDADES', w: 0.12, a: 'r' }, { n: 'CAJAS + U', w: 0.15, a: 'r' }];
@@ -3647,6 +3670,7 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="hibrido" ${opt('quesoSap') === 'hibrido' ? 'checked' : ''}> <span><b>Híbrida:</b> Yasukawa por variación de su stock, ventana por el archivo de ventanas, y la facturación Ilolay la cargo en la pestaña <b>Quesos</b>; SAP no se usa para quesos</span></label>
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">La variación de Yasukawa (en hormas) se aplica en los tres casos. No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
+      <label class="stack" style="gap:2px"><span class="lbl">Orden de los artículos (Administración, Depósito, PDF y Excel)</span><select id="oOrden" style="max-width:360px">${[['codAsc', 'Código de fábrica ascendente (menor a mayor)'], ['codDesc', 'Código de fábrica descendente (mayor a menor)'], ['orden', 'Orden de Artículos (el que se arma con ▲ ▼)']].map(([v, n]) => `<option value="${v}" ${(opt('ordenArt') || 'codAsc') === v ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">Siempre primero Frío y después Seco.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oCero" ${opt('ceroAuto') !== false ? 'checked' : ''}> <span>Artículos con <b>sistema en 0</b> que nadie contó: tomarlos como <b>contados en 0</b> (sin diferencia). Si depósito cuenta algo, aparece la diferencia.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
       <label class="stack" style="gap:2px"><span class="lbl">Pase automático al casillero siguiente (segundos)</span><input type="number" id="oPaso" min="0" max="10" step="0.1" value="${esc(opt('pasoSeg') ?? 1.5)}" style="max-width:110px"><span class="small muted">Al cargar Cajas (o pallets, bases y bultos en Contar detallado), si pasa este tiempo sin tocar otra tecla el cursor salta solo al casillero siguiente. 0 = no pasa solo.</span></label>
@@ -3716,7 +3740,7 @@ function armarPdfDif(c, t) {
   const fs = Math.max(6, Math.min(18, Number(cfg.difLetra) || 9)), ft = Math.max(9, Math.min(28, Number(cfg.difTitulo) || 15));
   const rowH = Math.round(fs * Math.max(1.3, Math.min(4, Number(cfg.difAlto) || 2.3))), M = 28, ancho = P.W - 2 * M, pad = 24; // renglones altos y columnas con aire, para leer y escribir a mano
   const CU = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
-  const L = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || String(a.c).localeCompare(String(b.c), 'es', { numeric: true }));
+  const L = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort(cmpArt);
   const cols = [
     { k: 'c', n: 'CÓDIGO', v: l => l.c },
     { k: 'd', n: 'DESCRIPCIÓN', v: l => l.d || '' },
@@ -3916,7 +3940,7 @@ function armarPdfDifMovs(c, difs, M, t) {
     const A = porCh.get(ch), bocas = [...A.values()].sort((a, b) => (b.tot ? 1 : 0) - (a.tot ? 1 : 0) || cmp(a.boca, b.boca) || a.o.localeCompare(b.o));
     lugar(lh * 6); cab(ch);
     for (const B of bocas) {
-      const codes = [...B.arts.keys()].sort(cmp), bl = partir(B.boca, W.b - 2 * pad, fs, true);
+      const codes = [...B.arts.keys()].sort((x, y) => cmpArt({ c: x }, { c: y })), bl = partir(B.boca, W.b - 2 * pad, fs, true);
       let conBoca = true;
       codes.forEach((code, i) => {
         const l = D.get(code), r = B.arts.get(code), dif = Math.abs(l.dif), hl = dif > 0 && Math.abs(Math.abs(r.q) - dif) <= dif * tol / 100;
@@ -4102,10 +4126,10 @@ function pdfCierre(c, cfgIn, opts = {}) {
   const cjun = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(q, u || 1); return fmt(sp.cj) + ' cj ' + fmt(sp.un) + ' u'; };
   const valor = (k, l) => ({ codigo: l.c, descripcion: l.d, sector: l.s === 'FRIO' ? 'Frío' : l.s === 'SECO' ? 'Seco' : (l.s || ''), sistema: cjun(l.sis, l.u), contado: cjun(l.cont, l.u), sisCj: cjPartes(l.sis, l.u)[0], sisUn: cjPartes(l.sis, l.u)[1], conCj: cjPartes(l.cont, l.u)[0], conUn: cjPartes(l.cont, l.u)[1],
     dif: l.dif ? fmtS(l.dif) : '0', valorizado: l.dif ? money(l.imp || 0) : '', motivo: l.dif ? (l.m || 'sin motivo') : '', obs: [l.obs, l.nota ? '"' + l.nota + '"' : ''].filter(Boolean).join(' · ') })[k];
-  const dif = lin.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort((a, b) => (a.s || '').localeCompare(b.s || '') || Math.abs(b.imp || 0) - Math.abs(a.imp || 0));
+  const dif = lin.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort(cmpArt);
   // Detalle de todo lo contado (con y sin diferencia), en el orden de la lista, separado por sector
-  const contados = lin.map((l, i) => [l, i]).filter(([l]) => l.cont !== null && l.cont !== undefined).sort((a, b) => (a[0].s || '').localeCompare(b[0].s || '') || a[1] - b[1]).map(x => x[0]);
-  const sin = lin.filter(l => l.cont === null || l.cont === undefined);
+  const contados = lin.filter(l => l.cont !== null && l.cont !== undefined).sort(cmpArt);
+  const sin = lin.filter(l => l.cont === null || l.cont === undefined).sort(cmpArt);
   // Columnas visibles y autoajuste: cada columna mide lo que necesita el X % de las filas (X = cfg.autoPct)
   const sinVal = !cfg.valorizado; // Configuración → PDF: el cierre sale sin valorizado salvo que se tilde
   const vis = cfg.cols.filter(x => x.v && !(sinVal && x.k === 'valorizado')).map(x => { const d = PDF_COLS.find(([k]) => k === x.k); return { k: x.k, n: x.n || d[1], a: d[2] }; });
@@ -4470,6 +4494,8 @@ document.addEventListener('click', async e => {
     case 'mdesignorar': cambiarIgnorados(c, false); break;
     case 'mbaja': editarMaestro(c, 'baja', !(draft || S.maestro)[c]?.baja); render(); break;
     case 'mguardar': guardarMaestro(); break;
+    case 'mSubir': moverArt(c, -1); break;
+    case 'mBajar': moverArt(c, 1); break;
     case 'mdescartar': draft = null; render(); break;
     case 'madd': case 'mnuevo': {
       const code = a === 'madd' ? c : Core.code($('#nuevoCod').value); if (!code) break;
@@ -4686,7 +4712,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
