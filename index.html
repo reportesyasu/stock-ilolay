@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb109';
+window.__VERSION = 'sb110';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb109</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb110</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3945,15 +3945,13 @@ function armarPdfDifMovs(c, difs, M, t) {
       codes.forEach((code, i) => {
         const l = D.get(code), r = B.arts.get(code), dif = Math.abs(l.dif), hl = dif > 0 && Math.abs(Math.abs(r.q) - dif) <= dif * tol / 100;
         const dLin = partir(S.maestro[l.c]?.dc || l.d || '', W.d - 2 * pad, fs, false);
-        const dDif = `Dif. artículo: ${fmtS(l.dif)} u` + (B.tot ? ` · ${r.comps.size || 1} comprobante${r.comps.size === 1 ? '' : 's'}` : '');
-        const h0 = Math.max(dLin.length * lh + (lh - 2), lh) + 4;
+        const h0 = Math.max(dLin.length * lh, lh) + 4;
         if (lugar(Math.max(h0, conBoca ? bl.length * lh + 4 : 0))) { cab(ch, true); conBoca = true; }
         const h = Math.max(h0, conBoca ? bl.length * lh + 4 : 0);
         if (hl) P.rect(X.c, y, ancho - W.b, h, '#fff3a6');
         if (conBoca) { let yb = y + fs + 1; for (const s of bl) { P.text(X.b + pad, yb, s, fs, true); yb += lh; } conBoca = false; }
         P.text(X.c + pad, y + fs + 1, l.c, fs, true);
         let yy = y + fs + 1; for (const s of dLin) { P.text(X.d + pad, yy, s, fs); yy += lh; }
-        P.text(X.d + pad, yy - 1, dDif, fs - 1.8, false, 'l', l.dif < 0 ? cfg.cNeg : cfg.cPos);
         P.text(X.o + pad, y + fs + 1, ORI[B.o] || B.o, fs - 1.5, false, 'l', '#666666');
         P.text(X.f + W.f - pad, y + fs + 1, r.q < 0 ? '+' + fmt(-r.q) + ' NC' : fmt(r.q), fs, true, 'r', r.q < 0 ? cfg.cPos : '#000000');
         y += h; if (cfg.sep !== false) P.line(i === codes.length - 1 ? Mg : X.c, y, Mg + ancho, y, cS, gS);
@@ -4675,8 +4673,20 @@ document.addEventListener('toggle', e => {
   if (d.open) OP_AB.add(d.dataset.sec); else OP_AB.delete(d.dataset.sec);
   try { localStorage.setItem('opAbiertas', JSON.stringify([...OP_AB])); } catch { }
 }, true);
+// Grilla de Administración: de Unidades se pasa a Cajas del artículo siguiente (no al principio de la página)
+function cntSiguiente(t, dir) {
+  const L = [...document.querySelectorAll(`input[data-act="cnt"][data-k="${dir > 0 ? 'cj' : 'un'}"]`)];
+  const yo = document.getElementById(`a-${dir > 0 ? 'cj' : 'un'}-` + t.dataset.c), i = L.indexOf(yo), sig = L[i + dir];
+  // primero se sale del campo (eso guarda y redibuja la grilla) y después se pone el foco en el campo siguiente ya redibujado
+  const id = sig?.id; t.blur();
+  if (id) setTimeout(() => { const el = document.getElementById(id); if (el) { el.focus(); try { el.select(); } catch { } el.scrollIntoView({ block: 'nearest' }); } }, 0);
+}
 document.addEventListener('keydown', e => {
   const t = e.target;
+  if (e.key === 'Tab' && t.dataset?.act === 'cnt') {
+    if (!e.shiftKey && t.dataset.k === 'un') { e.preventDefault(); cntSiguiente(t, 1); return; }
+    if (e.shiftKey && t.dataset.k === 'cj') { e.preventDefault(); cntSiguiente(t, -1); return; }
+  }
   if (e.key === 'Escape' && S.ui.det) { S.ui.det = null; $('#sheet').innerHTML = ''; }
   if (e.key === 'Escape' && $('#scanner')) cerrarEscaner('tecla Escape');
   if (e.key !== 'Enter') return;
@@ -4693,7 +4703,7 @@ document.addEventListener('keydown', e => {
     if (t.dataset.k === 'acj') document.getElementById('d-aun-' + t.dataset.c)?.focus();
     else sumarDeposito(t.dataset.c);
   }
-  if (t.dataset?.act === 'cnt') { e.preventDefault(); if (t.dataset.k === 'cj') $('#a-un-' + CSS.escape(t.dataset.c))?.focus(); else t.blur(); }
+  if (t.dataset?.act === 'cnt') { e.preventDefault(); if (t.dataset.k === 'cj') $('#a-un-' + CSS.escape(t.dataset.c))?.focus(); else cntSiguiente(t, 1); }
   if (t.dataset?.act === 'ddet') {
     e.preventDefault();
     const c = t.dataset.c, campos = [...document.querySelectorAll(`#card-${CSS.escape(c)} input[data-act="ddet"]`)], i = campos.indexOf(t);
