@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb111';
+window.__VERSION = 'sb112';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb111</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb112</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1757,6 +1757,7 @@ function vHoy() {
       <div class="chips" role="group" aria-label="Filtro">${filtros.map(([k, n, c]) => `<button class="chip" data-act="filtro" data-v="${k}" aria-pressed="${S.ui.filtro === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
       <input type="search" id="qHoy" data-act="buscar" placeholder="Buscar código o descripción" value="${esc(S.ui.q)}" style="min-width:220px;flex:1;max-width:320px">
       ${!cerrado ? `<button class="btn sm ${opt('verSisDep') ? 'ok' : ''}" data-act="verSisDep" aria-pressed="${!!opt('verSisDep')}" title="Mostrar u ocultar la existencia del sistema a depósito en Recontar y Con diferencia">Depósito ve el sistema: <b>${opt('verSisDep') ? 'Sí' : 'No (a ciegas)'}</b></button>${opt('verSisDep') ? (S.remoto && S.remoto.fecha === S.dia && S.remoto.items ? `<span class="small muted">depósito ve el cruce de las ${hora(S.remoto.ts)}</span>` : `<span class="small" style="color:var(--bad)">depósito todavía no tiene cruce del ${dm(S.dia)}: cargá los archivos en esta PC</span>`) : ''}` : ''}
+      ${!cerrado ? `<button class="btn sm" data-act="pdfPlanilla" title="Planilla en papel para que depósito cuente sin el escáner: código, descripción corta y cajas / unidades en blanco. Sale por sector (Frío y Seco); respeta el sector elegido arriba.">Planilla para contar (PDF)</button>` : ''}
       ${!cerrado && sis && r.dif ? `<button class="btn sm" data-act="pdfDif" title="PDF con todos los artículos que hoy tienen diferencia (el día sigue abierto)">PDF de diferencias (${r.dif})</button><button class="btn sm" data-act="pdfDifMov" title="PDF de las diferencias con lo que salió de cada artículo: por chofer y cliente, y por proveedor (Yasukawa, Ilolay, Ventana)">PDF por chofer y proveedor</button>` : ''}
 
     </div>
@@ -3733,6 +3734,64 @@ function docActual() {
 // Sector elegido arriba en Administración (Todos / Frío / Seco): los PDF de diferencias salen solo con ese sector
 const sectorTxt = s => s === 'FRIO' ? 'Frío' : s === 'SECO' ? 'Seco' : s;
 function conSector(c) { const s = S.ui.sector; return !s || s === 'TODOS' ? c : { ...c, sector: s, lineas: (c.lineas || []).filter(l => l.s === s) }; }
+/* Administración → Planilla para contar en papel (sin el sistema): código, descripción corta y cajas / unidades en blanco */
+function pdfPlanillaConteo() {
+  try {
+    const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0'), sec = S.ui.sector || 'TODOS';
+    const r = armarPdfPlanilla(t, sec);
+    if (!r.n) { toast('No hay artículos para la planilla.'); return; }
+    descargar('Planilla para contar ' + S.dia + (sec !== 'TODOS' ? ' ' + sectorTxt(sec) : '') + ' ' + hh + '.pdf', r.blob);
+    toast('Planilla descargada (' + r.n + ' artículos).');
+  } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
+}
+function armarPdfPlanilla(t, sector) {
+  const cfg = pdfCfg();
+  const P = pdfDoc(false, cfg.difFuente); // hoja vertical
+  const fs = Math.max(6, Math.min(14, Number(cfg.difLetra) || 9)), ft = Math.max(9, Math.min(24, Number(cfg.difTitulo) || 15));
+  const rowH = Math.round(fs * Math.max(2, Math.min(4, Number(cfg.difAlto) || 2.3))), M = 28, ancho = P.W - 2 * M, pad = 14, lhD = Math.round(fs * 1.25);
+  const gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5)), cS = cfg.cSep || '#b4b4b4';
+  const secs = sector === 'TODOS' ? ['FRIO', 'SECO'] : [sector];
+  const items = Object.entries(S.maestro).filter(([, m]) => !m.baja).map(([c, m]) => ({ c, ...m }));
+  const maxCod = Math.max(...items.map(i => anchoTxt(i.c, fs, true)), 0);
+  const cols = [{ k: 'c', n: 'CÓDIGO', w: Math.max(52, maxCod + pad, anchoTxt('CÓDIGO', fs - 0.5, true) + pad) }, { k: 'd', n: 'DESCRIPCIÓN' }, { k: 'cj', n: 'CAJAS', w: 90 }, { k: 'un', n: 'UNIDADES', w: 100 }];
+  for (const cl of cols) if (cl.w) cl.w = Math.max(cl.w, anchoTxt(cl.n, fs - 0.5, true) + pad);
+  const desc = cols[1]; desc.w = Math.max(120, ancho - cols.filter(x => x !== desc).reduce((s, x) => s + x.w, 0));
+  let x = M; cols.forEach(cl => { cl.x = x; x += cl.w; });
+  let y = 0, total = 0;
+  const encabezado = (s, n, cont) => {
+    P.nueva(); y = 24 + ft;
+    P.text(M + 4, y, cortar('STOCK ILOLAY · Planilla para contar · ' + (s === 'FRIO' ? 'FRÍO (refrigerado)' : 'SECO') + (cont ? ' (continuación)' : ''), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    P.text(M + 4, y, cortar('Stock del ' + diaSem(S.dia) + ' ' + dmy(S.dia) + ' · ' + n + ' artículo' + (n === 1 ? '' : 's') + ' · Contó: ____________________', ancho - 8, Math.max(6, fs - 1)), Math.max(6, fs - 1), false, 'l', '#555555'); y += 14;
+    const hh = Math.round(fs * 2.2);
+    P.rect(M, y, ancho, hh, cfg.cHead);
+    cols.forEach(cl => { const yy = y + hh / 2 + fs * 0.35; if (cl.k === 'cj' || cl.k === 'un') P.text(cl.x + cl.w / 2, yy, cl.n, fs - 0.5, true, 'c', '#000000'); else P.text(cl.x + pad / 2, yy, cl.n, fs - 0.5, true, 'l', '#000000'); });
+    cols.slice(1).forEach(cl => P.line(cl.x, y, cl.x, y + hh, '#8a8a8a', 0.5));
+    y += hh;
+  };
+  for (const s of secs) {
+    const L = items.filter(i => i.s === s).sort(cmpArt);
+    if (!L.length) continue;
+    total += L.length;
+    encabezado(s, L.length);
+    let i = 0;
+    for (const it of L) {
+      const dl = partirTxt(it.dc || it.d || '', desc.w - pad, fs, false), h = Math.max(rowH, dl.length * lhD + (rowH - fs));
+      if (y + h > P.H - 30) encabezado(s, L.length, true);
+      if (cfg.zebra && i++ % 2) P.rect(M, y, ancho, h, cfg.cZebra);
+      const base = y + rowH / 2 + fs * 0.35;
+      P.text(cols[0].x + pad / 2, base, it.c, fs, true, 'l', '#000000');
+      dl.forEach((t2, k) => P.text(desc.x + pad / 2, base + k * lhD, t2, fs, false, 'l', '#000000'));
+      y += h;
+      P.line(M, y, M + ancho, y, cS, gS);
+      cols.slice(1).forEach(cl => P.line(cl.x, y - h, cl.x, y, cS, gS));
+      P.line(M, y - h, M, y, cS, gS); P.line(M + ancho, y - h, M + ancho, y, cS, gS);
+    }
+    if (y + 40 > P.H - 30) { P.nueva(); y = 40; }
+    y += 26;
+    P.text(M + 4, y, 'Contó: ______________________   Fecha: ____/____/______   Hora: ______   Firma: ______________________', Math.max(6, fs - 0.5), false, 'l', '#333333');
+  }
+  return { n: total, blob: total ? P.blob() : null };
+}
 function pdfDiferencias() {
   if (!tieneSistema()) { toast('Todavía no hay stock del sistema: cargá los archivos del día para calcular las diferencias.'); return; }
   const c = conSector(docActual());
@@ -4567,6 +4626,7 @@ document.addEventListener('click', async e => {
     }
     case 'ajDelSel': S.ui.ajConfDel = true; render(); break;
     case 'pdfControl': pdfControl(); break;
+    case 'pdfPlanilla': pdfPlanillaConteo(); break;
     case 'xlsPedidoIlolay': xlsPedidoIlolay(); break;
     case 'verSinExist': S.ui.verSinExist = !S.ui.verSinExist; render(); break;
     case 'ajEd': S.ui.ajEd = S.ui.ajEd === t.dataset.id ? null : t.dataset.id; S.ui.ajEdLote = false; S.ui.ajEdV = {}; render(); break;
