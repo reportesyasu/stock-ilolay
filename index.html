@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb112';
+window.__VERSION = 'sb113';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb112</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb113</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3910,8 +3910,8 @@ async function cargarClientesSiHace() {
 function bocaDe(x) {
   const r = x.o === 'I' && x.nc ? CLIENTES.get('I|' + nroCli(x.nc)) : null;
   if (r) {
-    const cli = r.cli || r.suc || '', suc = r.suc && r.suc.toUpperCase() !== cli.toUpperCase() ? r.suc : '';
-    return [cli, suc && !cli.toUpperCase().includes(suc.toUpperCase()) ? '(' + suc + ')' : '', r.dom ? '- ' + r.dom : ''].filter(Boolean).join(' ') || bocaArchivo(x);
+    const cli = r.cli || r.suc || '';
+    return [cli, r.dom ? '- ' + r.dom : ''].filter(Boolean).join(' ') || bocaArchivo(x);
   }
   return bocaArchivo(x);
 }
@@ -3932,14 +3932,37 @@ function clientesSinDir() {
   }
   return [...vistos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
+// Listado de clientes de Ilolay: los cargados + los que aparecen hoy en la facturación de Ilolay (con el nombre que trae el archivo)
+function clientesGrilla(Q) {
+  const M = movsActuales(), hoy = new Map();
+  for (const x of M?.filas || []) { if (x.o !== 'I' || !x.nc) continue; const n = nroCli(x.nc); if (!hoy.has(n)) hoy.set(n, String(x.suc || x.cliN || x.cli || '').trim()); }
+  const out = new Map();
+  for (const [k, v] of CLIENTES.entries()) { const [o, nro] = k.split('|'); if (o !== 'I') continue; out.set(nro, { nro, cargado: true, cli: v.cli || '', dom: v.dom || '', orig: hoy.get(nro) || v.suc || '' }); }
+  for (const [nro, orig] of hoy) if (!out.has(nro)) out.set(nro, { nro, cargado: false, cli: '', dom: '', orig });
+  return [...out.values()].filter(x => !Q || sinTilde(x.nro + ' ' + x.cli + ' ' + x.orig + ' ' + x.dom).includes(Q))
+    .sort((a, b) => (a.cargado ? 1 : 0) - (b.cargado ? 1 : 0) || (a.orig || a.cli).localeCompare(b.orig || b.cli, 'es'));
+}
+// Guarda una fila de la grilla al salir del campo (nombre corto y/o dirección)
+async function guardarClienteFila(nro) {
+  const x = clientesGrilla('').find(y => y.nro === nro) || { nro, orig: '' };
+  const nom = ($('#cc-' + CSS.escape(nro))?.value || '').trim(), dom = ($('#cd-' + CSS.escape(nro))?.value || '').trim();
+  const cliente = nom || x.orig || x.cli;
+  if (!cliente) { toast('Escribí el nombre a mostrar para el cliente ' + nro + '.'); return; }
+  if (x.cargado && cliente === x.cli && dom === x.dom) return;
+  try {
+    await API.call('guardarCliente', { o: 'I', nro, cliente, domicilio: dom, sucursal: x.orig || '' });
+    CLIENTES.set('I|' + nro, { cli: cliente, suc: x.orig || '', dom });
+    S.clientesMeta = { n: CLIENTES.size, ts: Date.now() }; clientesTs = S.clientesMeta.ts;
+    toast('Cliente ' + nro + ' guardado.');
+  } catch (e) { toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo guardar: ' + e.message); }
+  render();
+}
 function vClientes() {
   if (!S.admin) return '';
   if (S.clientesMeta?.n && clientesTs !== S.clientesMeta.ts && !S.ui.cliCargando) { S.ui.cliCargando = true; cargarClientesSiHace().finally(() => { S.ui.cliCargando = false; render(); }); }
   const F = S.ui.cliF ||= { o: 'I', nro: '', cliente: '', domicilio: '' }; F.o = 'I'; const Q = sinTilde(S.ui.cliQ || '');
-  const lista = [...CLIENTES.entries()].map(([k, v]) => { const [o, nro] = k.split('|'); return { o, nro, ...v }; })
-    .filter(x => x.o === 'I').filter(x => !Q || sinTilde(x.nro + ' ' + x.cli + ' ' + x.dom).includes(Q)).sort((a, b) => a.cli.localeCompare(b.cli, 'es'));
-  const sin = clientesSinDir(), ORG = { I: 'Ilolay', Y: 'Yasukawa' };
-  return `<div style="max-width:760px" id="cliPanel">${secOp('cli', 'Clientes de Ilolay (direcciones)', 'Número, nombre y dirección de las bocas de Ilolay, para el PDF por chofer.')}
+  const G = clientesGrilla(Q), nuevos = G.filter(x => !x.cargado).length;
+  return `<div style="max-width:760px" id="cliPanel">${secOp('cli', 'Clientes de Ilolay (nombres y direcciones)', 'Listado de clientes de Ilolay con el nombre corto y la dirección con que salen en el PDF por chofer.')}
     <span class="small muted">Solo para lo facturado por <b>Ilolay</b>: el número es el "Destinatario de mercadería" de la facturación de Ilolay. Yasukawa y Ventana salen con los datos que traen sus propios archivos. Si una boca de Ilolay no está cargada, sale con el nombre que trae el archivo.</span>
     <form id="fCli" class="row" style="gap:8px;align-items:end;flex-wrap:wrap">
       <label class="stack" style="gap:2px"><span class="lbl">N° destinatario</span><input type="text" id="cliNro" data-act="cliF" data-k="nro" inputmode="numeric" class="mono" style="width:120px" value="${esc(F.nro)}" required></label>
@@ -3947,10 +3970,16 @@ function vClientes() {
       <label class="stack" style="gap:2px;flex:1;min-width:180px"><span class="lbl">Dirección</span><input type="text" id="cliDom" data-act="cliF" data-k="domicilio" value="${esc(F.domicilio)}" placeholder="Calle y número"></label>
       <button class="btn pri" type="submit">${F.antes ? 'Guardar cambios' : 'Agregar'}</button>${F.antes || F.nro || F.cliente ? '<button class="btn" type="button" data-act="cliLimpiar">Cancelar</button>' : ''}
     </form>
-    ${sin.length ? `<details class="small" ${S.ui.cliSinAb ? 'open' : ''} id="cliSinDet"><summary><b style="color:var(--warn)">${sin.length} boca${sin.length === 1 ? '' : 's'} de Ilolay de los movimientos de hoy sin dirección</b> · tocá uno para completarlo</summary>
-      <div class="stack" style="margin-top:6px;max-height:260px;overflow:auto">${sin.map(x => `<button class="btn sm" type="button" style="justify-content:flex-start;text-align:left" data-act="cliUsar" data-o="${x.o}" data-nro="${esc(x.nro)}" data-nom="${esc(x.nombre)}"><span class="mono">${esc(x.nro)}</span>&nbsp;${esc(x.nombre)}${x.loc ? ' <span class="muted">· ' + esc(x.loc) + '</span>' : ''}</button>`).join('')}</div></details>` : ''}
-    <div class="row" style="justify-content:space-between;align-items:center"><input type="search" id="cliQ" data-act="cliQ" placeholder="Buscar por número, nombre o dirección" value="${esc(S.ui.cliQ || '')}" style="max-width:320px"><span class="small muted">${fmt(lista.length)} boca${lista.length === 1 ? '' : 's'} cargada${lista.length === 1 ? '' : 's'}${CLIENTES.size ? ` · <button class="link" data-act="cliBorrarTodos" style="color:var(--bad)">${S.ui.cliConfTodos ? '¿Seguro? Tocá de nuevo para borrar todos' : 'Borrar todos'}</button>` : ''}</span></div>
-    ${lista.length ? `<div class="tablebox" style="max-height:360px"><table><thead><tr><th>N° destinatario</th><th>Nombre</th><th>Dirección</th><th></th></tr></thead><tbody>${lista.slice(0, 300).map(x => `<tr><td class="mono">${esc(x.nro)}</td><td>${esc(x.cli)}</td><td>${esc(x.dom)}</td><td style="white-space:nowrap"><button class="btn xs" data-act="cliEditar" data-o="${x.o}" data-nro="${esc(x.nro)}">Editar</button><button class="btn xs" data-act="cliBorrar" data-o="${x.o}" data-nro="${esc(x.nro)}" title="Borrar">✕</button></td></tr>`).join('')}</tbody></table></div>${lista.length > 300 ? '<span class="small muted">Se muestran los primeros 300: buscá para encontrar el resto.</span>' : ''}` : `<span class="small muted">${Q ? 'No hay clientes que coincidan.' : 'Todavía no hay clientes cargados.'}</span>`}
+    <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><input type="search" id="cliQ" data-act="cliQ" placeholder="Buscar por número, nombre o dirección" value="${esc(S.ui.cliQ || '')}" style="max-width:320px">
+      <span class="small muted">${fmt(G.length)} cliente${G.length === 1 ? '' : 's'}${nuevos ? ` · <b style="color:var(--warn)">${nuevos} de hoy sin cargar</b>` : ''}${CLIENTES.size ? ` · <button class="link" data-act="cliBorrarTodos">Borrar todos</button>` : ''}</span></div>
+    ${S.ui.cliConfTodos ? `<div class="confirm row"><span class="small" style="color:var(--bad)">¿Borrar los ${CLIENTES.size} clientes cargados? Tocá de nuevo para confirmar.</span><button class="btn danger sm" data-act="cliBorrarTodos">Sí, borrar</button><button class="btn sm" data-act="cliTodosNo">Cancelar</button></div>` : ''}
+    <span class="small muted">Escribí en <b>Nombre a mostrar</b> el nombre corto con el que querés que salga en el PDF por chofer (vacío = el del archivo). Se guarda solo al salir del campo.</span>
+    ${G.length ? `<div class="tablebox" style="max-height:460px"><table><thead><tr><th>N° destinatario</th><th>Nombre en el archivo</th><th>Nombre a mostrar</th><th>Dirección</th><th></th></tr></thead><tbody>${G.slice(0, 400).map(x => `<tr class="${x.cargado ? '' : 'muted'}">
+      <td class="mono">${esc(x.nro)}${x.cargado ? '' : ' <span class="pill warn" title="Está en los movimientos de hoy y todavía no se cargó">nuevo</span>'}</td>
+      <td class="small">${esc(x.orig || '—')}</td>
+      <td><input type="text" id="cc-${esc(x.nro)}" data-act="cliFila" data-nro="${esc(x.nro)}" data-k="cliente" value="${esc(x.cargado ? x.cli : '')}" placeholder="${esc(x.orig || 'Nombre corto')}" style="min-width:170px;width:100%"></td>
+      <td><input type="text" id="cd-${esc(x.nro)}" data-act="cliFila" data-nro="${esc(x.nro)}" data-k="domicilio" value="${esc(x.dom || '')}" placeholder="Calle y número" style="min-width:170px;width:100%"></td>
+      <td>${x.cargado ? `<button class="btn xs" data-act="cliBorrar" data-o="I" data-nro="${esc(x.nro)}" title="Quitar de la lista">✕</button>` : ''}</td></tr>`).join('')}</tbody></table></div>${G.length > 400 ? '<div class="small muted">Se muestran los primeros 400: usá el buscador.</div>' : ''}` : '<div class="small muted">Todavía no hay clientes: cargá la facturación de Ilolay del día o agregalos arriba.</div>'}
   </div></details></div>`;
 }
 async function guardarClienteForm() {
@@ -4571,6 +4600,7 @@ document.addEventListener('click', async e => {
     case 'cliEditar': { const x = CLIENTES.get(t.dataset.o + '|' + t.dataset.nro) || {}; S.ui.cliF = { o: t.dataset.o, nro: t.dataset.nro, cliente: x.cli || '', domicilio: x.dom || '', antes: { o: t.dataset.o, nro: t.dataset.nro } }; render(); $('#cliPanel')?.scrollIntoView({ block: 'start' }); break; }
     case 'cliBorrar': borrarCliente(t.dataset.o, t.dataset.nro); break;
     case 'cliBorrarTodos': if (S.ui.cliConfTodos) borrarCliente('TODOS'); else { S.ui.cliConfTodos = true; render(); } break;
+    case 'cliTodosNo': S.ui.cliConfTodos = false; render(); break;
     case 'cliLimpiar': S.ui.cliF = { o: (S.ui.cliF || {}).o || 'I', nro: '', cliente: '', domicilio: '' }; render(); break;
     case 'cbConfirmar': cbConfirmar(t.dataset.ean ? [t.dataset.ean] : []); break;
     case 'cbBorrar': cbBorrar(t.dataset.ean); break;
@@ -4727,6 +4757,7 @@ document.addEventListener('change', async e => {
   if (a === 'abrirF') { S.ui.abrirF = t.value || hoyISO(); S.ui.abrirConf = false; render(); return; }
   if (t.id === 'armFile' && t.files?.[0]) { const f = t.files[0]; t.blur(); t.value = ''; armLeer(f).catch(er => { S.ui.arm = { estado: '<span style="color:var(--bad)">No se pudo leer el archivo: ' + esc(er.message) + '</span>' }; try { render(); } catch { } }); return; }
   if (a === 'cliF') { (S.ui.cliF ||= {})[t.dataset.k] = t.value; render(); return; }
+  if (a === 'cliFila') { delete t.dataset.dirty; await guardarClienteFila(t.dataset.nro); return; }
   if (t.id === 'bdFile' && t.files?.[0]) { const f = t.files[0]; t.blur(); t.value = ''; bdLeerArchivo(f).catch(er => { S.ui.bd = { ocupado: false, estado: '<span style="color:var(--bad)">No se pudo leer el archivo: ' + esc(er.message) + '</span>' }; try { render(); } catch { } }); return; }
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'cxlsF') { (S.ui.cxls ||= {}).fecha = t.value; render(); return; }
