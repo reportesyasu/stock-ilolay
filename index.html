@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb114';
+window.__VERSION = 'sb115';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb114</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb115</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1704,7 +1704,7 @@ function vFiles() {
     <div class="drop small" id="dropzone">También podés arrastrar los archivos acá.</div>
   </div></details>`;
 }
-/* Tiempos del conteo de depósito por sector: desde la primera carga hasta la última (sin las de administración) */
+/* Tiempos del conteo de depósito por sector: desde la primera cuenta hasta la última cuenta (primeras cargas de cada artículo; sin recuentos ni cargas de administración) */
 const hm = ts => ts ? new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
 function tiemposConteo() {
   const T = {};
@@ -1712,8 +1712,9 @@ function tiemposConteo() {
     if (!k || (k.cj === null && k.un === null)) continue;
     const s = S.maestro[c]?.s || ''; if (!s) continue;
     const E = (Array.isArray(k.carga) ? k.carga : []).filter(e => e && e.ts && e.k !== 'sis' && e.adm !== true);
-    const ini = k.pt || (E.length ? Math.min(...E.map(e => Number(e.ts))) : null), fin = E.length ? Math.max(...E.map(e => Number(e.ts))) : null;
-    if (!ini && !fin) continue;
+    // Solo la primera cuenta de cada artículo (los recuentos y las sumas posteriores no mueven los horarios)
+    const ini = k.pt || (E.length ? Math.min(...E.map(e => Number(e.ts))) : null), fin = ini;
+    if (!ini) continue;
     const t = T[s] ||= { desde: null, hasta: null, n: 0, arts: 0, quien: [] };
     if (ini && (!t.desde || ini < t.desde)) t.desde = ini;
     if (fin && (!t.hasta || fin > t.hasta)) t.hasta = fin;
@@ -1727,7 +1728,7 @@ function vTiemposConteo() {
   const T = S.cierre ? (S.cierre.tiempos || null) : tiemposConteo();
   if (!T || !Object.keys(T).length) return '';
   const parte = (s, n) => T[s] ? `<span><b>${n}:</b> ${tiempoTxt(T[s])} <span class="muted">· ${fmt(T[s].arts || 0)} art.${T[s].quien?.length ? ' · ' + T[s].quien.map(q => esc(nom(q))).join(', ') : ''}</span></span>` : '';
-  return `<div class="panel small row" style="gap:18px;flex-wrap:wrap;align-items:center"><b>Conteo de depósito</b>${parte('FRIO', 'Frío')}${parte('SECO', 'Seco')}<span class="muted">(primera y última carga de depósito${S.cierre ? ', guardado en el cierre' : ''})</span></div>`;
+  return `<div class="panel small row" style="gap:18px;flex-wrap:wrap;align-items:center"><b>Conteo de depósito</b>${parte('FRIO', 'Frío')}${parte('SECO', 'Seco')}<span class="muted">(primera y última cuenta de depósito, sin recuentos${S.cierre ? ' · guardado en el cierre' : ''})</span></div>`;
 }
 function vHoy() {
   const cerrado = !!S.cierre;
