@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb113';
+window.__VERSION = 'sb114';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb113</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb114</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1163,7 +1163,7 @@ function aplicarCola() {
   for (const op of colaLeer()) {
     if (op.dia !== S.dia) continue;
     const k = S.conteos[op.c] = { c: op.c, fecha: op.dia, cj: null, un: null, m: '', obs: '', nota: '', rec: false, ...(S.conteos[op.c] || {}) };
-    const ent = { ...(op.t === 'set' ? (op.patch?.carga || { k: 'tot', cj: op.patch?.cj, un: op.patch?.un }) : op.carga), by: S.me.id, ts: op.ts };
+    const ent = { ...(op.t === 'set' ? (op.patch?.carga || { k: 'tot', cj: op.patch?.cj, un: op.patch?.un }) : op.carga), by: S.me.id, ts: op.ts, adm: !!S.admin };
     if (op.t === 'set') {
       const { carga, ...resto } = op.patch || {}; Object.assign(k, resto);
       if ('cj' in resto || 'un' in resto) k.carga = ent.k === 'sis' ? [...(Array.isArray(k.carga) ? k.carga : []), ent] : [ent];
@@ -1253,7 +1253,7 @@ async function guardarConteo(c, patchIn) {
   S.conteos[c] = { c, fecha: S.dia, cj: null, un: null, m: '', obs: '', nota: '', rec: false, by: null, ...(prev || {}), ...patch, ts: Date.now() };
   if ('cj' in patch || 'un' in patch) {
     S.conteos[c].by = S.me.id;
-    const e = patch.carga && typeof patch.carga === 'object' ? patch.carga : { k: 'tot', cj: S.conteos[c].cj, un: S.conteos[c].un }, ent = { ...e, by: S.me.id, ts: Date.now() };
+    const e = patch.carga && typeof patch.carga === 'object' ? patch.carga : { k: 'tot', cj: S.conteos[c].cj, un: S.conteos[c].un }, ent = { ...e, by: S.me.id, ts: Date.now(), adm: !!S.admin };
     S.conteos[c].carga = e.k === 'sis' ? [...(Array.isArray(prev?.carga) ? prev.carga : []), ent] : [ent];
   } else if (prev) S.conteos[c].carga = prev.carga;
   recalc(); render();
@@ -1704,6 +1704,31 @@ function vFiles() {
     <div class="drop small" id="dropzone">También podés arrastrar los archivos acá.</div>
   </div></details>`;
 }
+/* Tiempos del conteo de depósito por sector: desde la primera carga hasta la última (sin las de administración) */
+const hm = ts => ts ? new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+function tiemposConteo() {
+  const T = {};
+  for (const [c, k] of Object.entries(S.conteos || {})) {
+    if (!k || (k.cj === null && k.un === null)) continue;
+    const s = S.maestro[c]?.s || ''; if (!s) continue;
+    const E = (Array.isArray(k.carga) ? k.carga : []).filter(e => e && e.ts && e.k !== 'sis' && e.adm !== true);
+    const ini = k.pt || (E.length ? Math.min(...E.map(e => Number(e.ts))) : null), fin = E.length ? Math.max(...E.map(e => Number(e.ts))) : null;
+    if (!ini && !fin) continue;
+    const t = T[s] ||= { desde: null, hasta: null, n: 0, arts: 0, quien: [] };
+    if (ini && (!t.desde || ini < t.desde)) t.desde = ini;
+    if (fin && (!t.hasta || fin > t.hasta)) t.hasta = fin;
+    t.n += E.length; t.arts++;
+    for (const e of E) if (e.by && !t.quien.includes(e.by)) t.quien.push(e.by);
+  }
+  return T;
+}
+const tiempoTxt = t => t && t.desde ? `${hm(t.desde)} → ${hm(t.hasta || t.desde)}` : '—';
+function vTiemposConteo() {
+  const T = S.cierre ? (S.cierre.tiempos || null) : tiemposConteo();
+  if (!T || !Object.keys(T).length) return '';
+  const parte = (s, n) => T[s] ? `<span><b>${n}:</b> ${tiempoTxt(T[s])} <span class="muted">· ${fmt(T[s].arts || 0)} art.${T[s].quien?.length ? ' · ' + T[s].quien.map(q => esc(nom(q))).join(', ') : ''}</span></span>` : '';
+  return `<div class="panel small row" style="gap:18px;flex-wrap:wrap;align-items:center"><b>Conteo de depósito</b>${parte('FRIO', 'Frío')}${parte('SECO', 'Seco')}<span class="muted">(primera y última carga de depósito${S.cierre ? ', guardado en el cierre' : ''})</span></div>`;
+}
 function vHoy() {
   const cerrado = !!S.cierre;
   const all = lineasVista();
@@ -1730,6 +1755,7 @@ function vHoy() {
       <span class="small">Descargá el PDF para mandarlo por mail. ¿Querés guardar también un backup completo de las bases en esta computadora o dispositivo?</span>
       <div class="row"><button class="btn pri" data-act="postPdf">${S.ui.postCierre.pdf ? '✓ PDF descargado' : 'Descargar PDF del cierre'}</button><button class="btn" data-act="postBackup">${S.ui.postCierre.backup ? '✓ Backup descargado' : 'Sí, guardar backup (XLSX)'}</button><button class="btn" data-act="postCierreNo">${S.ui.postCierre.pdf || S.ui.postCierre.backup ? 'Listo' : 'No, gracias'}</button></div></div>` : ''}
     ${avisos.join('')}
+    ${vTiemposConteo()}
     <details class="panel resdia" data-recordar="resAb" ${resAbierto() ? 'open' : ''}>
       <summary><span class="row" style="gap:8px;align-items:baseline;flex-wrap:wrap"><span class="arch-flecha" aria-hidden="true"></span><b style="font-size:19px">Stock ${cerrado ? 'cerrado' : 'del día'} · ${dm(S.dia)}</b>
         <span class="small">${r.contados}/${r.total} contados${sis ? ` · <b style="color:${r.dif ? 'var(--bad)' : 'var(--ok)'}">${r.dif} con diferencia</b> · ${money(r.imp)}` : ''}</span>
@@ -2310,7 +2336,7 @@ async function sumarDeposito(c) {
     const enCelular = () => {
       colaAgregar(op); const sp = Core.split(s.total, s.u), antes = S.conteos[c] || {};
       S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...antes, cj: sp.cj, un: sp.un, rec: false, ok: false, by: S.me.id, ts: Date.now(), pend: true,
-        carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: op.ts }] };
+        carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: op.ts, adm: !!S.admin }] };
       res = { cj: sp.cj, un: sp.un, antes: s.antes, total: s.total, cola: true }; recalc();
     };
     if (colaLeer().length) { enCelular(); colaEnviar(); }
@@ -2318,7 +2344,7 @@ async function sumarDeposito(c) {
       res = await API.call('sumarConteo', S.dia, c, s.delta, s.u, carga);
       const antes = S.conteos[c] || {};
       S.conteos[c] = { c, fecha: S.dia, m: '', obs: '', nota: '', ...antes, cj: res.cj, un: res.un, rec: false, ok: false, by: S.me.id, ts: Date.now(),
-        carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: Date.now() }] };
+        carga: [...(Array.isArray(antes.carga) ? antes.carga : []), { ...carga, by: S.me.id, ts: Date.now(), adm: !!S.admin }] };
       programarRefresco(400);
     } catch (e) { if (e.red) enCelular(); else throw e; }
   } catch (e) {
@@ -3307,9 +3333,9 @@ function vHistorial() {
       <div class="panel stack"><h3>Motivos de diferencia</h3><div class="bars">${mots.map(([k, n]) => `<div><span>${esc(k)}</span><i style="width:${Math.max(4, n / maxM * 100)}%"></i><span class="mono">${n}</span></div>`).join('')}</div></div>
       <div class="panel stack"><h3>Artículos con más diferencias</h3><div class="tablebox"><table><thead><tr><th>Artículo</th><th class="n">Días</th><th class="n">Neto u</th></tr></thead><tbody>${arts.map(a => `<tr><td><span class="code">${esc(a.c)}</span> ${esc(a.d)}</td><td class="n">${a.n}</td><td class="n">${fmtS(a.u)}</td></tr>`).join('')}</tbody></table></div></div>
     </div>
-    <div class="tablebox"><table><thead><tr><th>Día</th><th class="n">Artículos</th><th class="n">Con dif.</th><th class="n">Sobrante</th><th class="n">Faltante</th><th class="n">Valorizado</th><th>Origen</th></tr></thead><tbody>
+    <div class="tablebox"><table><thead><tr><th>Día</th><th class="n">Artículos</th><th class="n">Con dif.</th><th class="n">Sobrante</th><th class="n">Faltante</th><th class="n">Valorizado</th><th title="Primera y última carga de depósito">Conteo Frío</th><th title="Primera y última carga de depósito">Conteo Seco</th><th>Origen</th></tr></thead><tbody>
     ${L.map(c => { let so = 0, fa = 0; for (const l of c.lineas || []) { if (l.dif > 0) so += l.dif; else if (l.dif < 0) fa += l.dif; }
-      return `<tr><td><button class="link" data-act="hAbrir" data-v="${esc(c.fecha)}">${diaSem(c.fecha).slice(0, 3)} ${dm(c.fecha)}</button></td><td class="n">${c.resumen?.articulos ?? (c.lineas || []).length}</td><td class="n">${c.resumen?.conDif ?? ''}</td><td class="n" style="color:var(--ok)">${so ? fmtS(so) : ''}</td><td class="n" style="color:var(--bad)">${fa ? fmt(fa) : ''}</td><td class="n">${money(c.resumen?.importe)}</td><td class="small muted">${c.origen === 'planilla' ? 'Excel' : 'App'}</td></tr>`; }).join('')}
+      return `<tr><td><button class="link" data-act="hAbrir" data-v="${esc(c.fecha)}">${diaSem(c.fecha).slice(0, 3)} ${dm(c.fecha)}</button></td><td class="n">${c.resumen?.articulos ?? (c.lineas || []).length}</td><td class="n">${c.resumen?.conDif ?? ''}</td><td class="n" style="color:var(--ok)">${so ? fmtS(so) : ''}</td><td class="n" style="color:var(--bad)">${fa ? fmt(fa) : ''}</td><td class="n">${money(c.resumen?.importe)}</td><td class="small mono">${tiempoTxt(c.tiempos?.FRIO)}</td><td class="small mono">${tiempoTxt(c.tiempos?.SECO)}</td><td class="small muted">${c.origen === 'planilla' ? 'Excel' : 'App'}</td></tr>`; }).join('')}
     </tbody></table></div>
     ${ab ? `<div class="panel stack"><div class="row" style="justify-content:space-between"><h3>Ajustes del ${diaSem(ab.fecha)} ${dm(ab.fecha)}</h3><div class="row"><button class="btn sm" data-act="hPdf" data-v="${esc(ab.fecha)}">Descargar PDF</button><button class="btn sm" data-act="hExport" data-v="${esc(ab.fecha)}">Descargar Excel</button><button class="btn sm" data-act="hCerrar">Cerrar</button></div></div>
       ${histAjTabla(ab)}</div>` : ''}`}
@@ -4123,6 +4149,7 @@ async function cerrarDia() {
   const doc = { fecha: S.dia, origen: 'app', por: S.me.id, ts: Date.now(), lineas, archivos: { sap: S.files.sap?.name || '', yasu: S.files.yasu?.name || '', ventanas: S.files.vent?.name || '', facYasukawa: S.files.fya?.name || '', facIlolay: S.files.fil?.name || '', comprobantes: S.files.comp?.name || '' }, resumen: { articulos: lineas.length, contados: r.contados, conDif: r.dif, sobra: r.sobra, falta: r.falta, importe: Math.round(r.imp * 100) / 100 } };
   clearTimeout(okT); clearTimeout(autoRecT);
   doc.ajustesDia = await ajustesDelDia(S.dia);
+  doc.tiempos = tiemposConteo();
   while (loteEnCurso) await sleep(100);
   try { await API.call('cerrarDia', doc); }
   catch (e) { toast('No se pudo guardar el cierre: ' + e.message); return; }
