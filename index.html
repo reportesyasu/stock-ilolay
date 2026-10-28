@@ -322,7 +322,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb116';
+window.__VERSION = 'sb117';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +345,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb116</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb117</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1753,6 +1753,7 @@ function vHoy() {
   const hu = !cerrado && S.files.sap && S.files.yasu ? Core.huerfanos({ maestro: S.maestro, sap: S.files.sap.data, yasu: S.files.yasu.data }).filter(h => !ignorado(h.c)) : [];
   const avisos = [];
   const hoy = hoyISO();
+  { const a = avisoSinContar(); if (a) avisos.push(`<div class="banner warn"><span class="grow">Ya se contó el <b>${Math.floor(a.p)}%</b> de los artículos (${a.hechos} de ${a.total}), pero todavía ${pl(a.sin.length, 'queda', 'quedan')} <b>${a.sin.length} sin contar</b>: ${listaSinContar(a.sin, 10)}.</span><button class="btn sm" data-act="verSinContar">Ver los sin contar</button></div>`); }
   { const pend = codigosPend(); if (pend.length) avisos.push(`<div class="banner warn"><span class="grow"><b>${pend.length} código${pend.length === 1 ? '' : 's'} de barra nuevo${pend.length === 1 ? '' : 's'}</b> aprendido${pend.length === 1 ? '' : 's'} desde depósito, para revisar.</span><button class="btn sm" data-act="tab" data-v="maestro">Revisar</button><button class="btn sm" data-act="cbConfirmar">Confirmar todos</button></div>`); }
   if (cerrado && S.dia < hoy) avisos.push(`<div class="banner info"><span class="grow">El stock del ${diaSem(S.dia)} ${dm(S.dia)} ya está cerrado.</span><button class="btn pri sm" data-act="nuevodia">Empezar el conteo de hoy (${dm(hoy)})</button></div>`);
   if (!cerrado && S.dia < hoy && S.diaDoc) avisos.push(`<div class="banner warn"><span class="grow">Estás trabajando sobre el ${dm(S.dia)}, que todavía no se cerró. Cerralo con los archivos de ese día o pasá a hoy.</span><button class="btn sm" data-act="nuevodia">Pasar a hoy (${dm(hoy)})</button></div>`);
@@ -1846,11 +1847,28 @@ async function abrirStock(cero) {
     toast(/desconocida/i.test(e.message) ? 'Falta actualizar la base: corré el 1_estructura.sql nuevo en Supabase.' : 'No se pudo abrir: ' + e.message);
   }
 }
+// Artículos sin contar (todos los sectores). Para cerrar el stock tienen que estar todos contados.
+function sinContar() { return S.cierre ? [] : LINES.filter(l => !l.contado).sort(cmpArt); }
+// Aviso en Administración cuando ya se contó el porcentaje de Configuración ("Aviso de artículos sin contar"; 0 = no avisar)
+function avisoSinContar() {
+  if (S.cierre || !LINES.length) return null;
+  const pct = Number(opt('avisoSinContar') ?? 90); if (!(pct > 0)) return null;
+  const sin = sinContar(); if (!sin.length) return null;
+  const total = LINES.length, hechos = total - sin.length, p = hechos / total * 100;
+  return p >= pct ? { sin, hechos, total, p } : null;
+}
+const listaSinContar = (sin, n) => sin.slice(0, n).map(l => `<b class="mono">${esc(l.c)}</b> ${esc(dDep(l.c))}`).join(' · ') + (sin.length > n ? ` · y ${sin.length - n} más` : '');
+const pl = (n, s, p) => n === 1 ? s : (p || s + 's');
 function vConfirmCierre(r) {
+  const faltan = sinContar();
+  if (faltan.length) return `<div class="confirm" style="border-color:var(--bad)"><b style="color:var(--bad)">No se puede cerrar el stock del ${diaSem(S.dia)} ${dm(S.dia)}: hay ${faltan.length} ${pl(faltan.length, 'artículo')} sin contar.</b>
+    <span class="small">Para cerrar tienen que estar todos contados. ${pl(faltan.length, 'Falta', 'Faltan')}: ${listaSinContar(faltan, 15)}.</span>
+    <span class="small muted">Si de alguno no hay mercadería, cargalo en 0 (desde Depósito o en la grilla de Administración).</span>
+    <div class="row"><button class="btn pri" data-act="verSinContar">Ver los sin contar</button><button class="btn" data-act="cancel">Volver</button></div></div>`;
   const sin = r.total - r.contados;
   return `<div class="confirm"><b>Cerrar el stock del ${diaSem(S.dia)} ${dm(S.dia)}</b>
     ${fuentes().faltan.length ? `<span class="small" style="color:var(--bad)"><b>Atención:</b> el cruce es parcial (falta ${fuentes().faltan.map(k => NOMBRE_ARCH[k]).join(' y ')}). Se va a guardar así en el historial.</span>` : ''}
-    <span class="small">${r.contados} de ${r.total} artículos contados. ${sin ? `<b>${sin} sin contar</b> quedan guardados como "no contado". ` : ''}${r.dif} con diferencia${r.sinMot ? `, <b>${r.sinMot} sin motivo</b>` : ''}. Valorizado: ${money(r.imp)}.</span>
+    <span class="small">${r.contados} de ${r.total} artículos contados. ${r.dif} con diferencia${r.sinMot ? `, <b>${r.sinMot} sin motivo</b>` : ''}. Valorizado: ${money(r.imp)}.</span>
     ${(() => { const P = celularesPendientes(); return P.length ? `<span class="small" style="color:var(--bad)"><b>Celulares de depósito</b> · ${P.join(' · ')}<br>Si estuvieron sin señal pueden tener conteos sin enviar: confirmá con depósito antes de cerrar (lo que llegue después del cierre no se toma).</span>` : ''; })()}
     <span class="small muted">Se guarda el cierre con stock del sistema, contado y diferencias de cada artículo (los verificados conservan el sistema del momento en que se verificaron). Los ajustes "del día" (ingresos y ventas de quesos) se borran.</span>
     <div class="row"><button class="btn pri" data-act="cerrarOk">Confirmar cierre</button><button class="btn" data-act="cancel">Cancelar</button></div></div>`;
@@ -3778,6 +3796,7 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">En la automática y la manual se aplica la variación del stock de Yasukawa (en hormas). No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="stack" style="gap:2px"><span class="lbl">Orden de los artículos (Administración, Depósito, PDF y Excel)</span><select id="oOrden" style="max-width:360px">${[['codAsc', 'Código de fábrica ascendente (menor a mayor)'], ['codDesc', 'Código de fábrica descendente (mayor a menor)'], ['orden', 'Orden de Artículos (el que se arma con ▲ ▼)']].map(([v, n]) => `<option value="${v}" ${(opt('ordenArt') || 'codAsc') === v ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">Siempre primero Frío y después Seco.</span></label>
+      <label class="stack" style="gap:2px"><span class="lbl">Aviso de artículos sin contar (% contado)</span><input type="number" id="oAvisoSin" min="0" max="100" step="1" value="${esc(opt('avisoSinContar') ?? 90)}" style="max-width:110px"><span class="small muted">Cuando ya se contó este porcentaje de los artículos, Administración avisa cuáles faltan. 0 = no avisar. Para cerrar el stock tienen que estar todos contados.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oCero" ${opt('ceroAuto') !== false ? 'checked' : ''}> <span>Artículos con <b>sistema en 0</b> que nadie contó: tomarlos como <b>contados en 0</b> (sin diferencia). Si depósito cuenta algo, aparece la diferencia.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
       <label class="stack" style="gap:2px"><span class="lbl">Pase automático al casillero siguiente (segundos)</span><input type="number" id="oPaso" min="0" max="10" step="0.1" value="${esc(opt('pasoSeg') ?? 1.5)}" style="max-width:110px"><span class="small muted">Al cargar Cajas (o pallets, bases y bultos en Contar detallado), si pasa este tiempo sin tocar otra tecla el cursor salta solo al casillero siguiente. 0 = no pasa solo.</span></label>
@@ -4192,6 +4211,7 @@ function ajustesDiaDe(c, cfg) {
   return { lista: lin.flatMap(l => (l.ajd || []).filter(a => a.f === c.fecha).map(a => ({ c: l.c, d: l.d, ux: l.u, u: a.u, t: a.t, m: a.m, est: 'pend', v: l.dif ? Math.round(a.u * (l.imp / l.dif) * 100) / 100 : null }))).filter(f).sort((a, b) => a.c.localeCompare(b.c)), aprox: true };
 }
 async function cerrarDia() {
+  { const f = sinContar(); if (f.length) { toast(`No se puede cerrar: hay ${f.length} ${pl(f.length, 'artículo')} sin contar.`); S.ui.confirm = 'cerrar'; render(); return; } }
   const r = resumen(LINES);
   const lineas = LINES.map(l => ({ c: l.c, d: l.d, s: l.s, u: l.uxc, q: l.q ? 1 : 0, sap: l.sap, ya: l.yasu, sk: l.sapRaw, pe: l.peso, aj: l.aj, sis: l.sis, cont: l.contado ? l.cont : null, dif: l.contado ? l.dif : 0, m: l.contado && l.dif ? l.motivo : '', obs: l.obs || '', nota: l.nota || '', imp: l.importe || 0, por: l.por || null, ...ajDetalle(l.c) }));
   const doc = { fecha: S.dia, origen: 'app', por: S.me.id, ts: Date.now(), lineas, archivos: { sap: S.files.sap?.name || '', yasu: S.files.yasu?.name || '', ventanas: S.files.vent?.name || '', facYasukawa: S.files.fya?.name || '', facIlolay: S.files.fil?.name || '', comprobantes: S.files.comp?.name || '' }, resumen: { articulos: lineas.length, contados: r.contados, conDif: r.dif, sobra: r.sobra, falta: r.falta, importe: Math.round(r.imp * 100) / 100 } };
@@ -4551,7 +4571,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'cerrarDet' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="cerrarDet"]')) return;
   const a = t.dataset.act, c = t.dataset.c, v = t.dataset.v;
   switch (a) {
-    case 'tab': S.ui.tab = v; S.ui.q = ''; scanDestino = null; if (v !== 'ajustes') { S.ui.ajPre = null; S.ui.ajPreM = ''; S.ui.ajPreO = ''; } S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); render(); window.scrollTo(0, 0); break;
+    case 'tab': S.ui.tab = v; S.ui.q = ''; scanDestino = null; if (v !== 'ajustes') { S.ui.ajPre = null; S.ui.ajPreM = ''; S.ui.ajPreO = ''; } S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); if (v === 'hoy') { const a = avisoSinContar(); if (a) toast(`Todavía ${pl(a.sin.length, 'queda', 'quedan')} ${a.sin.length} ${pl(a.sin.length, 'artículo')} sin contar (contado ${Math.floor(a.p)}%).`); } render(); window.scrollTo(0, 0); break;
     case 'vista': if (v === 'auto') delete document.documentElement.dataset.vista; else document.documentElement.dataset.vista = v; try { localStorage.setItem('vista', v); } catch { } render(); break;
     case 'copiarLog': try { await navigator.clipboard.writeText(S.scanLog.join('\n')); toast('Registro copiado.'); } catch { toast('No se pudo copiar; sacá una captura.'); } break;
     case 'probarConexion': probarConexion(); break;
@@ -4562,6 +4582,7 @@ document.addEventListener('click', async e => {
     case 'recargarNo': S.ui.confRecarga = false; render(); break;
     case 'sector': S.ui.sector = v; render(); break;
     case 'filtro': S.ui.filtro = v; render(); break;
+    case 'verSinContar': S.ui.filtro = 'sin'; S.ui.sector = 'TODOS'; S.ui.q = ''; S.ui.confirm = false; S.ui.tab = 'hoy'; render(); setTimeout(() => document.querySelector('.chips[aria-label=Filtro]')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50); break;
     case 'solo': S.ui.solo = v; S.ui.foco = null; render(); break;
     case 'verTodos': S.ui.foco = null; S.ui.yaContado = null; render(); focoBusqueda(); break;
     case 'actualizar': actualizar(); break;
@@ -4923,7 +4944,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, avisoSinContar: Math.max(0, Math.min(100, Math.round(Number(String($('#oAvisoSin')?.value ?? 90).replace(',', '.')) || 0))), ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
