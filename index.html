@@ -141,6 +141,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .tablebox tfoot td{position:sticky;bottom:0;z-index:2;background:var(--sunk);font-weight:700;border-top:2px solid var(--line)}
 #qGrid td.q-d{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #qGrid input.q-in{width:64px}
+#pedGrid input.ped-in{width:62px}#pedGrid td.desc{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#pedGrid tr.ped-con td{background:rgba(46,125,50,.09)}#pedGrid thead th{line-height:1.15}
+.ped-card{padding:10px 12px;gap:8px;display:grid}.ped-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 8px}.ped-nums b{display:block;font-size:15px}.ped-card input.ped-in{width:70px}
 .q-movil{display:none}
 .q-cel #qGrid{max-height:none;overflow:visible}
 .q-cel #qGrid thead th{top:calc(var(--topH,58px))}
@@ -322,7 +324,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb117';
+window.__VERSION = 'sb118';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -345,7 +347,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb117</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb118</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1142,6 +1144,7 @@ function aplicarEstado(e, silencioso) {
     if (e.movs && (!S.movsRemoto || S.movsRemoto.ts !== e.movs.ts)) { S.movsRemoto = null; if (e.movs.fecha === e.dia) S.movsMeta = e.movs; }
     if (!e.movs) { S.movsMeta = null; if (!movimientosLocal()) S.movsRemoto = null; }
     if (!S.ui.tab) S.ui.tab = S.admin ? 'hoy' : 'contar';
+    if (S.ui.tab === 'pedido') cargarPedido(true);
     nombres();
     renderSuave = !!silencioso;
     try { recalc(); render(); } finally { renderSuave = false; }
@@ -1597,6 +1600,7 @@ function renderAhora() {
   else if (t === 'maestro') html = vMaestro();
   else if (t === 'ajustes') html = vAjustes();
   else if (t === 'quesos') html = vQuesos();
+  else if (t === 'pedido') html = vPedido();
   else if (t === 'correos') html = vCorreos();
   else if (t === 'historial') html = vHistorial();
   else if (t === 'opciones') html = vOpciones();
@@ -1620,9 +1624,12 @@ function buscarScroll(clave, raiz) {
   const i = clave.lastIndexOf('@'); let lista; try { lista = raiz.querySelectorAll(clave.slice(0, i)); } catch { return null; }
   return lista[+clave.slice(i + 1)] || null;
 }
+const escribiendoNum = () => { const a = document.activeElement; return !!(a && a.tagName === 'INPUT' && a.type === 'number' && ['pedIn', 'qIlo', 'qIng'].includes(a.dataset.act)); };
 function ponerMain(main, html) {
   const mismaPantalla = ultimoTab === S.ui.tab; ultimoTab = S.ui.tab;
   if (renderSuave && mismaPantalla && html === ultimoMain && main.childElementCount) return;
+  // Refresco de fondo mientras se tipea un número (pedido, quesos): se deja para cuando sale del casillero (si no, el cursor salta al principio)
+  if (renderSuave && mismaPantalla && escribiendoNum()) return;
   const pos = [];
   if (mismaPantalla) for (const el of main.querySelectorAll('*')) if (el.scrollTop > 0 || el.scrollLeft > 0) { const k = claveScroll(el, main); if (k) pos.push([k, el.scrollTop, el.scrollLeft]); }
   const wy = window.scrollY, wx = window.scrollX;
@@ -1640,12 +1647,12 @@ function restoreFocus(k) {
   const el = document.getElementById(k.id); if (!el) return;
   try { if (k.dirty || el.tagName !== 'SELECT') { el.value = k.v; if (k.dirty) el.dataset.dirty = '1'; } } catch { }
   el.focus({ preventScroll: true });
-  try { if (k.s !== null && k.s !== undefined) el.setSelectionRange(k.s, k.e); } catch { }
+  try { if (k.s !== null && k.s !== undefined) el.setSelectionRange(k.s, k.e); else if (el.type === 'number' && ['pedIn', 'qIlo', 'qIng'].includes(el.dataset.act)) { const n = String(el.value).length; el.type = 'text'; el.setSelectionRange(n, n); el.type = 'number'; } } catch { } // pedido / quesos: cursor al final
 }
 function renderTop() {
   const tabs = S.admin
-    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['quesos', 'Quesos'], ['correos', 'Correos'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Configuración']]
-    : [['contar', 'Depósito']];
+    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['quesos', 'Quesos'], ['pedido', 'Pedido a Ilolay'], ['correos', 'Correos'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Configuración']]
+    : [['contar', 'Depósito'], ['pedido', 'Pedido a Ilolay']];
   $('#tabs').hidden = false;
   $('#tabs').innerHTML = (tabs.length < 2 ? [] : tabs).map(([k, n]) => `<button data-act="tab" data-v="${k}" ${S.ui.tab === k ? 'aria-current="page"' : ''}>${n}</button>`).join('') + '<button data-act="salir" title="Cambiar de PIN o de servidor">Salir</button>';
   const st = S.cierre ? '<span class="pill closed">Cerrado</span>' : '<span class="pill open">Abierto</span>';
@@ -1870,6 +1877,7 @@ function vConfirmCierre(r) {
     ${fuentes().faltan.length ? `<span class="small" style="color:var(--bad)"><b>Atención:</b> el cruce es parcial (falta ${fuentes().faltan.map(k => NOMBRE_ARCH[k]).join(' y ')}). Se va a guardar así en el historial.</span>` : ''}
     <span class="small">${r.contados} de ${r.total} artículos contados. ${r.dif} con diferencia${r.sinMot ? `, <b>${r.sinMot} sin motivo</b>` : ''}. Valorizado: ${money(r.imp)}.</span>
     ${(() => { const P = celularesPendientes(); return P.length ? `<span class="small" style="color:var(--bad)"><b>Celulares de depósito</b> · ${P.join(' · ')}<br>Si estuvieron sin señal pueden tener conteos sin enviar: confirmá con depósito antes de cerrar (lo que llegue después del cierre no se toma).</span>` : ''; })()}
+    ${(() => { const A = (movimientosLocal() || S.movsRemoto || S.movsMeta)?.archivos || {}, it = (k, n) => A[k] ? n + ' ✓' : `<span style="color:var(--bad)">${n}: falta</span>`; return `<span class="small"><b>Ventas para Pedido a Ilolay:</b> ${it('fya', 'Fact. Yasukawa')} · ${it('fil', 'Fact. Ilolay')} · ${it('vent', 'Ventanas')}${!A.fya || !A.fil ? ' <span class="muted">(lo que falte queda como día sin datos)</span>' : ''}</span>`; })()}
     <span class="small muted">Se guarda el cierre con stock del sistema, contado y diferencias de cada artículo (los verificados conservan el sistema del momento en que se verificaron). Los ajustes "del día" (ingresos y ventas de quesos) se borran.</span>
     <div class="row"><button class="btn pri" data-act="cerrarOk">Confirmar cierre</button><button class="btn" data-act="cancel">Cancelar</button></div></div>`;
 }
@@ -3247,6 +3255,334 @@ function armarPdfControl(t, sector, conCero) {
   }
   return { n: total, blob: total ? P.blob() : null };
 }
+/* ================= Pedido a Ilolay =================
+   Lo ven administración y depósito. Por artículo: stock de Yasukawa y de Ilolay en cajas (para abajo), venta de los últimos
+   15 días corridos (Ilolay, Yasukawa + ventana), promedio diario, días de stock, sugerido para cubrir los días de Configuración,
+   y lo que está en camino y lo que se va a pedir (en cajas; lo cargan administración y depósito y lo ven todos).
+   Las ventas se guardan por día al cerrar el stock (60 días); los domingos no se trabaja: cuentan como venta 0. */
+const PED_DIAS_VENTA = 15;
+const isoMas = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const esDomingo = iso => new Date(iso + 'T12:00:00').getDay() === 0;
+const pedDiasCubrir = () => [7, 10, 15].includes(Number(opt('pedidoDias'))) ? Number(opt('pedidoDias')) : 10;
+const r2 = x => Math.round((Number(x) || 0) * 100) / 100;
+const cmpCodigo = (a, b) => (a.s === b.s ? 0 : a.s === 'FRIO' ? -1 : b.s === 'FRIO' ? 1 : String(a.s || '').localeCompare(String(b.s || ''))) || String(a.c).localeCompare(String(b.c), 'es', { numeric: true });
+async function cargarPedido(silencioso) {
+  if (S.pedCargando) return;
+  S.pedCargando = true;
+  try { S.ped = await API.call('getPedido', isoMas(S.dia, -(PED_DIAS_VENTA + 7))); S.pedErr = null; }
+  catch (e) { S.pedErr = e.message; if (!silencioso) toast('No se pudo leer el pedido: ' + e.message); }
+  S.pedCargando = false;
+  if (S.ui.tab === 'pedido') { renderSuave = true; try { render(); } finally { renderSuave = false; } }
+}
+// Stock para el pedido. Día cerrado: lo guardado en ese cierre. Abierto: los archivos de hoy (depósito solo si ve el sistema,
+// para no romper el conteo a ciegas); si no, el último cierre. Quesos de Ilolay: kilos de SAP ÷ peso nominal (hormas).
+function stockPedido() {
+  const by = {}, pesoDe = (c, pe) => Number(S.maestro[c]?.p) || Number(pe) || 0;
+  const ilo = (c, sap, sk, pe) => S.maestro[c]?.q ? (pesoDe(c, pe) > 0 ? (Number(sk) || 0) / pesoDe(c, pe) : null) : (Number(sap) || 0); // queso sin peso nominal: no se puede pasar a hormas
+  if (S.cierre) {
+    for (const l of S.cierre.lineas || []) by[l.c] = { ya: Number(l.ya) || 0, ilo: ilo(l.c, l.sap, l.sk, l.pe) };
+    return { by, fuente: 'cierre', fecha: S.dia };
+  }
+  const f = fuentes();
+  if ((S.admin || opt('verSisDep')) && f.origen && !f.faltan.length) {
+    for (const l of LINES) by[l.c] = { ya: Number(l.yasu) || 0, ilo: ilo(l.c, l.sap, l.sapRaw, l.peso) };
+    return { by, fuente: 'hoy', fecha: S.dia };
+  }
+  if (S.anteriorFecha && S.anterior && Object.keys(S.anterior).length) {
+    for (const [c, a] of Object.entries(S.anterior)) by[c] = { ya: Number(a.ya) || 0, ilo: ilo(c, a.sap, a.sk, a.pe) };
+    return { by, fuente: 'anterior', fecha: S.anteriorFecha };
+  }
+  return { by, fuente: '', fecha: '' };
+}
+// Ventas de los 15 días corridos hasta el último día cerrado (si hoy está cerrado, hasta hoy; si no, hasta ayer)
+function ventasPedido() {
+  const P = S.ped; if (!P) return null;
+  const fin = S.cierre ? S.dia : isoMas(S.dia, -1), ini = isoMas(fin, -(PED_DIAS_VENTA - 1));
+  const dias = []; for (let f = ini; f <= fin; f = isoMas(f, 1)) dias.push(f);
+  const R = Object.fromEntries((P.dias || []).map(d => [d.f, d]));
+  const okI = f => !!R[f]?.i || esDomingo(f), okY = f => !!R[f]?.y || esDomingo(f);
+  const nI = dias.filter(okI).length, nY = dias.filter(okY).length;
+  const faltan = dias.filter(f => !okI(f) || !okY(f)).map(f => ({ f, i: okI(f), y: okY(f) }));
+  const by = {};
+  for (const [f, c, o, u] of P.ventas || []) {
+    if (f < ini || f > fin) continue;
+    const x = by[c] ||= { I: 0, Y: 0 };
+    if (o === 'I') x.I += Number(u) || 0; else x.Y += Number(u) || 0; // Y: facturación Yasukawa + ventana
+  }
+  return { ini, fin, dias, nI, nY, faltan, by };
+}
+// Pallets, bases y cajas de una cantidad de cajas, según el armado de Artículos (caja = bulto)
+function palletsDe(c, cajas) {
+  const m = S.maestro[c] || {}, bpb = Number(m.bpb) > 0 ? Number(m.bpb) : 0, bpp = Number(m.bpp) > 0 ? Number(m.bpp) : 0, cxp = bpb && bpp ? bpb * bpp : 0;
+  let r = Math.max(0, Math.round(Number(cajas) || 0));
+  const pal = cxp ? Math.floor(r / cxp) : 0; r -= pal * cxp;
+  const bas = bpb ? Math.floor(r / bpb) : 0; r -= bas * bpb;
+  const partes = [pal ? pal + ' ' + (pal === 1 ? 'pallet' : 'pallets') : '', bas ? bas + ' ' + (bas === 1 ? 'base' : 'bases') : '', r ? r + ' ' + (r === 1 ? 'caja' : 'cajas') : ''].filter(Boolean);
+  return { pal, bas, cj: r, cxp, bpb, bpp, txt: partes.join(' + ') || '0', armado: cxp ? `1 pallet = ${fmt(bpp)} bases × ${fmt(bpb)} cajas = ${fmt(cxp)} cajas` : bpb ? `1 base = ${fmt(bpb)} cajas` : 'sin armado cargado' };
+}
+const pedNum = v => Math.max(0, Math.round(Number(String(v ?? '').replace(',', '.')) || 0));
+function filasPedido() {
+  const st = stockPedido(), V = ventasPedido(), PD = S.ped?.pedido || {}, D = S.ui.pedDraft || {}, dc = pedDiasCubrir();
+  return LINES.filter(l => S.maestro[l.c] && !S.maestro[l.c].baja).map(l => {
+    const m = S.maestro[l.c], uxc = l.uxc || 1, s = st.by[l.c], v = V?.by[l.c] || { I: 0, Y: 0 };
+    const ya = s ? s.ya : null, ilo = s && s.ilo !== null ? s.ilo : null;
+    const prom = V ? (V.nI ? v.I / V.nI : 0) + (V.nY ? v.Y / V.nY : 0) : 0; // unidades por día
+    const stockU = (ya || 0) + (ilo || 0);
+    const camino = D[l.c + 'k'] !== undefined ? pedNum(D[l.c + 'k']) : Number(PD[l.c]?.k) || 0;
+    const pedir = D[l.c + 'p'] !== undefined ? pedNum(D[l.c + 'p']) : Number(PD[l.c]?.p) || 0;
+    const falta = prom * dc - stockU - camino * uxc;
+    return {
+      c: l.c, d: dDep(l.c) || l.d, s: l.s || m.s, uxc,
+      yaCj: ya === null ? null : Math.floor(ya / uxc + 1e-9), iloCj: ilo === null ? null : Math.floor(ilo / uxc + 1e-9),
+      vI: v.I / uxc, vY: v.Y / uxc, vT: (v.I + v.Y) / uxc, prom: prom / uxc,
+      dias: prom > 0 ? Math.max(0, stockU) / prom : null, camino, pedir,
+      sug: prom > 0 && falta > 0 ? Math.ceil(falta / uxc - 1e-9) : 0
+    };
+  }).sort(cmpCodigo);
+}
+function pedFiltrar(F) {
+  const q = (S.ui.pedQ || '').trim().toUpperCase(), sec = S.ui.sector || 'TODOS', fil = S.ui.pedFil || 'todos';
+  const L = F.filter(r => (sec === 'TODOS' || r.s === sec) && (!q || r.c.includes(q) || String(r.d).toUpperCase().includes(q))
+    && (fil === 'todos' || (fil === 'sug' && r.sug > 0) || (fil === 'ped' && r.pedir > 0) || (fil === 'cam' && r.camino > 0)));
+  if (S.ui.pedOrden === 'dias') L.sort((a, b) => (a.dias ?? 1e9) - (b.dias ?? 1e9) || cmpCodigo(a, b));
+  return L;
+}
+const f1 = x => x === null || x === undefined ? '—' : x > 999 ? '999+' : fmt(Math.round(x * 10) / 10);
+function vPedido() {
+  if (!S.ped && !S.pedErr) { if (!S.pedCargando) cargarPedido(true); return '<div class="panel empty">Cargando el pedido…</div>'; }
+  if (!S.ped) return `<div class="panel empty">No se pudo leer el pedido.<br><span class="small muted">${esc(S.pedErr)}</span><br><br><button class="btn" data-act="pedRecargar">Reintentar</button></div>`;
+  const st = stockPedido(), V = ventasPedido(), F = filasPedido(), L = pedFiltrar(F), dc = pedDiasCubrir(), cel = esTactil() || window.innerWidth < 720;
+  const tot = { ped: F.filter(r => r.pedir > 0), cam: F.filter(r => r.camino > 0), sug: F.filter(r => r.sug > 0) };
+  const cj = A => A.reduce((s, r) => s + r, 0);
+  const camMeta = S.ped.camino;
+  const stTxt = st.fuente === 'hoy' ? `de hoy (archivos del ${dm(st.fecha)})` : st.fuente === 'cierre' ? `del cierre del ${diaSem(st.fecha)} ${dm(st.fecha)}` : st.fuente === 'anterior' ? `del último cierre (${diaSem(st.fecha)} ${dm(st.fecha)})` : '<b style="color:var(--bad)">sin datos</b>';
+  const faltan = V ? V.faltan : [];
+  const conf = S.ui.pedConf;
+  const confHtml = !conf ? '' : conf === 'copiar' ? `<div class="confirm"><b>Copiar el sugerido al pedido${(S.ui.sector || 'TODOS') !== 'TODOS' ? ' (' + sectorTxt(S.ui.sector) + ')' : ''}</b><span class="small">${tot.sug.filter(r => (S.ui.sector || 'TODOS') === 'TODOS' || r.s === S.ui.sector).length} artículos con sugerido pasan a "Pedido a realizar" con esa cantidad. Lo que ya estaba cargado en esos artículos se reemplaza; los demás no se tocan.</span><div class="row"><button class="btn pri" data-act="pedCopiarOk">Copiar</button><button class="btn" data-act="pedConfNo">Cancelar</button></div></div>`
+    : conf === 'enviado' ? `<div class="confirm"><b>Marcar el pedido como enviado</b><span class="small">${tot.ped.length} artículos (${fmt(cj(tot.ped.map(r => r.pedir)))} cajas) pasan a "En camino" (se suman a lo que ya estaba en camino) y el pedido queda vacío para el próximo.</span><div class="row"><button class="btn pri" data-act="pedEnviadoOk">Pedido enviado</button><button class="btn" data-act="pedConfNo">Cancelar</button></div></div>`
+    : conf === 'borrarK' ? `<div class="confirm"><b>Borrar lo que está en camino</b><span class="small">${tot.cam.length} artículos (${fmt(cj(tot.cam.map(r => r.camino)))} cajas) quedan en 0. Usalo cuando llegó el camión.</span><div class="row"><button class="btn danger" data-act="pedBorrarOk" data-k="k">Borrar en camino</button><button class="btn" data-act="pedConfNo">Cancelar</button></div></div>`
+    : conf === 'borrarP' ? `<div class="confirm"><b>Borrar el pedido a realizar</b><span class="small">${tot.ped.length} artículos (${fmt(cj(tot.ped.map(r => r.pedir)))} cajas) quedan en 0.</span><div class="row"><button class="btn danger" data-act="pedBorrarOk" data-k="p">Borrar pedido</button><button class="btn" data-act="pedConfNo">Cancelar</button></div></div>` : '';
+  const inp = (r, k) => `<input type="number" inputmode="numeric" min="0" step="1" class="cj ped-in" id="ped-${k}-${esc(r.c)}" data-act="pedIn" data-k="${k}" data-c="${esc(r.c)}" value="${esc(S.ui.pedDraft?.[r.c + k] ?? ((k === 'p' ? r.pedir : r.camino) || ''))}" placeholder="0" aria-label="${k === 'p' ? 'Pedido a realizar' : 'En camino'} ${esc(r.c)}">`;
+  const sugBtn = r => r.sug > 0 ? `<button class="link mono" data-act="pedUsarSug" data-c="${esc(r.c)}" title="Usar el sugerido como pedido">${fmt(r.sug)}</button>` : '<span class="muted">0</span>';
+  const diasTd = r => r.dias === null ? '<span class="muted" title="Sin venta en los 15 días">—</span>' : `<span style="color:${r.dias < dc ? 'var(--bad)' : 'inherit'}">${f1(r.dias)}</span>`;
+  const stk = x => x === null ? '<span class="muted">—</span>' : fmt(x);
+  const tabla = cel ? `<div class="stack" style="gap:8px">${L.map(r => `<div class="panel ped-card">
+      <div><b class="mono">${esc(r.c)}</b> ${esc(r.d)}</div>
+      <div class="ped-nums small"><span>Stock Yasu.<b>${stk(r.yaCj)}</b></span><span>Stock Ilolay<b>${stk(r.iloCj)}</b></span><span>Venta Ilolay<b>${f1(r.vI)}</b></span><span>Venta Yasu.<b>${f1(r.vY)}</b></span><span>Venta total<b>${f1(r.vT)}</b></span><span>Prom. día<b>${f1(r.prom)}</b></span><span>Días stock<b>${diasTd(r)}</b></span><span>Sugerido<b>${sugBtn(r)}</b></span></div>
+      <div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div></div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
+    : `<div class="tablebox" id="pedGrid"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n" title="Stock de Yasukawa en cajas (para abajo)">Stock<br>Yasu.</th><th class="n" title="Stock de Ilolay (SAP) en cajas (para abajo)">Stock<br>Ilolay</th><th class="n" title="Facturación Ilolay de los 15 días, en cajas">Venta 15 d<br>Ilolay</th><th class="n" title="Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas">Venta 15 d<br>Yasu.</th><th class="n">Venta 15 d<br>total</th><th class="n" title="Venta promedio por día, en cajas">Prom.<br>diario</th><th class="n" title="Stock total ÷ promedio diario">Días de<br>stock</th><th class="n" title="Cajas en camino: se descuentan del sugerido">En<br>camino</th><th class="n" title="Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.">Sugerido<br>(${dc} días)</th><th class="n">Pedido a<br>realizar</th></tr></thead>
+      <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}><td class="code">${esc(r.c)}</td><td class="desc">${esc(r.d)}</td><td class="n">${stk(r.yaCj)}</td><td class="n">${stk(r.iloCj)}</td><td class="n">${f1(r.vI)}</td><td class="n">${f1(r.vY)}</td><td class="n"><b>${f1(r.vT)}</b></td><td class="n">${f1(r.prom)}</td><td class="n">${diasTd(r)}</td><td class="n">${inp(r, 'k')}</td><td class="n">${sugBtn(r)}</td><td class="n">${inp(r, 'p')}</td></tr>`).join('') || '<tr><td colspan="12" class="muted">No hay artículos con ese filtro.</td></tr>'}</tbody>
+      <tfoot><tr><td></td><td>TOTAL (${L.length})</td><td class="n">${fmt(cj(L.map(r => r.yaCj || 0)))}</td><td class="n">${fmt(cj(L.map(r => r.iloCj || 0)))}</td><td class="n">${f1(cj(L.map(r => r.vI)))}</td><td class="n">${f1(cj(L.map(r => r.vY)))}</td><td class="n">${f1(cj(L.map(r => r.vT)))}</td><td class="n">${f1(cj(L.map(r => r.prom)))}</td><td></td><td class="n">${fmt(cj(L.map(r => r.camino)))}</td><td class="n">${fmt(cj(L.map(r => r.sug)))}</td><td class="n">${fmt(cj(L.map(r => r.pedir)))}</td></tr></tfoot></table></div>`;
+  const filtros = [['todos', 'Ver todos', F.length], ['sug', 'Con sugerido', tot.sug.length], ['ped', 'Con pedido', tot.ped.length], ['cam', 'En camino', tot.cam.length]];
+  return `<div class="stack">
+    <div class="row" style="justify-content:space-between;align-items:end"><div style="min-width:0;flex:1 1 300px"><h2>Pedido a Ilolay</h2>
+      <div class="small muted">Stock ${stTxt}, en cajas para abajo${st.fuente === 'anterior' && !S.admin ? '' : ''}. Venta de los 15 días corridos ${V ? `del ${dm(V.ini)} al ${dm(V.fin)}` : ''} (domingos = 0), en cajas. Sugerido para cubrir <b>${dc} días</b>${S.admin ? ' (se cambia en Configuración)' : ''}. Pedido y en camino en cajas: lo ven todos.</div></div>
+      <button class="btn sm" data-act="pedRecargar" ${S.pedCargando ? 'disabled' : ''}>Actualizar</button></div>
+    ${faltan.length ? `<div class="banner warn"><span class="grow"><b>Faltan datos de venta</b> de ${faltan.length} ${faltan.length === 1 ? 'día' : 'días'}: ${faltan.map(x => `${diaSem(x.f).slice(0, 3)} ${dm(x.f)}${!x.i && !x.y ? '' : !x.i ? ' (Ilolay)' : ' (Yasukawa)'}`).join(' · ')}. El promedio se calcula con los días que tienen datos.${S.admin ? ' Se completan al cerrar el stock con los archivos de facturación, o con "Cargar ventas anteriores".' : ''}</span></div>` : ''}
+    ${camMeta && tot.cam.length ? `<div class="banner info"><span class="grow">Pedido en camino desde el ${diaSem(camMeta.f)} ${dm(camMeta.f)}${camMeta.por ? ' (marcado por ' + esc(nom(camMeta.por)) + ')' : ''}: ${tot.cam.length} artículos, ${fmt(cj(tot.cam.map(r => r.camino)))} cajas. Cuando llegue, borralo con "Borrar en camino".</span></div>` : ''}
+    ${confHtml}
+    <div class="row ${cel ? '' : 'ajBarra'}" style="flex-wrap:wrap">
+      ${chipsSector(F)}
+      <div class="chips" role="group" aria-label="Filtro del pedido">${filtros.map(([k, n, c]) => `<button class="chip" data-act="pedFil" data-v="${k}" aria-pressed="${(S.ui.pedFil || 'todos') === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
+      <input type="search" id="pedQ" data-act="pedQ" placeholder="Buscar código o descripción" value="${esc(S.ui.pedQ || '')}" style="min-width:180px;flex:1;max-width:280px">
+      <label class="row small" style="gap:6px">Orden <select data-act="pedOrden" id="pedOrden"><option value="cod" ${S.ui.pedOrden !== 'dias' ? 'selected' : ''}>Código de fábrica</option><option value="dias" ${S.ui.pedOrden === 'dias' ? 'selected' : ''}>Días de stock (menos primero)</option></select></label>
+    </div>
+    <div class="row" style="flex-wrap:wrap;gap:8px">
+      <button class="btn" data-act="pedConf" data-v="copiar" ${tot.sug.length ? '' : 'disabled'} title="Pone el sugerido como pedido en los artículos que tienen sugerido (del sector elegido)">Copiar el sugerido</button>
+      <button class="btn pri" data-act="pedConf" data-v="enviado" ${tot.ped.length ? '' : 'disabled'}>Pedido enviado</button>
+      <button class="btn" data-act="pedConf" data-v="borrarK" ${tot.cam.length ? '' : 'disabled'}>Borrar en camino</button>
+      <button class="btn" data-act="pedConf" data-v="borrarP" ${tot.ped.length ? '' : 'disabled'}>Borrar pedido</button>
+      <span class="grow"></span>
+      <button class="btn" data-act="pedXls">Excel</button>
+      <button class="btn" data-act="pedPdf" ${tot.ped.length ? '' : 'disabled'} title="Pedido a realizar con el resumen por pallet">PDF del pedido</button>
+      <button class="btn" data-act="pedPdfTodo" title="Listado completo con stock, ventas, días de stock y sugerido">PDF del listado</button>
+    </div>
+    ${tot.ped.length ? `<div class="small"><b>Pedido a realizar:</b> ${tot.ped.length} artículos · ${fmt(cj(tot.ped.map(r => r.pedir)))} cajas · ${fmt(cj(tot.ped.map(r => palletsDe(r.c, r.pedir).pal)))} pallets completos</div>` : ''}
+    ${tabla}
+    ${S.admin ? vPedidoVentas() : ''}
+  </div>`;
+}
+/* ---- Historial de ventas: lo guardado y la carga de ventas anteriores (administración) ---- */
+function vPedidoVentas() {
+  const D = S.ped?.dias || [], I = S.ui.pedImp;
+  const prev = I ? `<div class="confirm"><b>Ventas encontradas en ${esc(I.archivos.join(', '))}</b>
+      <div class="tablebox"><table><thead><tr><th>Día</th><th class="n">Ilolay (u)</th><th class="n">Yasukawa (u)</th><th class="n">Ventana (u)</th></tr></thead><tbody>${Object.keys(I.fechas).sort().map(f => { const x = I.fechas[f], t = o => x[o] ? fmt(r2(Object.values(x[o]).reduce((s, u) => s + u, 0))) + ` <span class="muted">(${Object.keys(x[o]).length})</span>` : '<span class="muted">—</span>'; return `<tr><td>${diaSem(f).slice(0, 3)} ${dmy(f)}${D.some(d => d.f === f) ? ' <span class="pill seco" title="Ese día ya tiene ventas guardadas: se reemplaza lo de cada origen que trae el archivo">reemplaza</span>' : ''}</td><td class="n">${t('I')}</td><td class="n">${t('Y')}</td><td class="n">${t('V')}</td></tr>`; }).join('')}</tbody></table></div>
+      ${I.aviso.length ? `<span class="small" style="color:var(--warn)">${I.aviso.map(esc).join('<br>')}</span>` : ''}
+      <span class="small muted">Entre paréntesis, la cantidad de artículos. Quesos de Ilolay en kilos: pasados a hormas por el peso nominal. Solo se guardan los artículos de la lista y los últimos 60 días.</span>
+      <div class="row"><button class="btn pri" data-act="pedImpOk" ${S.ui.pedImpGuardando ? 'disabled' : ''}>${S.ui.pedImpGuardando ? 'Guardando…' : 'Guardar estas ventas'}</button><button class="btn" data-act="pedImpNo">Cancelar</button></div></div>` : '';
+  return `<details class="panel" data-recordar="pedVentasAb" ${I || (() => { try { return localStorage.getItem('pedVentasAb') === '1'; } catch { return false; } })() ? 'open' : ''}><summary><b>Historial de ventas</b> <span class="small muted">· ${D.length ? `${D.length} días guardados en los últimos ${PED_DIAS_VENTA + 7}` : 'todavía no hay ventas guardadas'}</span></summary>
+    <div class="stack" style="margin-top:8px">
+      <span class="small muted">Las ventas se guardan solas al cerrar el stock, con los archivos de facturación Yasukawa, facturación Ilolay y ventanas que haya en ese momento (los quesos de Ilolay, de lo cargado en la pestaña Quesos). Para cargar días anteriores, elegí los archivos de facturación (pueden traer varios días: se separan por la fecha de cada línea).</span>
+      ${D.length ? `<div class="small">${D.slice().reverse().map(d => `<span class="mono" style="margin-right:10px">${dm(d.f)} ${d.i ? 'I✓' : '<span style="color:var(--bad)">I✗</span>'} ${d.y ? 'Y✓' : '<span style="color:var(--bad)">Y✗</span>'}${d.v ? ' V✓' : ''}</span>`).join('')}</div>` : ''}
+      <div class="row"><label class="btn" for="pickVentas">Cargar ventas anteriores</label><input type="file" id="pickVentas" multiple accept=".xls,.xlsx,.xlsm,.csv,.txt,.htm,.html,.tsv" hidden></div>
+      ${prev}
+    </div></details>`;
+}
+async function leerVentasAnteriores(list) {
+  const fechas = {}, archivos = [], aviso = [], hoy = hoyISO(), limite = isoMas(hoy, -60);
+  const pesoDe = c => Number(S.maestro[c]?.p) || Number(S.anterior?.[c]?.pe) || 0;
+  const fyDe = c => Number(S.maestro[c]?.fy) > 1 ? Number(S.maestro[c].fy) : 1;
+  const sumar = (f, o, c, q) => { if (!f || f > hoy || f < limite || !S.maestro[c]) return; const x = (fechas[f] ||= {})[o] ||= {}; x[c] = r2((x[c] || 0) + q); };
+  for (const file of [...list]) {
+    try {
+      const { rows, info } = await fileRows(file);
+      if (info.kind === 'fya') { const d = Core.buildFya(rows, info, opt('prefijo')); archivos.push(file.name); let sf = 0; for (const x of d.filas) { if (x.ms === false) continue; if (!x.f) { sf++; continue; } sumar(x.f, 'Y', x.c, Number(x.q) || 0); } if (sf) aviso.push(file.name + ': ' + sf + ' líneas sin fecha (no se toman).'); }
+      else if (info.kind === 'fil') {
+        const d = Core.buildFil(rows, info); archivos.push(file.name); let sf = 0, sp = new Set();
+        for (const x of d.filas) {
+          if (!x.f) { sf++; continue; }
+          let q = Number(x.q) || 0;
+          if (x.um === 'KG') { const p = pesoDe(x.c); if (p > 0) q = Math.round(q / p); else { sp.add(x.c); continue; } }
+          else if (fyDe(x.c) > 1) q = q / fyDe(x.c);
+          sumar(x.f, 'I', x.c, q);
+        }
+        if (sf) aviso.push(file.name + ': ' + sf + ' líneas sin fecha (no se toman).');
+        if (sp.size) aviso.push('Sin peso nominal (no se pudieron pasar los kilos a hormas): ' + [...sp].join(', ') + '. Cargá el peso en Artículos y volvé a elegir el archivo.');
+      }
+      else if (info.kind === 'vent') { const d = Core.buildVent(rows, info, opt('prefijo')); archivos.push(file.name); for (const x of d.filas) if (x.f) sumar(x.f, 'V', x.c, Number(x.q) || 0); }
+      else aviso.push(file.name + ': no es un archivo de facturación Yasukawa, facturación Ilolay ni ventanas.');
+    } catch (e) { aviso.push(file.name + ': ' + (e.message || 'no se pudo leer')); }
+  }
+  if (!Object.keys(fechas).length) { toast(aviso[0] || 'No encontré ventas con fecha de los últimos 60 días en esos archivos.'); return; }
+  S.ui.pedImp = { fechas, archivos, aviso }; render();
+}
+async function guardarVentasAnteriores() {
+  const I = S.ui.pedImp; if (!I) return;
+  S.ui.pedImpGuardando = true; render();
+  let n = 0;
+  try {
+    for (const f of Object.keys(I.fechas).sort()) for (const o of ['I', 'Y', 'V']) if (I.fechas[f][o]) { await API.call('guardarVentas', f, o, I.fechas[f][o], 'carga'); n++; }
+    toast('Ventas guardadas (' + Object.keys(I.fechas).length + ' días).'); S.ui.pedImp = null;
+  } catch (e) { toast('Se cortó al guardar (' + n + ' guardados): ' + e.message); }
+  S.ui.pedImpGuardando = false;
+  await cargarPedido(true); render();
+}
+/* ---- Ventas del día para guardar al cerrar (de los movimientos: facturación Yasukawa, Ilolay y ventanas) ---- */
+function ventasDelDia() {
+  const M = movimientosLocal() || (S.movsRemoto && S.movsRemoto.fecha === S.dia ? S.movsRemoto : null);
+  if (!M) return null;
+  const A = M.archivos || {}, out = {};
+  if (A.fya) out.Y = {}; if (A.fil) out.I = {}; if (A.vent) out.V = {};
+  for (const x of M.filas || []) {
+    const m = S.maestro[x.c]; if (!m || x.ms === false) continue;
+    const o = x.o === 'I' ? 'I' : x.o === 'V' ? 'V' : 'Y';
+    if (!out[o] || (o === 'I' && m.q)) continue; // quesos de Ilolay: lo cargado a mano en la pestaña Quesos
+    out[o][x.c] = r2((out[o][x.c] || 0) + (Number(x.q) || 0));
+  }
+  if (out.I) for (const [c, q] of Object.entries(S.quesosDia || {})) if (S.maestro[c]?.q && Number(q?.i)) out.I[c] = Number(q.i);
+  return Object.keys(out).length ? out : null;
+}
+/* ---- Guardar lo que se carga (en camino / pedido) ---- */
+async function guardarPedidoCampo(c, k, val) {
+  const n = pedNum(val), PD = (S.ped ||= {}).pedido ||= {};
+  if (((PD[c]?.[k]) || 0) === n) { delete (S.ui.pedDraft ||= {})[c + k]; return; }
+  (PD[c] ||= { p: 0, k: 0 })[k] = n;
+  delete (S.ui.pedDraft ||= {})[c + k];
+  try { await API.call('pedidoGuardar', { [c]: n }, k); } catch (e) { toast('No se guardó: ' + e.message); cargarPedido(true); }
+}
+async function pedidoAccion(a, k) {
+  try {
+    if (a === 'copiar') {
+      const sec = S.ui.sector || 'TODOS', m = {};
+      for (const r of filasPedido()) if (r.sug > 0 && (sec === 'TODOS' || r.s === sec)) m[r.c] = r.sug;
+      await API.call('pedidoGuardar', m, 'p'); toast('Sugerido copiado en ' + Object.keys(m).length + ' artículos.');
+    }
+    if (a === 'enviado') { const n = await API.call('pedidoEnviado'); toast(n + ' artículos pasaron a "En camino".'); }
+    if (a === 'borrar') { await API.call('pedidoBorrar', k); toast(k === 'k' ? 'En camino borrado.' : 'Pedido borrado.'); }
+  } catch (e) { toast('No se pudo: ' + e.message); }
+  S.ui.pedConf = null; S.ui.pedDraft = {};
+  await cargarPedido(true); render();
+}
+/* ---- Excel y PDF ---- */
+function pedNombre(ext, que) { const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0'); return (que || 'Pedido a Ilolay') + ' ' + hoyISO() + ' ' + hh + '.' + ext; }
+function xlsPedido() {
+  const F = filasPedido(), P = F.filter(r => r.pedir > 0), dc = pedDiasCubrir(), r1 = x => x === null ? '' : Math.round(x * 10) / 10;
+  try {
+    const wb = XL.utils.book_new();
+    const ped = P.map(r => { const p = palletsDe(r.c, r.pedir); return [r.c, r.d, r.pedir, p.pal, p.bas, p.cj, p.txt, p.armado]; });
+    const tp = P.reduce((s, r) => s + r.pedir, 0), tpal = P.reduce((s, r) => s + palletsDe(r.c, r.pedir).pal, 0);
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'CAJAS', 'PALLETS', 'BASES', 'CAJAS SUELTAS', 'RESUMEN', 'ARMADO'], ...ped, ['', 'TOTAL', tp, tpal, '', '', '', '']]), 'PEDIDO');
+    const lis = F.map(r => [r.c, r.d, r.yaCj ?? '', r.iloCj ?? '', r1(r.vI), r1(r.vY), r1(r.vT), Math.round(r.prom * 100) / 100, r.dias === null ? '' : r1(r.dias), r.camino, r.sug, r.pedir]);
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'VENTA 15 DIAS ILOLAY (CAJAS)', 'VENTA 15 DIAS YASUKAWA (CAJAS)', 'VENTA 15 DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
+    descargar(pedNombre('xlsx'), new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    toast('Excel descargado (' + P.length + ' artículos pedidos).');
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
+}
+// Tabla genérica para PDF: columnas con ancho por contenido y una flexible (descripción); grupos por sector
+function pdfTabla({ apaisado, titulo, sub, cols, grupos, notas }) {
+  const cfg = pdfCfg(), P = pdfDoc(apaisado, cfg.difFuente);
+  const fs = Math.max(6, Math.min(12, Number(cfg.difLetra) || 9)), ft = Math.max(9, Math.min(20, Number(cfg.difTitulo) || 15));
+  const rowH = Math.round(fs * 2), M = 28, ancho = P.W - 2 * M, pad = 10, hh = Math.round(fs * 2.4);
+  const cS = cfg.cSep || '#b4b4b4', gS = Math.max(0.1, Math.min(3, Number(cfg.grosor) || 0.5));
+  cols.forEach((cl, i) => {
+    if (cl.flex) return;
+    let w = Math.max(...String(cl.n).split('\n').map(s => anchoTxt(s, fs - 1, true))) + pad;
+    for (const g of grupos) for (const f of [...g.filas, ...(g.total ? [g.total] : [])]) w = Math.max(w, anchoTxt(String(f[i] ?? ''), fs, true) + pad);
+    cl.w = w;
+  });
+  const flex = cols.find(cl => cl.flex); flex.w = Math.max(90, ancho - cols.filter(cl => !cl.flex).reduce((s, cl) => s + cl.w, 0));
+  let x = M; cols.forEach(cl => { cl.x = x; x += cl.w; });
+  let y = 0, n = 0;
+  const celda = (cl, s, yy, b, col) => { const t = cortar(String(s ?? ''), cl.w - pad, fs, b); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, t, fs, b, 'r', col); else if (cl.a === 'c') P.text(cl.x + cl.w / 2, yy, t, fs, b, 'c', col); else P.text(cl.x + pad / 2, yy, t, fs, b, 'l', col); };
+  const cabCols = () => {
+    P.rect(M, y, ancho, hh, cfg.cHead);
+    cols.forEach(cl => { const L = String(cl.n).split('\n'); L.forEach((s, k) => { const yy = y + hh / 2 + fs * 0.35 + (k - (L.length - 1) / 2) * (fs - 0.5); if (cl.a === 'r') P.text(cl.x + cl.w - pad / 2, yy, s, fs - 1, true, 'r', '#000000'); else if (cl.a === 'c') P.text(cl.x + cl.w / 2, yy, s, fs - 1, true, 'c', '#000000'); else P.text(cl.x + pad / 2, yy, s, fs - 1, true, 'l', '#000000'); }); });
+    y += hh;
+  };
+  const pagina = () => {
+    P.nueva(); y = 24 + ft;
+    P.text(M + 4, y, cortar(titulo, ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
+    if (sub) { P.text(M + 4, y, cortar(sub, ancho - 8, fs - 1), fs - 1, false, 'l', '#555555'); y += 12; }
+  };
+  const tituloGrupo = (t, cont) => { y += 6; P.text(M + 2, y + fs, t + (cont ? ' (continuación)' : ''), fs + 1, true, 'l', '#000000'); y += fs + 8; cabCols(); };
+  pagina();
+  for (const g of grupos) {
+    if (!g.filas.length) continue;
+    if (y + hh + rowH * 3 > P.H - 34) pagina();
+    tituloGrupo(g.t);
+    let i = 0;
+    const fila = (f, b, fondo) => {
+      if (y + rowH > P.H - 34) { pagina(); tituloGrupo(g.t, true); }
+      if (fondo) P.rect(M, y, ancho, rowH, fondo); else if (cfg.zebra && i++ % 2) P.rect(M, y, ancho, rowH, cfg.cZebra);
+      cols.forEach((cl, k) => celda(cl, f[k], y + rowH / 2 + fs * 0.35, b || !!cl.b, '#000000'));
+      y += rowH; P.line(M, y, M + ancho, y, cS, gS);
+    };
+    for (const f of g.filas) { fila(f, false); n++; }
+    if (g.total) fila(g.total, true, cfg.cHead);
+  }
+  if (notas?.length) { y += 14; for (const t of notas) { if (y + 14 > P.H - 30) { P.nueva(); y = 40; } P.text(M + 4, y, cortar(t, ancho - 8, fs), fs, true, 'l', '#000000'); y += Math.round(fs * 1.6); } }
+  return { n, blob: P.blob() };
+}
+function pdfPedido() {
+  const P = filasPedido().filter(r => r.pedir > 0);
+  if (!P.length) { toast('No hay pedido cargado.'); return; }
+  try {
+    const grupos = ['FRIO', 'SECO', ...new Set(P.map(r => r.s).filter(s => s !== 'FRIO' && s !== 'SECO'))].map(s => {
+      const L = P.filter(r => r.s === s), pl = L.map(r => palletsDe(r.c, r.pedir));
+      return { t: s === 'FRIO' ? 'FRÍO' : s === 'SECO' ? 'SECO' : (s || 'SIN SECTOR'), filas: L.map((r, i) => [r.c, r.d, fmt(r.pedir), pl[i].pal || '', pl[i].bas || '', pl[i].cj || '']),
+        total: ['', 'Total ' + (s === 'FRIO' ? 'Frío' : s === 'SECO' ? 'Seco' : s), fmt(L.reduce((a, r) => a + r.pedir, 0)), fmt(pl.reduce((a, p) => a + p.pal, 0)) || '', '', ''] };
+    });
+    const tc = P.reduce((a, r) => a + r.pedir, 0), tpal = P.reduce((a, r) => a + palletsDe(r.c, r.pedir).pal, 0);
+    const r = pdfTabla({ apaisado: false, titulo: 'STOCK ILOLAY · Pedido a Ilolay', sub: 'Generado el ' + new Date().toLocaleString('es-AR') + ' · ' + P.length + ' artículos · cantidades en cajas',
+      cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'CAJAS', a: 'r', b: true }, { n: 'PALLETS', a: 'r' }, { n: 'BASES', a: 'r' }, { n: 'CAJAS\nSUELTAS', a: 'r' }],
+      grupos, notas: ['TOTAL DEL PEDIDO: ' + fmt(tc) + ' cajas · ' + fmt(tpal) + ' pallets completos.', 'Pallets y bases según el armado cargado en Artículos (bases por pallet y cajas por base).'] });
+    descargar(pedNombre('pdf'), r.blob); toast('PDF del pedido descargado (' + P.length + ' artículos).');
+  } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
+}
+function pdfPedidoTodo() {
+  const F = pedFiltrar(filasPedido()), dc = pedDiasCubrir(), st = stockPedido(), V = ventasPedido();
+  if (!F.length) { toast('No hay artículos con ese filtro.'); return; }
+  try {
+    const grupos = ['FRIO', 'SECO', ...new Set(F.map(r => r.s).filter(s => s !== 'FRIO' && s !== 'SECO'))].map(s => ({ t: s === 'FRIO' ? 'FRÍO' : s === 'SECO' ? 'SECO' : (s || 'SIN SECTOR'),
+      filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), f1(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
+    const stTxt = st.fuente === 'hoy' ? 'de hoy' : st.fecha ? 'del cierre del ' + dm(st.fecha) : 'sin datos';
+    const r = pdfTabla({ apaisado: true, titulo: 'STOCK ILOLAY · Pedido a Ilolay · listado', sub: `Stock ${stTxt} · venta del ${V ? dm(V.ini) + ' al ' + dm(V.fin) : '—'} (15 días corridos, domingos = 0) · sugerido para ${dc} días · cajas · generado el ${new Date().toLocaleString('es-AR')}`,
+      cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'STOCK\nYASU.', a: 'r' }, { n: 'STOCK\nILOLAY', a: 'r' }, { n: 'VENTA\nILOLAY', a: 'r' }, { n: 'VENTA\nYASU.', a: 'r' }, { n: 'VENTA\nTOTAL', a: 'r', b: true }, { n: 'PROM.\nDÍA', a: 'r' }, { n: 'DÍAS\nSTOCK', a: 'r' }, { n: 'EN\nCAMINO', a: 'r' }, { n: 'SUGER.\n' + dc + ' D', a: 'r' }, { n: 'PEDIDO', a: 'r', b: true }],
+      grupos });
+    descargar(pedNombre('pdf', 'Pedido a Ilolay listado'), r.blob); toast('PDF del listado descargado (' + r.n + ' artículos).');
+  } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
+}
+
 /* ---------- Correos → Para pedir a Ilolay: Excel con sistema (cajas y unidades), stock de Yasukawa y unidades por bulto ---------- */
 function vPedidoIlolay() {
   const sis = tieneSistema();
@@ -3796,6 +4132,7 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">En la automática y la manual se aplica la variación del stock de Yasukawa (en hormas). No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="stack" style="gap:2px"><span class="lbl">Orden de los artículos (Administración, Depósito, PDF y Excel)</span><select id="oOrden" style="max-width:360px">${[['codAsc', 'Código de fábrica ascendente (menor a mayor)'], ['codDesc', 'Código de fábrica descendente (mayor a menor)'], ['orden', 'Orden de Artículos (el que se arma con ▲ ▼)']].map(([v, n]) => `<option value="${v}" ${(opt('ordenArt') || 'codAsc') === v ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">Siempre primero Frío y después Seco.</span></label>
+      <label class="stack" style="gap:2px"><span class="lbl">Pedido a Ilolay: días a cubrir con el sugerido</span><select id="oPedDias" style="max-width:140px">${[7, 10, 15].map(d => `<option value="${d}" ${pedDiasCubrir() === d ? 'selected' : ''}>${d} días</option>`).join('')}</select><span class="small muted">Sugerido = venta promedio diaria (15 días corridos, domingos en 0) × estos días − stock (Yasukawa + Ilolay) − en camino, en cajas enteras.</span></label>
       <label class="stack" style="gap:2px"><span class="lbl">Aviso de artículos sin contar (% contado)</span><input type="number" id="oAvisoSin" min="0" max="100" step="1" value="${esc(opt('avisoSinContar') ?? 90)}" style="max-width:110px"><span class="small muted">Cuando ya se contó este porcentaje de los artículos, Administración avisa cuáles faltan. 0 = no avisar. Para cerrar el stock tienen que estar todos contados.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oCero" ${opt('ceroAuto') !== false ? 'checked' : ''}> <span>Artículos con <b>sistema en 0</b> que nadie contó: tomarlos como <b>contados en 0</b> (sin diferencia). Si depósito cuenta algo, aparece la diferencia.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
@@ -4218,6 +4555,9 @@ async function cerrarDia() {
   clearTimeout(okT); clearTimeout(autoRecT);
   doc.ajustesDia = await ajustesDelDia(S.dia);
   doc.tiempos = tiemposConteo();
+  // Pedido a Ilolay: lo vendido en el día (facturación Yasukawa, Ilolay y ventanas que haya; quesos de Ilolay de la pestaña Quesos)
+  if (!movimientosLocal() && !S.movsRemoto && S.movsMeta) await cargarMovsRemoto();
+  doc.ventas = ventasDelDia();
   while (loteEnCurso) await sleep(100);
   try { await API.call('cerrarDia', doc); }
   catch (e) { toast('No se pudo guardar el cierre: ' + e.message); return; }
@@ -4571,7 +4911,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.act === 'cerrarDet' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="cerrarDet"]')) return;
   const a = t.dataset.act, c = t.dataset.c, v = t.dataset.v;
   switch (a) {
-    case 'tab': S.ui.tab = v; S.ui.q = ''; scanDestino = null; if (v !== 'ajustes') { S.ui.ajPre = null; S.ui.ajPreM = ''; S.ui.ajPreO = ''; } S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); if (v === 'hoy') { const a = avisoSinContar(); if (a) toast(`Todavía ${pl(a.sin.length, 'queda', 'quedan')} ${a.sin.length} ${pl(a.sin.length, 'artículo')} sin contar (contado ${Math.floor(a.p)}%).`); } render(); window.scrollTo(0, 0); break;
+    case 'tab': S.ui.tab = v; S.ui.q = ''; scanDestino = null; if (v !== 'ajustes') { S.ui.ajPre = null; S.ui.ajPreM = ''; S.ui.ajPreO = ''; } S.ui.det = null; S.ui.confirm = false; if (v === 'historial' && !S.ui.hist.lista.length) cargarHist(); if (v === 'ajustes') cargarAjPasados(); if (v === 'pedido') { S.ui.pedConf = null; cargarPedido(true); } if (v === 'hoy') { const a = avisoSinContar(); if (a) toast(`Todavía ${pl(a.sin.length, 'queda', 'quedan')} ${a.sin.length} ${pl(a.sin.length, 'artículo')} sin contar (contado ${Math.floor(a.p)}%).`); } render(); window.scrollTo(0, 0); break;
     case 'vista': if (v === 'auto') delete document.documentElement.dataset.vista; else document.documentElement.dataset.vista = v; try { localStorage.setItem('vista', v); } catch { } render(); break;
     case 'copiarLog': try { await navigator.clipboard.writeText(S.scanLog.join('\n')); toast('Registro copiado.'); } catch { toast('No se pudo copiar; sacá una captura.'); } break;
     case 'probarConexion': probarConexion(); break;
@@ -4582,6 +4922,19 @@ document.addEventListener('click', async e => {
     case 'recargarNo': S.ui.confRecarga = false; render(); break;
     case 'sector': S.ui.sector = v; render(); break;
     case 'filtro': S.ui.filtro = v; render(); break;
+    case 'pedRecargar': S.pedErr = null; cargarPedido(false); render(); break;
+    case 'pedFil': S.ui.pedFil = v; render(); break;
+    case 'pedConf': S.ui.pedConf = v; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+    case 'pedConfNo': S.ui.pedConf = null; render(); break;
+    case 'pedCopiarOk': t.disabled = true; pedidoAccion('copiar'); break;
+    case 'pedEnviadoOk': t.disabled = true; pedidoAccion('enviado'); break;
+    case 'pedBorrarOk': t.disabled = true; pedidoAccion('borrar', t.dataset.k); break;
+    case 'pedUsarSug': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', r.sug); render(); } break; }
+    case 'pedXls': xlsPedido(); break;
+    case 'pedPdf': pdfPedido(); break;
+    case 'pedPdfTodo': pdfPedidoTodo(); break;
+    case 'pedImpOk': guardarVentasAnteriores(); break;
+    case 'pedImpNo': S.ui.pedImp = null; render(); break;
     case 'verSinContar': S.ui.filtro = 'sin'; S.ui.sector = 'TODOS'; S.ui.q = ''; S.ui.confirm = false; S.ui.tab = 'hoy'; render(); setTimeout(() => document.querySelector('.chips[aria-label=Filtro]')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50); break;
     case 'solo': S.ui.solo = v; S.ui.foco = null; render(); break;
     case 'verTodos': S.ui.foco = null; S.ui.yaContado = null; render(); focoBusqueda(); break;
@@ -4831,6 +5184,8 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'qIlo') (S.ui.qDraft ||= {})[t.dataset.c] = t.value;
   if (t.dataset.act === 'qIng') (S.ui.gDraft ||= {})[t.dataset.c] = t.value;
+  if (t.dataset.act === 'pedIn') (S.ui.pedDraft ||= {})[t.dataset.c + t.dataset.k] = t.value;
+  if (t.dataset.act === 'pedQ') { S.ui.pedQ = t.value; render(); }
   if (t.dataset.act === 'cliF') (S.ui.cliF ||= {})[t.dataset.k] = t.value;
   if (t.dataset.act === 'ajEdV') (S.ui.ajEdV ||= {})[t.id] = t.value;
   if (t.dataset.act === 'cliQ') { S.ui.cliQ = t.value; render(); }
@@ -4847,6 +5202,9 @@ document.addEventListener('change', async e => {
   if (a === 'pdfLstV' || a === 'pdfLstN') { const x = pdfDraft()[t.dataset.l]?.[+t.dataset.i]; if (x) { if (a === 'pdfLstV') x.v = t.checked; else x.n = t.value; } render(); return; }
   if (a === 'pdfKpi') { const d = pdfDraft(), set = new Set(d.kpis || []); if (t.checked) set.add(t.dataset.k); else set.delete(t.dataset.k); d.kpis = PDF_KPIS.map(([k]) => k).filter(k => set.has(k)); render(); return; }
   // Quesos: se redibuja recién cuando el foco ya pasó al casillero siguiente (si no, el foco vuelve al anterior y se pierde lo que se escribe)
+  // Pedido a Ilolay: se guarda al salir del casillero; se redibuja cuando el foco ya pasó al siguiente
+  if (a === 'pedIn') { (S.ui.pedDraft ||= {})[c + t.dataset.k] = t.value; guardarPedidoCampo(c, t.dataset.k, t.value); setTimeout(render, 0); return; }
+  if (a === 'pedOrden') { S.ui.pedOrden = t.value; render(); return; }
   if (a === 'qIlo' || a === 'qIng') { (a === 'qIlo' ? (S.ui.qDraft ||= {}) : (S.ui.gDraft ||= {}))[t.dataset.c] = t.value; setTimeout(render, 0); return; }
   if (a === 'cbTipo') { const x = (S.codigosDet || []).find(y => y.ean === t.dataset.ean); if (x) x.t = t.value; try { await API.call('tipoCodigo', t.dataset.ean, t.value); } catch (er) { toast('No se pudo guardar: ' + er.message); } render(); return; }
   if (a === 'ctlSec') { S.ui.ctlSec = t.value; render(); return; }
@@ -4944,12 +5302,13 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, avisoSinContar: Math.max(0, Math.min(100, Math.round(Number(String($('#oAvisoSin')?.value ?? 90).replace(',', '.')) || 0))), ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, pedidoDias: Number($('#oPedDias')?.value) || 10, avisoSinContar: Math.max(0, Math.min(100, Math.round(Number(String($('#oAvisoSin')?.value ?? 90).replace(',', '.')) || 0))), ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
 $('#pickFolder').addEventListener('change', e => { const fs = [...e.target.files]; if (fs.length) { S.carpeta = (fs[0].webkitRelativePath || '').split('/')[0] || 'carpeta'; leerArchivos(fs.filter(f => { const p = (f.webkitRelativePath || '').split('/'); return p.length <= 2 || (p.length === 3 && RE_CARPETA_EXCEL.test(p[1])); })); } e.target.value = ''; });
 $('#pickFiles').addEventListener('change', e => { if (e.target.files.length) leerArchivos(e.target.files); e.target.value = ''; });
+document.addEventListener('change', e => { if (e.target.id === 'pickVentas') { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) leerVentasAnteriores(fs); } });
 document.addEventListener('change', e => { if (e.target.id === 'pickPhoto' || e.target.id === 'pickPhoto2') { const f = e.target.files[0]; if (e.target.dataset.dest === 'cb') scanDestino = cbLeido; else if (e.target.id === 'pickPhoto') scanDestino = null; if (e.target.id === 'pickPhoto2') cerrarEscaner('usar foto'); if (f) leerFoto(f); e.target.value = ''; } });
 document.addEventListener('dragover', e => { if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.add('over'); });
 document.addEventListener('dragleave', e => { if (e.target.id === 'dropzone') e.target.classList.remove('over'); });
