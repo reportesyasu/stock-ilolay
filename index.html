@@ -141,8 +141,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .tablebox tfoot td{position:sticky;bottom:0;z-index:2;background:var(--sunk);font-weight:700;border-top:2px solid var(--line)}
 #qGrid td.q-d{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #qGrid input.q-in{width:64px}
-#pedGrid input.ped-in{width:62px}#pedGrid td.desc{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#pedGrid tr.ped-con td{background:rgba(46,125,50,.09)}#pedGrid thead th{line-height:1.15}#pedGrid th.ped-sort{cursor:pointer;user-select:none}#pedGrid th.ped-sort:hover{text-decoration:underline}
-.ped-card{padding:10px 12px;gap:8px;display:grid}.ped-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 8px}.ped-nums b{display:block;font-size:15px}.ped-card input.ped-in{width:70px}
+#pedGrid input.ped-in{width:62px}#pedGrid td.desc{white-space:nowrap;max-width:none;min-width:0}main.wrap.ancho{max-width:none}#pedGrid td,#pedGrid th{padding-left:6px;padding-right:6px}#pedGrid input.ped-in{width:56px}#pedGrid tr.ped-con td{background:rgba(46,125,50,.09)}#pedGrid thead th{line-height:1.15}#pedGrid th.ped-sort{cursor:pointer;user-select:none}#pedGrid th.ped-sort:hover{text-decoration:underline}
+.ped-card{padding:10px 12px;gap:8px;display:grid}.ped-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 8px}.ped-nums b{display:block;font-size:15px}.ped-card input.ped-in{width:70px}
 .q-movil{display:none}
 .q-cel #qGrid{max-height:none;overflow:visible}
 .q-cel #qGrid thead th{top:calc(var(--topH,58px))}
@@ -324,7 +324,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb119';
+window.__VERSION = 'sb120';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -347,7 +347,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb119</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb120</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1604,6 +1604,7 @@ function renderAhora() {
   else if (t === 'correos') html = vCorreos();
   else if (t === 'historial') html = vHistorial();
   else if (t === 'opciones') html = vOpciones();
+  main.classList.toggle('ancho', t === 'pedido'); // Pedido a Ilolay: tabla ancha, usa todo el ancho de la pantalla
   ponerMain(main, html);
   renderSheet();
   restoreFocus(keep);
@@ -3334,6 +3335,7 @@ function filasPedido() {
     return {
       c: l.c, d: dDep(l.c) || l.d, s: l.s || m.s, uxc,
       yaCj: ya === null ? null : Math.floor(ya / uxc + 1e-9), iloCj: ilo === null ? null : Math.floor(ilo / uxc + 1e-9),
+      stCj: ya === null && ilo === null ? null : (ya === null ? 0 : Math.floor(ya / uxc + 1e-9)) + (ilo === null ? 0 : Math.floor(ilo / uxc + 1e-9)),
       // ventas de 15 días y días de stock redondeados; el total es la suma de los dos redondeados (para que cierre a la vista)
       vI: Math.round(v.I / uxc), vY: Math.round(v.Y / uxc), vT: Math.round(v.I / uxc) + Math.round(v.Y / uxc), prom: prom / uxc,
       dias: prom > 0 ? Math.round(Math.max(0, stockU) / prom) : null, camino, pedir,
@@ -3342,8 +3344,8 @@ function filasPedido() {
   }).sort(cmpCodigo);
 }
 // Columnas de la grilla del pedido: se ordena tocando la cabecera (una vez ascendente, otra vez descendente)
-const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP) en cajas (para abajo)'],
-  ['vI', 'Venta 15 d<br>Ilolay', 'Facturación Ilolay de los 15 días, en cajas'], ['vY', 'Venta 15 d<br>Yasu.', 'Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas'], ['vT', 'Venta 15 d<br>total', 'Ilolay + Yasukawa, en cajas'],
+const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP) en cajas (para abajo)'], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas'],
+  ['vI', 'Venta<br>Ilolay', 'Venta de 15 días: Facturación Ilolay de los 15 días, en cajas'], ['vY', 'Venta<br>Yasu.', 'Venta de 15 días: Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas'], ['vT', 'Venta<br>total', 'Venta de 15 días: Ilolay + Yasukawa, en cajas'],
   ['prom', 'Prom.<br>diario', 'Venta promedio por día, en cajas'], ['dias', 'Días de<br>stock', 'Stock total ÷ promedio diario'], ['camino', 'En<br>camino', 'Cajas en camino: se descuentan del sugerido'],
   ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', '']];
 const pedSortAct = () => S.ui.pedSort || { k: 'c', dir: 1 };
@@ -3383,11 +3385,11 @@ function vPedido() {
   const stk = x => x === null ? '<span class="muted">—</span>' : fmt(x);
   const tabla = cel ? `<div class="stack" style="gap:8px">${L.map(r => `<div class="panel ped-card">
       <div><b class="mono">${esc(r.c)}</b> ${esc(r.d)}</div>
-      <div class="ped-nums small"><span>Stock Yasu.<b>${stk(r.yaCj)}</b></span><span>Stock Ilolay<b>${stk(r.iloCj)}</b></span><span>Venta Ilolay<b>${f1(r.vI)}</b></span><span>Venta Yasu.<b>${f1(r.vY)}</b></span><span>Venta total<b>${f1(r.vT)}</b></span><span>Prom. día<b>${f1(r.prom)}</b></span><span>Días stock<b>${diasTd(r)}</b></span><span>Sugerido<b>${sugBtn(r)}</b></span></div>
+      <div class="ped-nums small"><span>Stock Yasu.<b>${stk(r.yaCj)}</b></span><span>Stock Ilolay<b>${stk(r.iloCj)}</b></span><span>Stock total<b>${stk(r.stCj)}</b></span><span>Venta Ilolay<b>${f1(r.vI)}</b></span><span>Venta Yasu.<b>${f1(r.vY)}</b></span><span>Venta total<b>${f1(r.vT)}</b></span><span>Prom. día<b>${f1(r.prom)}</b></span><span>Días stock<b>${diasTd(r)}</b></span><span>Sugerido<b>${sugBtn(r)}</b></span></div>
       <div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div></div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
     : `<div class="tablebox" id="pedGrid"><table>${pedThead(dc)}
-      <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}><td class="code">${esc(r.c)}</td><td class="desc">${esc(r.d)}</td><td class="n">${stk(r.yaCj)}</td><td class="n">${stk(r.iloCj)}</td><td class="n">${f1(r.vI)}</td><td class="n">${f1(r.vY)}</td><td class="n"><b>${f1(r.vT)}</b></td><td class="n">${f1(r.prom)}</td><td class="n">${diasTd(r)}</td><td class="n">${inp(r, 'k')}</td><td class="n">${sugBtn(r)}</td><td class="n">${inp(r, 'p')}</td></tr>`).join('') || '<tr><td colspan="12" class="muted">No hay artículos con ese filtro.</td></tr>'}</tbody>
-      <tfoot><tr><td></td><td>TOTAL (${L.length})</td><td class="n">${fmt(cj(L.map(r => r.yaCj || 0)))}</td><td class="n">${fmt(cj(L.map(r => r.iloCj || 0)))}</td><td class="n">${f1(cj(L.map(r => r.vI)))}</td><td class="n">${f1(cj(L.map(r => r.vY)))}</td><td class="n">${f1(cj(L.map(r => r.vT)))}</td><td class="n">${f1(cj(L.map(r => r.prom)))}</td><td></td><td class="n">${fmt(cj(L.map(r => r.camino)))}</td><td class="n">${fmt(cj(L.map(r => r.sug)))}</td><td class="n">${fmt(cj(L.map(r => r.pedir)))}</td></tr></tfoot></table></div>`;
+      <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}><td class="code">${esc(r.c)}</td><td class="desc">${esc(r.d)}</td><td class="n">${stk(r.yaCj)}</td><td class="n">${stk(r.iloCj)}</td><td class="n"><b>${stk(r.stCj)}</b></td><td class="n">${f1(r.vI)}</td><td class="n">${f1(r.vY)}</td><td class="n"><b>${f1(r.vT)}</b></td><td class="n">${f1(r.prom)}</td><td class="n">${diasTd(r)}</td><td class="n">${inp(r, 'k')}</td><td class="n">${sugBtn(r)}</td><td class="n">${inp(r, 'p')}</td></tr>`).join('') || '<tr><td colspan="13" class="muted">No hay artículos con ese filtro.</td></tr>'}</tbody>
+      <tfoot><tr><td></td><td>TOTAL (${L.length})</td><td class="n">${fmt(cj(L.map(r => r.yaCj || 0)))}</td><td class="n">${fmt(cj(L.map(r => r.iloCj || 0)))}</td><td class="n">${fmt(cj(L.map(r => r.stCj || 0)))}</td><td class="n">${f1(cj(L.map(r => r.vI)))}</td><td class="n">${f1(cj(L.map(r => r.vY)))}</td><td class="n">${f1(cj(L.map(r => r.vT)))}</td><td class="n">${f1(cj(L.map(r => r.prom)))}</td><td></td><td class="n">${fmt(cj(L.map(r => r.camino)))}</td><td class="n">${fmt(cj(L.map(r => r.sug)))}</td><td class="n">${fmt(cj(L.map(r => r.pedir)))}</td></tr></tfoot></table></div>`;
   const filtros = [['todos', 'Ver todos', F.length], ['sug', 'Con sugerido', tot.sug.length], ['ped', 'Con pedido', tot.ped.length], ['cam', 'En camino', tot.cam.length]];
   return `<div class="stack">
     <div class="row" style="justify-content:space-between;align-items:end"><div style="min-width:0;flex:1 1 300px"><h2>Pedido a Ilolay</h2>
@@ -3517,8 +3519,8 @@ function xlsPedido() {
     const ped = P.map(r => { const p = palletsDe(r.c, r.pedir); return [r.c, r.d, r.pedir, p.pal, p.bas, p.cj, p.txt, p.armado]; });
     const tp = P.reduce((s, r) => s + r.pedir, 0), tpal = P.reduce((s, r) => s + palletsDe(r.c, r.pedir).pal, 0);
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'CAJAS', 'PALLETS', 'BASES', 'CAJAS SUELTAS', 'RESUMEN', 'ARMADO'], ...ped, ['', 'TOTAL', tp, tpal, '', '', '', '']]), 'PEDIDO');
-    const lis = F.map(r => [r.c, r.d, r.yaCj ?? '', r.iloCj ?? '', r1(r.vI), r1(r.vY), r1(r.vT), Math.round(r.prom * 100) / 100, r.dias === null ? '' : r1(r.dias), r.camino, r.sug, r.pedir]);
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'VENTA 15 DIAS ILOLAY (CAJAS)', 'VENTA 15 DIAS YASUKAWA (CAJAS)', 'VENTA 15 DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
+    const lis = F.map(r => [r.c, r.d, r.yaCj ?? '', r.iloCj ?? '', r.stCj ?? '', r1(r.vI), r1(r.vY), r1(r.vT), Math.round(r.prom * 100) / 100, r.dias === null ? '' : r1(r.dias), r.camino, r.sug, r.pedir]);
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'STOCK TOTAL (CAJAS)', 'VENTA 15 DIAS ILOLAY (CAJAS)', 'VENTA 15 DIAS YASUKAWA (CAJAS)', 'VENTA 15 DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
     descargar(pedNombre('xlsx'), new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel descargado (' + P.length + ' artículos pedidos).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
@@ -3589,10 +3591,10 @@ function pdfPedidoTodo() {
   if (!F.length) { toast('No hay artículos con ese filtro.'); return; }
   try {
     const grupos = ['FRIO', 'SECO', ...new Set(F.map(r => r.s).filter(s => s !== 'FRIO' && s !== 'SECO'))].map(s => ({ t: s === 'FRIO' ? 'FRÍO' : s === 'SECO' ? 'SECO' : (s || 'SIN SECTOR'),
-      filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), fDias(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
+      filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), r.stCj === null ? '—' : fmt(r.stCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), fDias(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
     const stTxt = st.fuente === 'hoy' ? 'de hoy' : st.fecha ? 'del cierre del ' + dm(st.fecha) : 'sin datos';
     const r = pdfTabla({ apaisado: true, titulo: 'STOCK ILOLAY · Pedido a Ilolay · listado', sub: `Stock ${stTxt} · venta del ${V ? dm(V.ini) + ' al ' + dm(V.fin) : '—'} (15 días corridos, domingos = 0) · sugerido para ${dc} días · cajas · generado el ${new Date().toLocaleString('es-AR')}`,
-      cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'STOCK\nYASU.', a: 'r' }, { n: 'STOCK\nILOLAY', a: 'r' }, { n: 'VENTA\nILOLAY', a: 'r' }, { n: 'VENTA\nYASU.', a: 'r' }, { n: 'VENTA\nTOTAL', a: 'r', b: true }, { n: 'PROM.\nDÍA', a: 'r' }, { n: 'DÍAS\nSTOCK', a: 'r' }, { n: 'EN\nCAMINO', a: 'r' }, { n: 'SUGER.\n' + dc + ' D', a: 'r' }, { n: 'PEDIDO', a: 'r', b: true }],
+      cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'STOCK\nYASU.', a: 'r' }, { n: 'STOCK\nILOLAY', a: 'r' }, { n: 'STOCK\nTOTAL', a: 'r', b: true }, { n: 'VENTA\nILOLAY', a: 'r' }, { n: 'VENTA\nYASU.', a: 'r' }, { n: 'VENTA\nTOTAL', a: 'r', b: true }, { n: 'PROM.\nDÍA', a: 'r' }, { n: 'DÍAS\nSTOCK', a: 'r' }, { n: 'EN\nCAMINO', a: 'r' }, { n: 'SUGER.\n' + dc + ' D', a: 'r' }, { n: 'PEDIDO', a: 'r', b: true }],
       grupos });
     descargar(pedNombre('pdf', 'Pedido a Ilolay listado'), r.blob); toast('PDF del listado descargado (' + r.n + ' artículos).');
   } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
