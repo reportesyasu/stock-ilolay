@@ -141,7 +141,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 .tablebox tfoot td{position:sticky;bottom:0;z-index:2;background:var(--sunk);font-weight:700;border-top:2px solid var(--line)}
 #qGrid td.q-d{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #qGrid input.q-in{width:64px}
-#pedGrid input.ped-in{width:62px}#pedGrid td.desc{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#pedGrid tr.ped-con td{background:rgba(46,125,50,.09)}#pedGrid thead th{line-height:1.15}
+#pedGrid input.ped-in{width:62px}#pedGrid td.desc{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#pedGrid tr.ped-con td{background:rgba(46,125,50,.09)}#pedGrid thead th{line-height:1.15}#pedGrid th.ped-sort{cursor:pointer;user-select:none}#pedGrid th.ped-sort:hover{text-decoration:underline}
 .ped-card{padding:10px 12px;gap:8px;display:grid}.ped-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 8px}.ped-nums b{display:block;font-size:15px}.ped-card input.ped-in{width:70px}
 .q-movil{display:none}
 .q-cel #qGrid{max-height:none;overflow:visible}
@@ -324,7 +324,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb118';
+window.__VERSION = 'sb119';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -347,7 +347,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb118</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb119</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3334,20 +3334,35 @@ function filasPedido() {
     return {
       c: l.c, d: dDep(l.c) || l.d, s: l.s || m.s, uxc,
       yaCj: ya === null ? null : Math.floor(ya / uxc + 1e-9), iloCj: ilo === null ? null : Math.floor(ilo / uxc + 1e-9),
-      vI: v.I / uxc, vY: v.Y / uxc, vT: (v.I + v.Y) / uxc, prom: prom / uxc,
-      dias: prom > 0 ? Math.max(0, stockU) / prom : null, camino, pedir,
+      // ventas de 15 días y días de stock redondeados; el total es la suma de los dos redondeados (para que cierre a la vista)
+      vI: Math.round(v.I / uxc), vY: Math.round(v.Y / uxc), vT: Math.round(v.I / uxc) + Math.round(v.Y / uxc), prom: prom / uxc,
+      dias: prom > 0 ? Math.round(Math.max(0, stockU) / prom) : null, camino, pedir,
       sug: prom > 0 && falta > 0 ? Math.ceil(falta / uxc - 1e-9) : 0
     };
   }).sort(cmpCodigo);
+}
+// Columnas de la grilla del pedido: se ordena tocando la cabecera (una vez ascendente, otra vez descendente)
+const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP) en cajas (para abajo)'],
+  ['vI', 'Venta 15 d<br>Ilolay', 'Facturación Ilolay de los 15 días, en cajas'], ['vY', 'Venta 15 d<br>Yasu.', 'Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas'], ['vT', 'Venta 15 d<br>total', 'Ilolay + Yasukawa, en cajas'],
+  ['prom', 'Prom.<br>diario', 'Venta promedio por día, en cajas'], ['dias', 'Días de<br>stock', 'Stock total ÷ promedio diario'], ['camino', 'En<br>camino', 'Cajas en camino: se descuentan del sugerido'],
+  ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', '']];
+const pedSortAct = () => S.ui.pedSort || { k: 'c', dir: 1 };
+function pedThead(dc) {
+  const o = pedSortAct();
+  return '<thead><tr>' + PED_COLS(dc).map(([k, n, t]) => `<th class="${k === 'c' || k === 'd' ? '' : 'n '}ped-sort" data-act="pedSort" data-v="${k}" title="${esc(t ? t + ' · ' : '')}Tocá para ordenar" aria-sort="${o.k === k ? (o.dir > 0 ? 'ascending' : 'descending') : 'none'}">${n}${o.k === k ? (o.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr></thead>';
 }
 function pedFiltrar(F) {
   const q = (S.ui.pedQ || '').trim().toUpperCase(), sec = S.ui.sector || 'TODOS', fil = S.ui.pedFil || 'todos';
   const L = F.filter(r => (sec === 'TODOS' || r.s === sec) && (!q || r.c.includes(q) || String(r.d).toUpperCase().includes(q))
     && (fil === 'todos' || (fil === 'sug' && r.sug > 0) || (fil === 'ped' && r.pedir > 0) || (fil === 'cam' && r.camino > 0)));
-  if (S.ui.pedOrden === 'dias') L.sort((a, b) => (a.dias ?? 1e9) - (b.dias ?? 1e9) || cmpCodigo(a, b));
+  const o = pedSortAct(), porSec = (a, b) => cmpCodigo({ s: a.s, c: '' }, { s: b.s, c: '' }), vacio = x => x === null || x === undefined;
+  if (o.k === 'c') L.sort((a, b) => porSec(a, b) || o.dir * String(a.c).localeCompare(String(b.c), 'es', { numeric: true })); // siempre Frío y después Seco
+  else if (o.k === 'd') L.sort((a, b) => o.dir * String(a.d).localeCompare(String(b.d), 'es') || cmpCodigo(a, b));
+  else L.sort((a, b) => { const x = a[o.k], y = b[o.k]; if (vacio(x) || vacio(y)) return vacio(x) && vacio(y) ? cmpCodigo(a, b) : vacio(x) ? 1 : -1; return o.dir * (x - y) || cmpCodigo(a, b); }); // sin dato, al final
   return L;
 }
-const f1 = x => x === null || x === undefined ? '—' : x > 999 ? '999+' : fmt(Math.round(x * 10) / 10);
+const f1 = x => x === null || x === undefined ? '—' : fmt(Math.round(x * 10) / 10);
+const fDias = x => x !== null && x !== undefined && x > 999 ? '999+' : f1(x); // días de stock: más de 999 no aporta
 function vPedido() {
   if (!S.ped && !S.pedErr) { if (!S.pedCargando) cargarPedido(true); return '<div class="panel empty">Cargando el pedido…</div>'; }
   if (!S.ped) return `<div class="panel empty">No se pudo leer el pedido.<br><span class="small muted">${esc(S.pedErr)}</span><br><br><button class="btn" data-act="pedRecargar">Reintentar</button></div>`;
@@ -3364,13 +3379,13 @@ function vPedido() {
     : conf === 'borrarP' ? `<div class="confirm"><b>Borrar el pedido a realizar</b><span class="small">${tot.ped.length} artículos (${fmt(cj(tot.ped.map(r => r.pedir)))} cajas) quedan en 0.</span><div class="row"><button class="btn danger" data-act="pedBorrarOk" data-k="p">Borrar pedido</button><button class="btn" data-act="pedConfNo">Cancelar</button></div></div>` : '';
   const inp = (r, k) => `<input type="number" inputmode="numeric" min="0" step="1" class="cj ped-in" id="ped-${k}-${esc(r.c)}" data-act="pedIn" data-k="${k}" data-c="${esc(r.c)}" value="${esc(S.ui.pedDraft?.[r.c + k] ?? ((k === 'p' ? r.pedir : r.camino) || ''))}" placeholder="0" aria-label="${k === 'p' ? 'Pedido a realizar' : 'En camino'} ${esc(r.c)}">`;
   const sugBtn = r => r.sug > 0 ? `<button class="link mono" data-act="pedUsarSug" data-c="${esc(r.c)}" title="Usar el sugerido como pedido">${fmt(r.sug)}</button>` : '<span class="muted">0</span>';
-  const diasTd = r => r.dias === null ? '<span class="muted" title="Sin venta en los 15 días">—</span>' : `<span style="color:${r.dias < dc ? 'var(--bad)' : 'inherit'}">${f1(r.dias)}</span>`;
+  const diasTd = r => r.dias === null ? '<span class="muted" title="Sin venta en los 15 días">—</span>' : `<span style="color:${r.dias < dc ? 'var(--bad)' : 'inherit'}">${fDias(r.dias)}</span>`;
   const stk = x => x === null ? '<span class="muted">—</span>' : fmt(x);
   const tabla = cel ? `<div class="stack" style="gap:8px">${L.map(r => `<div class="panel ped-card">
       <div><b class="mono">${esc(r.c)}</b> ${esc(r.d)}</div>
       <div class="ped-nums small"><span>Stock Yasu.<b>${stk(r.yaCj)}</b></span><span>Stock Ilolay<b>${stk(r.iloCj)}</b></span><span>Venta Ilolay<b>${f1(r.vI)}</b></span><span>Venta Yasu.<b>${f1(r.vY)}</b></span><span>Venta total<b>${f1(r.vT)}</b></span><span>Prom. día<b>${f1(r.prom)}</b></span><span>Días stock<b>${diasTd(r)}</b></span><span>Sugerido<b>${sugBtn(r)}</b></span></div>
       <div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div></div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
-    : `<div class="tablebox" id="pedGrid"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n" title="Stock de Yasukawa en cajas (para abajo)">Stock<br>Yasu.</th><th class="n" title="Stock de Ilolay (SAP) en cajas (para abajo)">Stock<br>Ilolay</th><th class="n" title="Facturación Ilolay de los 15 días, en cajas">Venta 15 d<br>Ilolay</th><th class="n" title="Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas">Venta 15 d<br>Yasu.</th><th class="n">Venta 15 d<br>total</th><th class="n" title="Venta promedio por día, en cajas">Prom.<br>diario</th><th class="n" title="Stock total ÷ promedio diario">Días de<br>stock</th><th class="n" title="Cajas en camino: se descuentan del sugerido">En<br>camino</th><th class="n" title="Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.">Sugerido<br>(${dc} días)</th><th class="n">Pedido a<br>realizar</th></tr></thead>
+    : `<div class="tablebox" id="pedGrid"><table>${pedThead(dc)}
       <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}><td class="code">${esc(r.c)}</td><td class="desc">${esc(r.d)}</td><td class="n">${stk(r.yaCj)}</td><td class="n">${stk(r.iloCj)}</td><td class="n">${f1(r.vI)}</td><td class="n">${f1(r.vY)}</td><td class="n"><b>${f1(r.vT)}</b></td><td class="n">${f1(r.prom)}</td><td class="n">${diasTd(r)}</td><td class="n">${inp(r, 'k')}</td><td class="n">${sugBtn(r)}</td><td class="n">${inp(r, 'p')}</td></tr>`).join('') || '<tr><td colspan="12" class="muted">No hay artículos con ese filtro.</td></tr>'}</tbody>
       <tfoot><tr><td></td><td>TOTAL (${L.length})</td><td class="n">${fmt(cj(L.map(r => r.yaCj || 0)))}</td><td class="n">${fmt(cj(L.map(r => r.iloCj || 0)))}</td><td class="n">${f1(cj(L.map(r => r.vI)))}</td><td class="n">${f1(cj(L.map(r => r.vY)))}</td><td class="n">${f1(cj(L.map(r => r.vT)))}</td><td class="n">${f1(cj(L.map(r => r.prom)))}</td><td></td><td class="n">${fmt(cj(L.map(r => r.camino)))}</td><td class="n">${fmt(cj(L.map(r => r.sug)))}</td><td class="n">${fmt(cj(L.map(r => r.pedir)))}</td></tr></tfoot></table></div>`;
   const filtros = [['todos', 'Ver todos', F.length], ['sug', 'Con sugerido', tot.sug.length], ['ped', 'Con pedido', tot.ped.length], ['cam', 'En camino', tot.cam.length]];
@@ -3385,7 +3400,7 @@ function vPedido() {
       ${chipsSector(F)}
       <div class="chips" role="group" aria-label="Filtro del pedido">${filtros.map(([k, n, c]) => `<button class="chip" data-act="pedFil" data-v="${k}" aria-pressed="${(S.ui.pedFil || 'todos') === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
       <input type="search" id="pedQ" data-act="pedQ" placeholder="Buscar código o descripción" value="${esc(S.ui.pedQ || '')}" style="min-width:180px;flex:1;max-width:280px">
-      <label class="row small" style="gap:6px">Orden <select data-act="pedOrden" id="pedOrden"><option value="cod" ${S.ui.pedOrden !== 'dias' ? 'selected' : ''}>Código de fábrica</option><option value="dias" ${S.ui.pedOrden === 'dias' ? 'selected' : ''}>Días de stock (menos primero)</option></select></label>
+      ${cel ? `<label class="row small" style="gap:6px">Orden <select data-act="pedSortSel" id="pedSortSel">${PED_COLS(dc).map(([k, n]) => `<option value="${k}" ${pedSortAct().k === k ? 'selected' : ''}>${n.replace('<br>', ' ')}</option>`).join('')}</select><button class="btn sm" data-act="pedSortDir" title="Cambiar entre ascendente y descendente">${pedSortAct().dir > 0 ? '▲ Asc.' : '▼ Desc.'}</button></label>` : '<span class="small muted">Tocá una cabecera para ordenar</span>'}
     </div>
     <div class="row" style="flex-wrap:wrap;gap:8px">
       <button class="btn" data-act="pedConf" data-v="copiar" ${tot.sug.length ? '' : 'disabled'} title="Pone el sugerido como pedido en los artículos que tienen sugerido (del sector elegido)">Copiar el sugerido</button>
@@ -3574,7 +3589,7 @@ function pdfPedidoTodo() {
   if (!F.length) { toast('No hay artículos con ese filtro.'); return; }
   try {
     const grupos = ['FRIO', 'SECO', ...new Set(F.map(r => r.s).filter(s => s !== 'FRIO' && s !== 'SECO'))].map(s => ({ t: s === 'FRIO' ? 'FRÍO' : s === 'SECO' ? 'SECO' : (s || 'SIN SECTOR'),
-      filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), f1(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
+      filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), fDias(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
     const stTxt = st.fuente === 'hoy' ? 'de hoy' : st.fecha ? 'del cierre del ' + dm(st.fecha) : 'sin datos';
     const r = pdfTabla({ apaisado: true, titulo: 'STOCK ILOLAY · Pedido a Ilolay · listado', sub: `Stock ${stTxt} · venta del ${V ? dm(V.ini) + ' al ' + dm(V.fin) : '—'} (15 días corridos, domingos = 0) · sugerido para ${dc} días · cajas · generado el ${new Date().toLocaleString('es-AR')}`,
       cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'STOCK\nYASU.', a: 'r' }, { n: 'STOCK\nILOLAY', a: 'r' }, { n: 'VENTA\nILOLAY', a: 'r' }, { n: 'VENTA\nYASU.', a: 'r' }, { n: 'VENTA\nTOTAL', a: 'r', b: true }, { n: 'PROM.\nDÍA', a: 'r' }, { n: 'DÍAS\nSTOCK', a: 'r' }, { n: 'EN\nCAMINO', a: 'r' }, { n: 'SUGER.\n' + dc + ' D', a: 'r' }, { n: 'PEDIDO', a: 'r', b: true }],
@@ -4924,6 +4939,8 @@ document.addEventListener('click', async e => {
     case 'filtro': S.ui.filtro = v; render(); break;
     case 'pedRecargar': S.pedErr = null; cargarPedido(false); render(); break;
     case 'pedFil': S.ui.pedFil = v; render(); break;
+    case 'pedSort': { const o = pedSortAct(); S.ui.pedSort = o.k === v ? { k: v, dir: -o.dir } : { k: v, dir: 1 }; render(); break; }
+    case 'pedSortDir': { const o = pedSortAct(); S.ui.pedSort = { k: o.k, dir: -o.dir }; render(); break; }
     case 'pedConf': S.ui.pedConf = v; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); break;
     case 'pedConfNo': S.ui.pedConf = null; render(); break;
     case 'pedCopiarOk': t.disabled = true; pedidoAccion('copiar'); break;
@@ -5204,7 +5221,7 @@ document.addEventListener('change', async e => {
   // Quesos: se redibuja recién cuando el foco ya pasó al casillero siguiente (si no, el foco vuelve al anterior y se pierde lo que se escribe)
   // Pedido a Ilolay: se guarda al salir del casillero; se redibuja cuando el foco ya pasó al siguiente
   if (a === 'pedIn') { (S.ui.pedDraft ||= {})[c + t.dataset.k] = t.value; guardarPedidoCampo(c, t.dataset.k, t.value); setTimeout(render, 0); return; }
-  if (a === 'pedOrden') { S.ui.pedOrden = t.value; render(); return; }
+  if (a === 'pedSortSel') { S.ui.pedSort = { k: t.value, dir: 1 }; render(); return; }
   if (a === 'qIlo' || a === 'qIng') { (a === 'qIlo' ? (S.ui.qDraft ||= {}) : (S.ui.gDraft ||= {}))[t.dataset.c] = t.value; setTimeout(render, 0); return; }
   if (a === 'cbTipo') { const x = (S.codigosDet || []).find(y => y.ean === t.dataset.ean); if (x) x.t = t.value; try { await API.call('tipoCodigo', t.dataset.ean, t.value); } catch (er) { toast('No se pudo guardar: ' + er.message); } render(); return; }
   if (a === 'ctlSec') { S.ui.ctlSec = t.value; render(); return; }
