@@ -152,7 +152,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 #pedGrid tbody tr.ped-con td,#pedGrid tbody tr.ped-con:nth-child(even) td{background:rgba(46,125,50,.18)}
 #pedGrid tfoot td{position:sticky;bottom:0;z-index:2;background:color-mix(in srgb,var(--ink) 16%,var(--surface));color:var(--ink);font-weight:700;border-top:2px solid color-mix(in srgb,var(--ink) 55%,var(--surface))}
 #pedGrid input.ped-in{border:1.5px solid color-mix(in srgb,var(--ink) 40%,var(--surface));color:var(--ink)}
-#pedGrid tbody td{padding-top:3px;padding-bottom:3px;vertical-align:middle}.ped-pbs{display:inline-flex;gap:3px;white-space:nowrap}.ped-pbs .btn.xs{min-width:30px;padding:2px 4px;font-weight:700}#pedGrid td.ped-btns{white-space:nowrap}#pedGrid input.ped-in{padding:3px 6px;min-height:0;height:30px}
+#pedGrid tbody td{padding-top:3px;padding-bottom:3px;vertical-align:middle}/* el resumen del pedido siempre ocupa un renglón: así la grilla no se mueve al cargar */
+main.ancho .ped-res{min-height:42px;white-space:nowrap;overflow:hidden}main.ancho .ped-res .grow{overflow:hidden;text-overflow:ellipsis}
+.ped-pbs{display:inline-flex;gap:3px;white-space:nowrap}.ped-pbs .btn.xs{min-width:30px;padding:2px 4px;font-weight:700}#pedGrid td.ped-btns{white-space:nowrap}#pedGrid input.ped-in{padding:3px 6px;min-height:0;height:30px}
 .ped-card{padding:10px 12px;gap:8px;display:grid}.ped-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 8px}.ped-nums b{display:block;font-size:15px}.ped-card input.ped-in{width:70px}
 .q-movil{display:none}
 .q-cel #qGrid{max-height:none;overflow:visible}
@@ -335,7 +337,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb129';
+window.__VERSION = 'sb130';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -358,7 +360,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb129</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb130</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3476,7 +3478,7 @@ function vPedido() {
       <button class="btn" data-act="pedPdf" ${tot.ped.length ? '' : 'disabled'} title="Pedido a realizar con el resumen por pallet">PDF del pedido</button>
       <button class="btn" data-act="pedPdfTodo" title="Listado completo con stock, ventas, días de stock y sugerido">PDF del listado</button>
     </div>
-    ${tot.ped.length ? (() => { const o = resumenPedido(tot.ped); return `<div class="banner info ped-res"><span class="grow"><b>Pedido a realizar:</b> ${o.arts} ${o.arts === 1 ? 'artículo' : 'artículos'} · <b>${fmt(o.cajas)} cajas</b> → <b>${fmt(o.pal)}</b> ${o.pal === 1 ? 'pallet completo' : 'pallets completos'} · <b>${fmt(o.bas)}</b> ${o.bas === 1 ? 'base suelta' : 'bases sueltas'} · <b>${fmt(o.cj)}</b> ${o.cj === 1 ? 'caja suelta' : 'cajas sueltas'}${o.sinArm ? ` · <span title="Sin bases por pallet / cajas por base en Artículos">${o.sinArm} sin armado: ${fmt(o.sinArmCj)} cajas</span>` : ''} · <b style="font-size:1.1em">Total: ${fmt(o.palEq)} ${o.palEq === 1 ? 'pallet' : 'pallets'}</b>${o.sinPal ? ` <span class="small" title="Artículos sin bases por pallet en Artículos: no se pueden pasar a pallets">(sin ${o.sinPal} sin armado de pallet)</span>` : ''}</span></div>`; })() : ''}
+    ${(() => { const o = resumenPedido(tot.ped); if (!tot.ped.length) return `<div class="banner info ped-res"><span class="grow"><b>Pedido a realizar:</b> <span class="muted">todavía no hay cajas cargadas</span></span></div>`; return `<div class="banner info ped-res" title="${esc(resumenPedidoTxt(o).join(' · '))}"><span class="grow"><b>Pedido a realizar:</b> ${o.arts} ${o.arts === 1 ? 'artículo' : 'artículos'} · <b>${fmt(o.cajas)} cajas</b> → <b>${fmt(o.pal)}</b> ${o.pal === 1 ? 'pallet completo' : 'pallets completos'} · <b>${fmt(o.bas)}</b> ${o.bas === 1 ? 'base suelta' : 'bases sueltas'} · <b>${fmt(o.cj)}</b> ${o.cj === 1 ? 'caja suelta' : 'cajas sueltas'}${o.sinArm ? ` · <span title="Sin bases por pallet / cajas por base en Artículos">${o.sinArm} sin armado: ${fmt(o.sinArmCj)} cajas</span>` : ''} · <b style="font-size:1.1em">Total: ${fmt(o.palEq)} ${o.palEq === 1 ? 'pallet' : 'pallets'}</b>${o.sinPal ? ` <span class="small" title="Artículos sin bases por pallet en Artículos: no se pueden pasar a pallets">(sin ${o.sinPal} sin armado de pallet)</span>` : ''}</span></div>`; })()}
     ${tabla}
     ${S.admin ? vPedidoVentas() : ''}
   </div>`;
