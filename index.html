@@ -142,6 +142,17 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 #qGrid td.q-d{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #qGrid input.q-in{width:64px}
 #pedGrid input.ped-in{width:62px}#pedGrid td.desc{white-space:nowrap;max-width:none;min-width:0}main.wrap.ancho{max-width:none}#pedGrid td,#pedGrid th{padding-left:6px;padding-right:6px}#pedGrid input.ped-in{width:56px}#pedGrid tr.ped-con td{background:rgba(46,125,50,.09)}#pedGrid thead th{line-height:1.15}#pedGrid th.ped-sort{cursor:pointer;user-select:none}#pedGrid th.ped-sort:hover{text-decoration:underline}
+/* Pedido a Ilolay: grilla con colores más marcados y cabecera / totales fijos */
+#pedGrid{overflow:auto;border:1.5px solid color-mix(in srgb,var(--ink) 45%,var(--surface))}
+#pedGrid thead th{position:sticky;top:0;z-index:3;background:color-mix(in srgb,var(--ink) 16%,var(--surface));color:var(--ink);font-weight:700;border-bottom:2px solid color-mix(in srgb,var(--ink) 55%,var(--surface))}
+#pedGrid td{border-bottom:1px solid color-mix(in srgb,var(--ink) 28%,var(--surface));color:var(--ink)}
+#pedGrid td+td,#pedGrid th+th{border-left:1px solid color-mix(in srgb,var(--ink) 18%,var(--surface))}
+#pedGrid tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--ink) 6%,var(--surface))}
+#pedGrid tbody tr:hover td{background:color-mix(in srgb,var(--ink) 12%,var(--surface))}
+#pedGrid tbody tr.ped-con td,#pedGrid tbody tr.ped-con:nth-child(even) td{background:rgba(46,125,50,.18)}
+#pedGrid tfoot td{position:sticky;bottom:0;z-index:2;background:color-mix(in srgb,var(--ink) 16%,var(--surface));color:var(--ink);font-weight:700;border-top:2px solid color-mix(in srgb,var(--ink) 55%,var(--surface))}
+#pedGrid input.ped-in{border:1.5px solid color-mix(in srgb,var(--ink) 40%,var(--surface));color:var(--ink)}
+#pedGrid tbody td{padding-top:3px;padding-bottom:3px;vertical-align:middle}.ped-pbs{display:inline-flex;gap:3px;white-space:nowrap}.ped-pbs .btn.xs{min-width:30px;padding:2px 4px;font-weight:700}#pedGrid td.ped-btns{white-space:nowrap}#pedGrid input.ped-in{padding:3px 6px;min-height:0;height:30px}
 .ped-card{padding:10px 12px;gap:8px;display:grid}.ped-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 8px}.ped-nums b{display:block;font-size:15px}.ped-card input.ped-in{width:70px}
 .q-movil{display:none}
 .q-cel #qGrid{max-height:none;overflow:visible}
@@ -324,7 +335,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb125';
+window.__VERSION = 'sb126';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -347,7 +358,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb125</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb126</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1614,7 +1625,15 @@ function renderAhora() {
   restoreFocus(keep);
   document.documentElement.style.setProperty('--topH', $('#top').offsetHeight + 'px');
   { const ab = document.querySelector('.ajBarra'); document.documentElement.style.setProperty('--ajBarH', (ab ? ab.offsetHeight : 0) + 'px'); }
+  ajustarPedGrid();
 }
+// Pedido a Ilolay: la grilla ocupa lo que queda de la pantalla (sin mover la página) y se desplaza por dentro, con las cabeceras fijas
+function ajustarPedGrid() {
+  const g = document.getElementById('pedGrid'); if (!g) return;
+  const top = g.getBoundingClientRect().top + window.scrollY;
+  g.style.maxHeight = Math.max(280, Math.floor(window.innerHeight - top - 14)) + 'px';
+}
+window.addEventListener('resize', () => ajustarPedGrid());
 /* Reemplaza la pantalla sin perder dónde estaba cada barra de desplazamiento.
    En la actualización automática (cada 15 s), si no cambió nada no se toca la pantalla. */
 let ultimoMain = null, ultimoTab = null, renderSuave = false;
@@ -3286,18 +3305,21 @@ async function cargarPedido(silencioso) {
 // para no romper el conteo a ciegas); si no, el último cierre. Quesos de Ilolay: kilos de SAP ÷ peso nominal (hormas).
 function stockPedido() {
   const by = {}, pesoDe = (c, pe) => Number(S.maestro[c]?.p) || Number(pe) || 0;
-  const ilo = (c, sap, sk, pe) => S.maestro[c]?.q ? (pesoDe(c, pe) > 0 ? (Number(sk) || 0) / pesoDe(c, pe) : null) : (Number(sap) || 0); // queso sin peso nominal: no se puede pasar a hormas
+  // Stock Ilolay = SAP menos los ajustes pendientes (roto, decomiso, etc.: lo que todavía no se pasó al sistema), como el sistema de Administración.
+  // Quesos: kilos de SAP ÷ peso nominal (hormas), sin ajustes (igual que en el cálculo de quesos)
+  const ajHoy = Object.fromEntries(LINES.map(l => [l.c, Number(l.aj) || 0]));
+  const ilo = (c, sap, sk, pe, aj) => S.maestro[c]?.q ? (pesoDe(c, pe) > 0 ? (Number(sk) || 0) / pesoDe(c, pe) : null) : (Number(sap) || 0) + (Number(aj) || 0); // queso sin peso nominal: no se puede pasar a hormas
   if (S.cierre) {
-    for (const l of S.cierre.lineas || []) by[l.c] = { ya: Number(l.ya) || 0, ilo: ilo(l.c, l.sap, l.sk, l.pe) };
+    for (const l of S.cierre.lineas || []) by[l.c] = { ya: Number(l.ya) || 0, ilo: ilo(l.c, l.sap, l.sk, l.pe, l.aj) };
     return { by, fuente: 'cierre', fecha: S.dia };
   }
   const f = fuentes();
   if ((S.admin || opt('verSisDep')) && f.origen && !f.faltan.length) {
-    for (const l of LINES) by[l.c] = { ya: Number(l.yasu) || 0, ilo: ilo(l.c, l.sap, l.sapRaw, l.peso) };
+    for (const l of LINES) by[l.c] = { ya: Number(l.yasu) || 0, ilo: ilo(l.c, l.sap, l.sapRaw, l.peso, l.aj) };
     return { by, fuente: 'hoy', fecha: S.dia };
   }
   if (S.anteriorFecha && S.anterior && Object.keys(S.anterior).length) {
-    for (const [c, a] of Object.entries(S.anterior)) by[c] = { ya: Number(a.ya) || 0, ilo: ilo(c, a.sap, a.sk, a.pe) };
+    for (const [c, a] of Object.entries(S.anterior)) by[c] = { ya: Number(a.ya) || 0, ilo: ilo(c, a.sap, a.sk, a.pe, ajHoy[c]) };
     return { by, fuente: 'anterior', fecha: S.anteriorFecha };
   }
   return { by, fuente: '', fecha: '' };
@@ -3353,18 +3375,24 @@ function filasPedido() {
   }).sort(cmpCodigo);
 }
 // Columnas de la grilla del pedido: se ordena tocando la cabecera (una vez ascendente, otra vez descendente)
-const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas'], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP) en cajas (para abajo)'],
+const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas'], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP menos ajustes pendientes: roto, decomiso, etc.) en cajas (para abajo)'],
   ['vI', 'Venta<br>Ilolay', `Venta de ${pedDiasVenta()} días: facturación Ilolay sin lo facturado a YASUKAWA JORGE FERNANDO, en cajas`], ['vY', 'Venta<br>Yasu.', `Venta de ${pedDiasVenta()} días: facturación Yasukawa (neta de notas de crédito) + ventana, en cajas`], ['vT', 'Venta<br>total', `Venta de ${pedDiasVenta()} días: Ilolay + Yasukawa, en cajas`],
   ['prom', 'Prom.<br>diario', 'Venta promedio por día, en cajas'], ['dias', 'Días de<br>stock', 'Stock total ÷ promedio diario'], ['camino', 'En<br>camino', 'Cajas en camino: se descuentan del sugerido'],
-  ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', '']];
+  ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', ''], ['btn', 'Pallet /<br>base', 'P+ / P−: sumar o restar un pallet al pedido · B+ / B−: sumar o restar una base']];
 const pedSortAct = () => S.ui.pedSort || { k: 'c', dir: 1 };
 // Vista de columnas del pedido (se recuerda en cada dispositivo)
-const PED_RES = ['c', 'd', 'stCj', 'yaCj', 'iloCj', 'vT', 'dias', 'pedir'];
+const PED_RES = ['c', 'd', 'stCj', 'yaCj', 'iloCj', 'vT', 'dias', 'pedir', 'btn'];
 const pedResumido = () => { if (S.ui.pedVista) return S.ui.pedVista === 'res'; try { return localStorage.getItem('pedVista') === 'res'; } catch { return false; } };
 const pedColsVis = dc => PED_COLS(dc).filter(([k]) => !pedResumido() || PED_RES.includes(k));
+// Botones para sumar o restar un pallet o una base al pedido (según el armado de Artículos; las cajas sueltas se cargan a mano)
+function pedBotones(c) {
+  const p = palletsDe(c, 0), b = (k, n, d, t) => `<button class="btn xs ped-pb" data-act="pedPal" data-c="${esc(c)}" data-d="${d}" ${d ? '' : 'disabled'} title="${esc(t)}">${n}</button>`;
+  const sinP = 'Falta cargar bases por pallet y cajas por base en Artículos', sinB = 'Falta cargar cajas por base en Artículos';
+  return `<span class="ped-pbs">${b('p+', 'P+', p.cxp, p.cxp ? `Sumar un pallet (${p.cxp} cajas)` : sinP)}${b('p-', 'P−', -p.cxp, p.cxp ? `Restar un pallet (${p.cxp} cajas)` : sinP)}${b('b+', 'B+', p.bpb, p.bpb ? `Sumar una base (${p.bpb} cajas)` : sinB)}${b('b-', 'B−', -p.bpb, p.bpb ? `Restar una base (${p.bpb} cajas)` : sinB)}</span>`;
+}
 function pedThead(dc) {
   const o = pedSortAct();
-  return '<thead><tr>' + pedColsVis(dc).map(([k, n, t]) => `<th class="${k === 'c' || k === 'd' ? '' : 'n '}ped-sort" data-act="pedSort" data-v="${k}" title="${esc(t ? t + ' · ' : '')}Tocá para ordenar" aria-sort="${o.k === k ? (o.dir > 0 ? 'ascending' : 'descending') : 'none'}">${n}${o.k === k ? (o.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr></thead>';
+  return '<thead><tr>' + pedColsVis(dc).map(([k, n, t]) => k === 'btn' ? `<th title="${esc(t)}">${n}</th>` : `<th class="${k === 'c' || k === 'd' ? '' : 'n '}ped-sort" data-act="pedSort" data-v="${k}" title="${esc(t ? t + ' · ' : '')}Tocá para ordenar" aria-sort="${o.k === k ? (o.dir > 0 ? 'ascending' : 'descending') : 'none'}">${n}${o.k === k ? (o.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr></thead>';
 }
 function pedFiltrar(F) {
   const q = (S.ui.pedQ || '').trim().toUpperCase(), sec = S.ui.sector || 'TODOS', fil = S.ui.pedFil || 'todos';
@@ -3401,23 +3429,23 @@ function vPedido() {
   const celda = { c: r => `<td class="code">${esc(r.c)}</td>`, d: r => `<td class="desc">${esc(r.d)}</td>`, stCj: r => `<td class="n"><b>${stk(r.stCj)}</b></td>`,
     yaCj: r => `<td class="n">${stk(r.yaCj)}</td>`, iloCj: r => `<td class="n">${stk(r.iloCj)}</td>`, vI: r => `<td class="n">${f1(r.vI)}</td>`, vY: r => `<td class="n">${f1(r.vY)}</td>`,
     vT: r => `<td class="n"><b>${f1(r.vT)}</b></td>`, prom: r => `<td class="n">${f1(r.prom)}</td>`, dias: r => `<td class="n">${diasTd(r)}</td>`,
-    camino: r => `<td class="n">${inp(r, 'k')}</td>`, sug: r => `<td class="n">${sugBtn(r)}</td>`, pedir: r => `<td class="n">${inp(r, 'p')}</td>` };
+    camino: r => `<td class="n">${inp(r, 'k')}</td>`, sug: r => `<td class="n">${sugBtn(r)}</td>`, pedir: r => `<td class="n">${inp(r, 'p')}</td>`, btn: r => `<td class="ped-btns">${pedBotones(r.c)}</td>` };
   const suma = k => cj(L.map(r => Number(r[k]) || 0));
-  const pie = { c: () => '<td></td>', d: () => `<td>TOTAL (${L.length})</td>`, dias: () => '<td></td>', vI: () => `<td class="n">${f1(suma('vI'))}</td>`, vY: () => `<td class="n">${f1(suma('vY'))}</td>`,
+  const pie = { btn: () => '<td></td>', c: () => '<td></td>', d: () => `<td>TOTAL (${L.length})</td>`, dias: () => '<td></td>', vI: () => `<td class="n">${f1(suma('vI'))}</td>`, vY: () => `<td class="n">${f1(suma('vY'))}</td>`,
     vT: () => `<td class="n">${f1(suma('vT'))}</td>`, prom: () => `<td class="n">${f1(suma('prom'))}</td>` };
   const tarjeta = { stCj: r => stk(r.stCj), yaCj: r => stk(r.yaCj), iloCj: r => stk(r.iloCj), vI: r => f1(r.vI), vY: r => f1(r.vY), vT: r => f1(r.vT), prom: r => f1(r.prom), dias: r => diasTd(r), sug: r => sugBtn(r) };
   const res = pedResumido();
   const tabla = cel ? `<div class="stack" style="gap:8px">${L.map(r => `<div class="panel ped-card">
       <div><b class="mono">${esc(r.c)}</b> ${esc(r.d)}</div>
       <div class="ped-nums small">${vis.filter(([k]) => tarjeta[k]).map(([k, n]) => `<span>${n.replace('<br>', ' ').replace(/\s*\(.*\)$/, '')}<b>${tarjeta[k](r)}</b></span>`).join('')}</div>
-      ${res ? `<div class="row" style="gap:10px"><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div>` : `<div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div>`}</div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
+      <div class="row" style="gap:10px;flex-wrap:wrap">${res ? '' : `<label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label>`}<label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label>${pedBotones(r.c)}</div></div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
     : `<div class="tablebox" id="pedGrid"><table>${pedThead(dc)}
       <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}>${vis.map(([k]) => celda[k](r)).join('')}</tr>`).join('') || `<tr><td colspan="${vis.length}" class="muted">No hay artículos con ese filtro.</td></tr>`}</tbody>
       <tfoot><tr>${vis.map(([k]) => pie[k] ? pie[k]() : `<td class="n">${fmt(suma(k))}</td>`).join('')}</tr></tfoot></table></div>`;
   const filtros = [['todos', 'Ver todos', F.length], ['sug', 'Con sugerido', tot.sug.length], ['ped', 'Con pedido', tot.ped.length], ['cam', 'En camino', tot.cam.length]];
   return `<div class="stack">
     <div class="row" style="justify-content:space-between;align-items:end"><div style="min-width:0;flex:1 1 300px"><h2>Pedido a Ilolay</h2>
-      <div class="small muted">Stock ${stTxt}, en cajas para abajo${st.fuente === 'anterior' && !S.admin ? '' : ''}. Venta de los <b>${pedDiasVenta()} días</b> corridos ${V ? `del ${dm(V.ini)} al ${dm(V.fin)}` : ''} (domingos = 0), en cajas${S.admin ? ' (se cambia en Configuración)' : ''}. Sugerido para cubrir <b>${dc} días</b>${S.admin ? ' (se cambia en Configuración)' : ''}. Pedido y en camino en cajas: lo ven todos.</div></div>
+      <div class="small muted">Stock ${stTxt}, en cajas para abajo (Ilolay: SAP menos ajustes pendientes)${st.fuente === 'anterior' && !S.admin ? '' : ''}. Venta de los <b>${pedDiasVenta()} días</b> corridos ${V ? `del ${dm(V.ini)} al ${dm(V.fin)}` : ''} (domingos = 0), en cajas${S.admin ? ' (se cambia en Configuración)' : ''}. Sugerido para cubrir <b>${dc} días</b>${S.admin ? ' (se cambia en Configuración)' : ''}. Pedido y en camino en cajas: lo ven todos.</div></div>
       <button class="btn sm" data-act="pedRecargar" ${S.pedCargando ? 'disabled' : ''}>Actualizar</button></div>
     ${faltan.length ? `<div class="banner warn"><span class="grow"><b>Faltan datos de venta</b> de ${faltan.length} ${faltan.length === 1 ? 'día' : 'días'}: ${faltan.map(x => `${diaSem(x.f).slice(0, 3)} ${dm(x.f)}${!x.i && !x.y ? '' : !x.i ? ' (Ilolay)' : ' (Yasukawa)'}`).join(' · ')}. El promedio se calcula con los días que tienen datos.${S.admin ? ' Se completan al cerrar el stock con los archivos de facturación, o con "Cargar ventas anteriores".' : ''}</span></div>` : ''}
     ${camMeta && tot.cam.length ? `<div class="banner info"><span class="grow">Pedido en camino desde el ${diaSem(camMeta.f)} ${dm(camMeta.f)}${camMeta.por ? ' (marcado por ' + esc(nom(camMeta.por)) + ')' : ''}: ${tot.cam.length} artículos, ${fmt(cj(tot.cam.map(r => r.camino)))} cajas. Cuando llegue, borralo con "Borrar en camino".</span></div>` : ''}
@@ -3427,7 +3455,7 @@ function vPedido() {
       <div class="chips" role="group" aria-label="Columnas">${[['res', 'Resumido'], ['exp', 'Expandido']].map(([k, n]) => `<button class="chip" data-act="pedVista" data-v="${k}" aria-pressed="${(pedResumido() ? 'res' : 'exp') === k}">${n}</button>`).join('')}</div>
       <div class="chips" role="group" aria-label="Filtro del pedido">${filtros.map(([k, n, c]) => `<button class="chip" data-act="pedFil" data-v="${k}" aria-pressed="${(S.ui.pedFil || 'todos') === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
       <input type="search" id="pedQ" data-act="pedQ" placeholder="Buscar código o descripción" value="${esc(S.ui.pedQ || '')}" style="min-width:180px;flex:1;max-width:280px">
-      ${cel ? `<label class="row small" style="gap:6px">Orden <select data-act="pedSortSel" id="pedSortSel">${pedColsVis(dc).map(([k, n]) => `<option value="${k}" ${pedSortAct().k === k ? 'selected' : ''}>${n.replace('<br>', ' ')}</option>`).join('')}</select><button class="btn sm" data-act="pedSortDir" title="Cambiar entre ascendente y descendente">${pedSortAct().dir > 0 ? '▲ Asc.' : '▼ Desc.'}</button></label>` : '<span class="small muted">Tocá una cabecera para ordenar</span>'}
+      ${cel ? `<label class="row small" style="gap:6px">Orden <select data-act="pedSortSel" id="pedSortSel">${pedColsVis(dc).filter(([k]) => k !== 'btn').map(([k, n]) => `<option value="${k}" ${pedSortAct().k === k ? 'selected' : ''}>${n.replace('<br>', ' ')}</option>`).join('')}</select><button class="btn sm" data-act="pedSortDir" title="Cambiar entre ascendente y descendente">${pedSortAct().dir > 0 ? '▲ Asc.' : '▼ Desc.'}</button></label>` : '<span class="small muted">Tocá una cabecera para ordenar</span>'}
     </div>
     <div class="row" style="flex-wrap:wrap;gap:8px">
       <button class="btn" data-act="pedConf" data-v="copiar" ${tot.sug.length ? '' : 'disabled'} title="Pone el sugerido como pedido en los artículos que tienen sugerido (del sector elegido)">Copiar el sugerido</button>
@@ -3543,7 +3571,7 @@ async function pedidoAccion(a, k) {
 function pedNombre(ext, que) { const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0'); return (que || 'Pedido a Ilolay') + ' ' + hoyISO() + ' ' + hh + '.' + ext; }
 // Excel de lo que se ve en pantalla: mismas columnas (resumido / expandido), filtros y orden
 function xlsPedidoPantalla() {
-  const dc = pedDiasCubrir(), vis = pedColsVis(dc), L = pedFiltrar(filasPedido());
+  const dc = pedDiasCubrir(), vis = pedColsVis(dc).filter(([k]) => k !== 'btn'), L = pedFiltrar(filasPedido());
   const val = (r, k) => k === 'c' || k === 'd' ? r[k] : k === 'prom' ? Math.round(r.prom * 100) / 100 : (r[k] === null || r[k] === undefined ? '' : r[k]);
   try {
     const wb = XL.utils.book_new();
@@ -4999,6 +5027,7 @@ document.addEventListener('click', async e => {
     case 'pedUsarSug': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', r.sug); render(); } break; }
     case 'pedXls': xlsPedido(); break;
     case 'pedXlsPant': xlsPedidoPantalla(); break;
+    case 'pedPal': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', Math.max(0, r.pedir + (Number(t.dataset.d) || 0))); render(); } break; }
     case 'pedVista': S.ui.pedVista = v; try { localStorage.setItem('pedVista', v); } catch { } if (v === 'res' && !PED_RES.includes(pedSortAct().k)) S.ui.pedSort = null; render(); break;
     case 'pedPdf': pdfPedido(); break;
     case 'pedPdfTodo': pdfPedidoTodo(); break;
