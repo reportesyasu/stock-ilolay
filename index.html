@@ -324,7 +324,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb121';
+window.__VERSION = 'sb122';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -347,7 +347,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb121</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb122</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3324,6 +3324,8 @@ function palletsDe(c, cajas) {
   const partes = [pal ? pal + ' ' + (pal === 1 ? 'pallet' : 'pallets') : '', bas ? bas + ' ' + (bas === 1 ? 'base' : 'bases') : '', r ? r + ' ' + (r === 1 ? 'caja' : 'cajas') : ''].filter(Boolean);
   return { pal, bas, cj: r, cxp, bpb, bpp, txt: partes.join(' + ') || '0', armado: cxp ? `1 pallet = ${fmt(bpp)} bases × ${fmt(bpb)} cajas = ${fmt(cxp)} cajas` : bpb ? `1 base = ${fmt(bpb)} cajas` : 'sin armado cargado' };
 }
+// En la facturación Ilolay, lo facturado a YASUKAWA JORGE FERNANDO (cliente 100816) es la compra de Yasukawa: no es venta para el pedido
+const esCliYasukawa = x => String(x?.nc || '').replace(/^0+/, '') === '100816' || /YASUKAWA\s+JORGE/i.test([x?.cli, x?.cliN, x?.suc].join(' '));
 const pedNum = v => Math.max(0, Math.round(Number(String(v ?? '').replace(',', '.')) || 0));
 function filasPedido() {
   const st = stockPedido(), V = ventasPedido(), PD = S.ped?.pedido || {}, D = S.ui.pedDraft || {}, dc = pedDiasCubrir();
@@ -3347,14 +3349,18 @@ function filasPedido() {
   }).sort(cmpCodigo);
 }
 // Columnas de la grilla del pedido: se ordena tocando la cabecera (una vez ascendente, otra vez descendente)
-const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP) en cajas (para abajo)'], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas'],
-  ['vI', 'Venta<br>Ilolay', 'Venta de 15 días: Facturación Ilolay de los 15 días, en cajas'], ['vY', 'Venta<br>Yasu.', 'Venta de 15 días: Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas'], ['vT', 'Venta<br>total', 'Venta de 15 días: Ilolay + Yasukawa, en cajas'],
+const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas'], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP) en cajas (para abajo)'],
+  ['vI', 'Venta<br>Ilolay', 'Venta de 15 días: facturación Ilolay sin lo facturado a YASUKAWA JORGE FERNANDO, en cajas'], ['vY', 'Venta<br>Yasu.', 'Venta de 15 días: Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas'], ['vT', 'Venta<br>total', 'Venta de 15 días: Ilolay + Yasukawa, en cajas'],
   ['prom', 'Prom.<br>diario', 'Venta promedio por día, en cajas'], ['dias', 'Días de<br>stock', 'Stock total ÷ promedio diario'], ['camino', 'En<br>camino', 'Cajas en camino: se descuentan del sugerido'],
   ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', '']];
 const pedSortAct = () => S.ui.pedSort || { k: 'c', dir: 1 };
+// Vista de columnas del pedido (se recuerda en cada dispositivo)
+const PED_RES = ['c', 'd', 'stCj', 'yaCj', 'iloCj', 'vT', 'dias'];
+const pedResumido = () => { if (S.ui.pedVista) return S.ui.pedVista === 'res'; try { return localStorage.getItem('pedVista') === 'res'; } catch { return false; } };
+const pedColsVis = dc => PED_COLS(dc).filter(([k]) => !pedResumido() || PED_RES.includes(k));
 function pedThead(dc) {
   const o = pedSortAct();
-  return '<thead><tr>' + PED_COLS(dc).map(([k, n, t]) => `<th class="${k === 'c' || k === 'd' ? '' : 'n '}ped-sort" data-act="pedSort" data-v="${k}" title="${esc(t ? t + ' · ' : '')}Tocá para ordenar" aria-sort="${o.k === k ? (o.dir > 0 ? 'ascending' : 'descending') : 'none'}">${n}${o.k === k ? (o.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr></thead>';
+  return '<thead><tr>' + pedColsVis(dc).map(([k, n, t]) => `<th class="${k === 'c' || k === 'd' ? '' : 'n '}ped-sort" data-act="pedSort" data-v="${k}" title="${esc(t ? t + ' · ' : '')}Tocá para ordenar" aria-sort="${o.k === k ? (o.dir > 0 ? 'ascending' : 'descending') : 'none'}">${n}${o.k === k ? (o.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr></thead>';
 }
 function pedFiltrar(F) {
   const q = (S.ui.pedQ || '').trim().toUpperCase(), sec = S.ui.sector || 'TODOS', fil = S.ui.pedFil || 'todos';
@@ -3386,13 +3392,24 @@ function vPedido() {
   const sugBtn = r => r.sug > 0 ? `<button class="link mono" data-act="pedUsarSug" data-c="${esc(r.c)}" title="Usar el sugerido como pedido">${fmt(r.sug)}</button>` : '<span class="muted">0</span>';
   const diasTd = r => r.dias === null ? '<span class="muted" title="Sin venta en los 15 días">—</span>' : `<span style="color:${r.dias < dc ? 'var(--bad)' : 'inherit'}">${fDias(r.dias)}</span>`;
   const stk = x => x === null ? '<span class="muted">—</span>' : fmt(x);
+  // Columnas: resumido (código, descripción, stock total, Yasukawa, Ilolay, venta total, días de stock) o expandido (todas)
+  const vis = pedColsVis(dc);
+  const celda = { c: r => `<td class="code">${esc(r.c)}</td>`, d: r => `<td class="desc">${esc(r.d)}</td>`, stCj: r => `<td class="n"><b>${stk(r.stCj)}</b></td>`,
+    yaCj: r => `<td class="n">${stk(r.yaCj)}</td>`, iloCj: r => `<td class="n">${stk(r.iloCj)}</td>`, vI: r => `<td class="n">${f1(r.vI)}</td>`, vY: r => `<td class="n">${f1(r.vY)}</td>`,
+    vT: r => `<td class="n"><b>${f1(r.vT)}</b></td>`, prom: r => `<td class="n">${f1(r.prom)}</td>`, dias: r => `<td class="n">${diasTd(r)}</td>`,
+    camino: r => `<td class="n">${inp(r, 'k')}</td>`, sug: r => `<td class="n">${sugBtn(r)}</td>`, pedir: r => `<td class="n">${inp(r, 'p')}</td>` };
+  const suma = k => cj(L.map(r => Number(r[k]) || 0));
+  const pie = { c: () => '<td></td>', d: () => `<td>TOTAL (${L.length})</td>`, dias: () => '<td></td>', vI: () => `<td class="n">${f1(suma('vI'))}</td>`, vY: () => `<td class="n">${f1(suma('vY'))}</td>`,
+    vT: () => `<td class="n">${f1(suma('vT'))}</td>`, prom: () => `<td class="n">${f1(suma('prom'))}</td>` };
+  const tarjeta = { stCj: r => stk(r.stCj), yaCj: r => stk(r.yaCj), iloCj: r => stk(r.iloCj), vI: r => f1(r.vI), vY: r => f1(r.vY), vT: r => f1(r.vT), prom: r => f1(r.prom), dias: r => diasTd(r), sug: r => sugBtn(r) };
+  const res = pedResumido();
   const tabla = cel ? `<div class="stack" style="gap:8px">${L.map(r => `<div class="panel ped-card">
       <div><b class="mono">${esc(r.c)}</b> ${esc(r.d)}</div>
-      <div class="ped-nums small"><span>Stock Yasu.<b>${stk(r.yaCj)}</b></span><span>Stock Ilolay<b>${stk(r.iloCj)}</b></span><span>Stock total<b>${stk(r.stCj)}</b></span><span>Venta Ilolay<b>${f1(r.vI)}</b></span><span>Venta Yasu.<b>${f1(r.vY)}</b></span><span>Venta total<b>${f1(r.vT)}</b></span><span>Prom. día<b>${f1(r.prom)}</b></span><span>Días stock<b>${diasTd(r)}</b></span><span>Sugerido<b>${sugBtn(r)}</b></span></div>
-      <div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div></div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
+      <div class="ped-nums small">${vis.filter(([k]) => tarjeta[k]).map(([k, n]) => `<span>${n.replace('<br>', ' ').replace(/\s*\(.*\)$/, '')}<b>${tarjeta[k](r)}</b></span>`).join('')}</div>
+      ${res ? '' : `<div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div>`}</div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
     : `<div class="tablebox" id="pedGrid"><table>${pedThead(dc)}
-      <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}><td class="code">${esc(r.c)}</td><td class="desc">${esc(r.d)}</td><td class="n">${stk(r.yaCj)}</td><td class="n">${stk(r.iloCj)}</td><td class="n"><b>${stk(r.stCj)}</b></td><td class="n">${f1(r.vI)}</td><td class="n">${f1(r.vY)}</td><td class="n"><b>${f1(r.vT)}</b></td><td class="n">${f1(r.prom)}</td><td class="n">${diasTd(r)}</td><td class="n">${inp(r, 'k')}</td><td class="n">${sugBtn(r)}</td><td class="n">${inp(r, 'p')}</td></tr>`).join('') || '<tr><td colspan="13" class="muted">No hay artículos con ese filtro.</td></tr>'}</tbody>
-      <tfoot><tr><td></td><td>TOTAL (${L.length})</td><td class="n">${fmt(cj(L.map(r => r.yaCj || 0)))}</td><td class="n">${fmt(cj(L.map(r => r.iloCj || 0)))}</td><td class="n">${fmt(cj(L.map(r => r.stCj || 0)))}</td><td class="n">${f1(cj(L.map(r => r.vI)))}</td><td class="n">${f1(cj(L.map(r => r.vY)))}</td><td class="n">${f1(cj(L.map(r => r.vT)))}</td><td class="n">${f1(cj(L.map(r => r.prom)))}</td><td></td><td class="n">${fmt(cj(L.map(r => r.camino)))}</td><td class="n">${fmt(cj(L.map(r => r.sug)))}</td><td class="n">${fmt(cj(L.map(r => r.pedir)))}</td></tr></tfoot></table></div>`;
+      <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}>${vis.map(([k]) => celda[k](r)).join('')}</tr>`).join('') || `<tr><td colspan="${vis.length}" class="muted">No hay artículos con ese filtro.</td></tr>`}</tbody>
+      <tfoot><tr>${vis.map(([k]) => pie[k] ? pie[k]() : `<td class="n">${fmt(suma(k))}</td>`).join('')}</tr></tfoot></table></div>`;
   const filtros = [['todos', 'Ver todos', F.length], ['sug', 'Con sugerido', tot.sug.length], ['ped', 'Con pedido', tot.ped.length], ['cam', 'En camino', tot.cam.length]];
   return `<div class="stack">
     <div class="row" style="justify-content:space-between;align-items:end"><div style="min-width:0;flex:1 1 300px"><h2>Pedido a Ilolay</h2>
@@ -3403,9 +3420,10 @@ function vPedido() {
     ${confHtml}
     <div class="row ${cel ? '' : 'ajBarra'}" style="flex-wrap:wrap">
       ${chipsSector(F)}
+      <div class="chips" role="group" aria-label="Columnas">${[['res', 'Resumido'], ['exp', 'Expandido']].map(([k, n]) => `<button class="chip" data-act="pedVista" data-v="${k}" aria-pressed="${(pedResumido() ? 'res' : 'exp') === k}">${n}</button>`).join('')}</div>
       <div class="chips" role="group" aria-label="Filtro del pedido">${filtros.map(([k, n, c]) => `<button class="chip" data-act="pedFil" data-v="${k}" aria-pressed="${(S.ui.pedFil || 'todos') === k}">${n}<span class="c">${c}</span></button>`).join('')}</div>
       <input type="search" id="pedQ" data-act="pedQ" placeholder="Buscar código o descripción" value="${esc(S.ui.pedQ || '')}" style="min-width:180px;flex:1;max-width:280px">
-      ${cel ? `<label class="row small" style="gap:6px">Orden <select data-act="pedSortSel" id="pedSortSel">${PED_COLS(dc).map(([k, n]) => `<option value="${k}" ${pedSortAct().k === k ? 'selected' : ''}>${n.replace('<br>', ' ')}</option>`).join('')}</select><button class="btn sm" data-act="pedSortDir" title="Cambiar entre ascendente y descendente">${pedSortAct().dir > 0 ? '▲ Asc.' : '▼ Desc.'}</button></label>` : '<span class="small muted">Tocá una cabecera para ordenar</span>'}
+      ${cel ? `<label class="row small" style="gap:6px">Orden <select data-act="pedSortSel" id="pedSortSel">${pedColsVis(dc).map(([k, n]) => `<option value="${k}" ${pedSortAct().k === k ? 'selected' : ''}>${n.replace('<br>', ' ')}</option>`).join('')}</select><button class="btn sm" data-act="pedSortDir" title="Cambiar entre ascendente y descendente">${pedSortAct().dir > 0 ? '▲ Asc.' : '▼ Desc.'}</button></label>` : '<span class="small muted">Tocá una cabecera para ordenar</span>'}
     </div>
     <div class="row" style="flex-wrap:wrap;gap:8px">
       <button class="btn" data-act="pedConf" data-v="copiar" ${tot.sug.length ? '' : 'disabled'} title="Pone el sugerido como pedido en los artículos que tienen sugerido (del sector elegido)">Copiar el sugerido</button>
@@ -3413,7 +3431,8 @@ function vPedido() {
       <button class="btn" data-act="pedConf" data-v="borrarK" ${tot.cam.length ? '' : 'disabled'}>Borrar en camino</button>
       <button class="btn" data-act="pedConf" data-v="borrarP" ${tot.ped.length ? '' : 'disabled'}>Borrar pedido</button>
       <span class="grow"></span>
-      <button class="btn" data-act="pedXls">Excel</button>
+      <button class="btn" data-act="pedXlsPant" title="Lo que se ve en pantalla: mismas columnas, filtros y orden">Excel de la pantalla</button>
+      <button class="btn" data-act="pedXls" title="Hoja PEDIDO con pallets, bases y cajas, y hoja LISTADO con todas las columnas">Excel del pedido</button>
       <button class="btn" data-act="pedPdf" ${tot.ped.length ? '' : 'disabled'} title="Pedido a realizar con el resumen por pallet">PDF del pedido</button>
       <button class="btn" data-act="pedPdfTodo" title="Listado completo con stock, ventas, días de stock y sugerido">PDF del listado</button>
     </div>
@@ -3448,8 +3467,9 @@ async function leerVentasAnteriores(list) {
       const { rows, info } = await fileRows(file);
       if (info.kind === 'fya') { const d = Core.buildFya(rows, info, opt('prefijo')); archivos.push(file.name); let sf = 0; for (const x of d.filas) { if (x.ms === false) continue; if (!x.f) { sf++; continue; } sumar(x.f, 'Y', x.c, Number(x.q) || 0); } if (sf) aviso.push(file.name + ': ' + sf + ' líneas sin fecha (no se toman).'); }
       else if (info.kind === 'fil') {
-        const d = Core.buildFil(rows, info); archivos.push(file.name); let sf = 0, sp = new Set();
+        const d = Core.buildFil(rows, info); archivos.push(file.name); let sf = 0, sp = new Set(), ny = 0;
         for (const x of d.filas) {
+          if (esCliYasukawa(x)) { ny++; continue; }
           if (!x.f) { sf++; continue; }
           let q = Number(x.q) || 0;
           if (x.um === 'KG') { const p = pesoDe(x.c); if (p > 0) q = Math.round(q / p); else { sp.add(x.c); continue; } }
@@ -3457,6 +3477,7 @@ async function leerVentasAnteriores(list) {
           sumar(x.f, 'I', x.c, q);
         }
         if (sf) aviso.push(file.name + ': ' + sf + ' líneas sin fecha (no se toman).');
+        if (ny) aviso.push(file.name + ': no se toman ' + ny + ' líneas facturadas a YASUKAWA JORGE FERNANDO (es la compra de Yasukawa, no venta).');
         if (sp.size) aviso.push('Sin peso nominal (no se pudieron pasar los kilos a hormas): ' + [...sp].join(', ') + '. Cargá el peso en Artículos y volvé a elegir el archivo.');
       }
       else if (info.kind === 'vent') { const d = Core.buildVent(rows, info, opt('prefijo')); archivos.push(file.name); for (const x of d.filas) if (x.f) sumar(x.f, 'V', x.c, Number(x.q) || 0); }
@@ -3487,6 +3508,7 @@ function ventasDelDia() {
     const m = S.maestro[x.c]; if (!m || x.ms === false) continue;
     const o = x.o === 'I' ? 'I' : x.o === 'V' ? 'V' : 'Y';
     if (!out[o] || (o === 'I' && m.q)) continue; // quesos de Ilolay: lo cargado a mano en la pestaña Quesos
+    if (o === 'I' && esCliYasukawa(x)) continue; // lo que Ilolay le factura a Yasukawa no es venta
     out[o][x.c] = r2((out[o][x.c] || 0) + (Number(x.q) || 0));
   }
   if (out.I) for (const [c, q] of Object.entries(S.quesosDia || {})) if (S.maestro[c]?.q && Number(q?.i)) out.I[c] = Number(q.i);
@@ -3515,6 +3537,17 @@ async function pedidoAccion(a, k) {
 }
 /* ---- Excel y PDF ---- */
 function pedNombre(ext, que) { const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0'); return (que || 'Pedido a Ilolay') + ' ' + hoyISO() + ' ' + hh + '.' + ext; }
+// Excel de lo que se ve en pantalla: mismas columnas (resumido / expandido), filtros y orden
+function xlsPedidoPantalla() {
+  const dc = pedDiasCubrir(), vis = pedColsVis(dc), L = pedFiltrar(filasPedido());
+  const val = (r, k) => k === 'c' || k === 'd' ? r[k] : k === 'prom' ? Math.round(r.prom * 100) / 100 : (r[k] === null || r[k] === undefined ? '' : r[k]);
+  try {
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([vis.map(([, n]) => n.replace('<br>', ' ').toUpperCase()), ...L.map(r => vis.map(([k]) => val(r, k)))]), pedResumido() ? 'RESUMIDO' : 'EXPANDIDO');
+    descargar(pedNombre('xlsx', 'Pedido a Ilolay pantalla'), new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    toast('Excel descargado (' + L.length + ' artículos).');
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
+}
 function xlsPedido() {
   const F = filasPedido(), P = F.filter(r => r.pedir > 0), dc = pedDiasCubrir(), r1 = x => x === null ? '' : Math.round(x * 10) / 10;
   try {
@@ -3522,8 +3555,8 @@ function xlsPedido() {
     const ped = P.map(r => { const p = palletsDe(r.c, r.pedir); return [r.c, r.d, r.pedir, p.pal, p.bas, p.cj, p.txt, p.armado]; });
     const tp = P.reduce((s, r) => s + r.pedir, 0), tpal = P.reduce((s, r) => s + palletsDe(r.c, r.pedir).pal, 0);
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'CAJAS', 'PALLETS', 'BASES', 'CAJAS SUELTAS', 'RESUMEN', 'ARMADO'], ...ped, ['', 'TOTAL', tp, tpal, '', '', '', '']]), 'PEDIDO');
-    const lis = F.map(r => [r.c, r.d, r.yaCj ?? '', r.iloCj ?? '', r.stCj ?? '', r1(r.vI), r1(r.vY), r1(r.vT), Math.round(r.prom * 100) / 100, r.dias === null ? '' : r1(r.dias), r.camino, r.sug, r.pedir]);
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'STOCK TOTAL (CAJAS)', 'VENTA 15 DIAS ILOLAY (CAJAS)', 'VENTA 15 DIAS YASUKAWA (CAJAS)', 'VENTA 15 DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
+    const lis = F.map(r => [r.c, r.d, r.stCj ?? '', r.yaCj ?? '', r.iloCj ?? '', r1(r.vI), r1(r.vY), r1(r.vT), Math.round(r.prom * 100) / 100, r.dias === null ? '' : r1(r.dias), r.camino, r.sug, r.pedir]);
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK TOTAL (CAJAS)', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'VENTA 15 DIAS ILOLAY (CAJAS)', 'VENTA 15 DIAS YASUKAWA (CAJAS)', 'VENTA 15 DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
     descargar(pedNombre('xlsx'), new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel descargado (' + P.length + ' artículos pedidos).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
@@ -3589,16 +3622,22 @@ function pdfPedido() {
     descargar(pedNombre('pdf'), r.blob); toast('PDF del pedido descargado (' + P.length + ' artículos).');
   } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
 }
+// PDF del listado con las columnas que se ven (resumido / expandido)
+function pedVisPdf(dc, o) {
+  const vis = new Set(pedColsVis(dc).map(([k]) => k)), ok = PED_COLS(dc).map(([k]) => vis.has(k));
+  o.cols = o.cols.filter((_, i) => ok[i]); for (const g of o.grupos) g.filas = g.filas.map(f => f.filter((_, i) => ok[i]));
+  return o;
+}
 function pdfPedidoTodo() {
   const F = pedFiltrar(filasPedido()), dc = pedDiasCubrir(), st = stockPedido(), V = ventasPedido();
   if (!F.length) { toast('No hay artículos con ese filtro.'); return; }
   try {
     const grupos = ['FRIO', 'SECO', ...new Set(F.map(r => r.s).filter(s => s !== 'FRIO' && s !== 'SECO'))].map(s => ({ t: s === 'FRIO' ? 'FRÍO' : s === 'SECO' ? 'SECO' : (s || 'SIN SECTOR'),
-      filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), r.stCj === null ? '—' : fmt(r.stCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), fDias(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
+      filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.stCj === null ? '—' : fmt(r.stCj), r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), fDias(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
     const stTxt = st.fuente === 'hoy' ? 'de hoy' : st.fecha ? 'del cierre del ' + dm(st.fecha) : 'sin datos';
-    const r = pdfTabla({ apaisado: true, titulo: 'STOCK ILOLAY · Pedido a Ilolay · listado', sub: `Stock ${stTxt} · venta del ${V ? dm(V.ini) + ' al ' + dm(V.fin) : '—'} (15 días corridos, domingos = 0) · sugerido para ${dc} días · cajas · generado el ${new Date().toLocaleString('es-AR')}`,
-      cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'STOCK\nYASU.', a: 'r' }, { n: 'STOCK\nILOLAY', a: 'r' }, { n: 'STOCK\nTOTAL', a: 'r', b: true }, { n: 'VENTA\nILOLAY', a: 'r' }, { n: 'VENTA\nYASU.', a: 'r' }, { n: 'VENTA\nTOTAL', a: 'r', b: true }, { n: 'PROM.\nDÍA', a: 'r' }, { n: 'DÍAS\nSTOCK', a: 'r' }, { n: 'EN\nCAMINO', a: 'r' }, { n: 'SUGER.\n' + dc + ' D', a: 'r' }, { n: 'PEDIDO', a: 'r', b: true }],
-      grupos });
+    const r = pdfTabla(pedVisPdf(dc, { apaisado: true, titulo: 'STOCK ILOLAY · Pedido a Ilolay · listado' + (pedResumido() ? ' (resumido)' : ''), sub: `Stock ${stTxt} · venta del ${V ? dm(V.ini) + ' al ' + dm(V.fin) : '—'} (15 días corridos, domingos = 0) · sugerido para ${dc} días · cajas · generado el ${new Date().toLocaleString('es-AR')}`,
+      cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'STOCK\nTOTAL', a: 'r', b: true }, { n: 'STOCK\nYASU.', a: 'r' }, { n: 'STOCK\nILOLAY', a: 'r' }, { n: 'VENTA\nILOLAY', a: 'r' }, { n: 'VENTA\nYASU.', a: 'r' }, { n: 'VENTA\nTOTAL', a: 'r', b: true }, { n: 'PROM.\nDÍA', a: 'r' }, { n: 'DÍAS\nSTOCK', a: 'r' }, { n: 'EN\nCAMINO', a: 'r' }, { n: 'SUGER.\n' + dc + ' D', a: 'r' }, { n: 'PEDIDO', a: 'r', b: true }],
+      grupos }));
     descargar(pedNombre('pdf', 'Pedido a Ilolay listado'), r.blob); toast('PDF del listado descargado (' + r.n + ' artículos).');
   } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
 }
@@ -4953,6 +4992,8 @@ document.addEventListener('click', async e => {
     case 'pedBorrarOk': t.disabled = true; pedidoAccion('borrar', t.dataset.k); break;
     case 'pedUsarSug': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', r.sug); render(); } break; }
     case 'pedXls': xlsPedido(); break;
+    case 'pedXlsPant': xlsPedidoPantalla(); break;
+    case 'pedVista': S.ui.pedVista = v; try { localStorage.setItem('pedVista', v); } catch { } if (v === 'res' && !PED_RES.includes(pedSortAct().k)) S.ui.pedSort = null; render(); break;
     case 'pedPdf': pdfPedido(); break;
     case 'pedPdfTodo': pdfPedidoTodo(); break;
     case 'pedImpOk': guardarVentasAnteriores(); break;
