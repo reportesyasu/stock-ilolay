@@ -324,7 +324,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb123';
+window.__VERSION = 'sb124';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -347,7 +347,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb123</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb124</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3359,7 +3359,7 @@ const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['stCj'
   ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', '']];
 const pedSortAct = () => S.ui.pedSort || { k: 'c', dir: 1 };
 // Vista de columnas del pedido (se recuerda en cada dispositivo)
-const PED_RES = ['c', 'd', 'stCj', 'yaCj', 'iloCj', 'vT', 'dias'];
+const PED_RES = ['c', 'd', 'stCj', 'yaCj', 'iloCj', 'vT', 'dias', 'pedir'];
 const pedResumido = () => { if (S.ui.pedVista) return S.ui.pedVista === 'res'; try { return localStorage.getItem('pedVista') === 'res'; } catch { return false; } };
 const pedColsVis = dc => PED_COLS(dc).filter(([k]) => !pedResumido() || PED_RES.includes(k));
 function pedThead(dc) {
@@ -3396,7 +3396,7 @@ function vPedido() {
   const sugBtn = r => r.sug > 0 ? `<button class="link mono" data-act="pedUsarSug" data-c="${esc(r.c)}" title="Usar el sugerido como pedido">${fmt(r.sug)}</button>` : '<span class="muted">0</span>';
   const diasTd = r => r.dias === null ? '<span class="muted" title="Sin venta en el período">—</span>' : `<span style="color:${r.dias < dc ? 'var(--bad)' : 'inherit'}">${fDias(r.dias)}</span>`;
   const stk = x => x === null ? '<span class="muted">—</span>' : fmt(x);
-  // Columnas: resumido (código, descripción, stock total, Yasukawa, Ilolay, venta total, días de stock) o expandido (todas)
+  // Columnas: resumido (código, descripción, stock total, Yasukawa, Ilolay, venta total, días de stock, pedido a realizar) o expandido (todas)
   const vis = pedColsVis(dc);
   const celda = { c: r => `<td class="code">${esc(r.c)}</td>`, d: r => `<td class="desc">${esc(r.d)}</td>`, stCj: r => `<td class="n"><b>${stk(r.stCj)}</b></td>`,
     yaCj: r => `<td class="n">${stk(r.yaCj)}</td>`, iloCj: r => `<td class="n">${stk(r.iloCj)}</td>`, vI: r => `<td class="n">${f1(r.vI)}</td>`, vY: r => `<td class="n">${f1(r.vY)}</td>`,
@@ -3410,7 +3410,7 @@ function vPedido() {
   const tabla = cel ? `<div class="stack" style="gap:8px">${L.map(r => `<div class="panel ped-card">
       <div><b class="mono">${esc(r.c)}</b> ${esc(r.d)}</div>
       <div class="ped-nums small">${vis.filter(([k]) => tarjeta[k]).map(([k, n]) => `<span>${n.replace('<br>', ' ').replace(/\s*\(.*\)$/, '')}<b>${tarjeta[k](r)}</b></span>`).join('')}</div>
-      ${res ? '' : `<div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div>`}</div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
+      ${res ? `<div class="row" style="gap:10px"><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div>` : `<div class="row" style="gap:10px"><label class="row small" style="gap:6px">En camino ${inp(r, 'k')}</label><label class="row small" style="gap:6px"><b>Pedido</b> ${inp(r, 'p')}</label></div>`}</div>`).join('') || '<div class="panel empty">No hay artículos con ese filtro.</div>'}</div>`
     : `<div class="tablebox" id="pedGrid"><table>${pedThead(dc)}
       <tbody>${L.map(r => `<tr${r.pedir ? ' class="ped-con"' : ''}>${vis.map(([k]) => celda[k](r)).join('')}</tr>`).join('') || `<tr><td colspan="${vis.length}" class="muted">No hay artículos con ese filtro.</td></tr>`}</tbody>
       <tfoot><tr>${vis.map(([k]) => pie[k] ? pie[k]() : `<td class="n">${fmt(suma(k))}</td>`).join('')}</tr></tfoot></table></div>`;
