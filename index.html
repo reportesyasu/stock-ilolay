@@ -335,7 +335,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb127';
+window.__VERSION = 'sb128';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -358,7 +358,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb127</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb128</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3468,7 +3468,7 @@ function vPedido() {
       <button class="btn" data-act="pedPdf" ${tot.ped.length ? '' : 'disabled'} title="Pedido a realizar con el resumen por pallet">PDF del pedido</button>
       <button class="btn" data-act="pedPdfTodo" title="Listado completo con stock, ventas, días de stock y sugerido">PDF del listado</button>
     </div>
-    ${tot.ped.length ? (() => { const o = resumenPedido(tot.ped); return `<div class="banner info ped-res"><span class="grow"><b>Pedido a realizar:</b> ${o.arts} ${o.arts === 1 ? 'artículo' : 'artículos'} · <b>${fmt(o.cajas)} cajas</b> → <b>${fmt(o.pal)}</b> ${o.pal === 1 ? 'pallet completo' : 'pallets completos'} · <b>${fmt(o.bas)}</b> ${o.bas === 1 ? 'base suelta' : 'bases sueltas'} · <b>${fmt(o.cj)}</b> ${o.cj === 1 ? 'caja suelta' : 'cajas sueltas'}${o.sinArm ? ` · <span title="Sin bases por pallet / cajas por base en Artículos">${o.sinArm} sin armado: ${fmt(o.sinArmCj)} cajas</span>` : ''}</span></div>`; })() : ''}
+    ${tot.ped.length ? (() => { const o = resumenPedido(tot.ped); return `<div class="banner info ped-res"><span class="grow"><b>Pedido a realizar:</b> ${o.arts} ${o.arts === 1 ? 'artículo' : 'artículos'} · <b>${fmt(o.cajas)} cajas</b> → <b>${fmt(o.pal)}</b> ${o.pal === 1 ? 'pallet completo' : 'pallets completos'} · <b>${fmt(o.bas)}</b> ${o.bas === 1 ? 'base suelta' : 'bases sueltas'} · <b>${fmt(o.cj)}</b> ${o.cj === 1 ? 'caja suelta' : 'cajas sueltas'}${o.sinArm ? ` · <span title="Sin bases por pallet / cajas por base en Artículos">${o.sinArm} sin armado: ${fmt(o.sinArmCj)} cajas</span>` : ''} · <b style="font-size:1.1em">Total: ${fmt(o.palEq)} ${o.palEq === 1 ? 'pallet' : 'pallets'}</b>${o.sinPal ? ` <span class="small" title="Artículos sin bases por pallet en Artículos: no se pueden pasar a pallets">(sin ${o.sinPal} sin armado de pallet)</span>` : ''}</span></div>`; })() : ''}
     ${tabla}
     ${S.admin ? vPedidoVentas() : ''}
   </div>`;
@@ -3582,18 +3582,24 @@ function xlsPedidoPantalla() {
 }
 // Resumen del pedido: pallets completos, bases y cajas sueltas (según el armado de Artículos); los artículos sin armado van aparte en cajas
 function resumenPedido(P) {
-  const o = { arts: P.length, cajas: 0, pal: 0, bas: 0, cj: 0, sinArm: 0, sinArmCj: 0 };
-  for (const r of P) { const p = palletsDe(r.c, r.pedir); o.cajas += r.pedir; if (p.cxp || p.bpb) { o.pal += p.pal; o.bas += p.bas; o.cj += p.cj; } else { o.sinArm++; o.sinArmCj += r.pedir; } }
+  const o = { arts: P.length, cajas: 0, pal: 0, bas: 0, cj: 0, sinArm: 0, sinArmCj: 0, palEq: 0, sinPal: 0 };
+  for (const r of P) {
+    const p = palletsDe(r.c, r.pedir); o.cajas += r.pedir;
+    if (p.cxp || p.bpb) { o.pal += p.pal; o.bas += p.bas; o.cj += p.cj; } else { o.sinArm++; o.sinArmCj += r.pedir; }
+    // Total en pallets: todo (pallets, bases y cajas sueltas) llevado a pallets, con decimales; solo los artículos con pallet armado
+    if (p.cxp) o.palEq += r.pedir / p.cxp; else o.sinPal++;
+  }
+  o.palEq = Math.round(o.palEq * 100) / 100;
   return o;
 }
-const resumenPedidoTxt = o => [`${fmt(o.pal)} ${o.pal === 1 ? 'pallet completo' : 'pallets completos'}`, `${fmt(o.bas)} ${o.bas === 1 ? 'base suelta' : 'bases sueltas'}`, `${fmt(o.cj)} ${o.cj === 1 ? 'caja suelta' : 'cajas sueltas'}`].concat(o.sinArm ? [`${o.sinArm} ${o.sinArm === 1 ? 'artículo' : 'artículos'} sin armado: ${fmt(o.sinArmCj)} cajas`] : []);
+const resumenPedidoTxt = o => [`${fmt(o.pal)} ${o.pal === 1 ? 'pallet completo' : 'pallets completos'}`, `${fmt(o.bas)} ${o.bas === 1 ? 'base suelta' : 'bases sueltas'}`, `${fmt(o.cj)} ${o.cj === 1 ? 'caja suelta' : 'cajas sueltas'}`].concat(o.sinArm ? [`${o.sinArm} ${o.sinArm === 1 ? 'artículo' : 'artículos'} sin armado: ${fmt(o.sinArmCj)} cajas`] : [], [`TOTAL EN PALLETS: ${fmt(o.palEq)}${o.sinPal ? ` (sin ${o.sinPal} ${o.sinPal === 1 ? 'artículo' : 'artículos'} sin armado de pallet)` : ''}`]);
 function xlsPedido() {
   const F = filasPedido(), P = F.filter(r => r.pedir > 0), dc = pedDiasCubrir(), r1 = x => x === null ? '' : Math.round(x * 10) / 10;
   try {
     const wb = XL.utils.book_new();
     const ped = P.map(r => { const p = palletsDe(r.c, r.pedir); return [r.c, r.d, r.pedir, p.pal, p.bas, p.cj, p.txt, p.armado]; });
     const o = resumenPedido(P);
-    const resumen = [[], ['RESUMEN DEL PEDIDO'], ['Artículos', o.arts], ['Total cajas', o.cajas], ['Pallets completos', o.pal], ['Bases sueltas', o.bas], ['Cajas sueltas', o.cj], ...(o.sinArm ? [['Artículos sin armado (en cajas)', o.sinArm, o.sinArmCj + ' cajas']] : [])];
+    const resumen = [[], ['RESUMEN DEL PEDIDO'], ['Artículos', o.arts], ['Total cajas', o.cajas], ['Pallets completos', o.pal], ['Bases sueltas', o.bas], ['Cajas sueltas', o.cj], ...(o.sinArm ? [['Artículos sin armado (en cajas)', o.sinArm, o.sinArmCj + ' cajas']] : []), ['TOTAL EN PALLETS', o.palEq, o.sinPal ? 'sin ' + o.sinPal + ' artículo(s) sin armado de pallet' : '']];
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'CAJAS', 'PALLETS', 'BASES', 'CAJAS SUELTAS', 'RESUMEN', 'ARMADO'], ...ped, ['', 'TOTAL', o.cajas, o.pal, o.bas, o.cj + o.sinArmCj, '', ''], ...resumen]), 'PEDIDO');
     // Hoja LISTADO: solo código, descripción, stocks, venta total y pedido (en cajas)
     const lis = F.map(r => [r.c, r.d, r.stCj ?? '', r.yaCj ?? '', r.iloCj ?? '', r1(r.vT), r.pedir]);
@@ -3659,7 +3665,7 @@ function pdfPedido() {
     const tc = P.reduce((a, r) => a + r.pedir, 0), tpal = P.reduce((a, r) => a + palletsDe(r.c, r.pedir).pal, 0);
     const r = pdfTabla({ apaisado: false, titulo: 'STOCK ILOLAY · Pedido a Ilolay', sub: 'Generado el ' + new Date().toLocaleString('es-AR') + ' · ' + P.length + ' artículos · cantidades en cajas',
       cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'CAJAS', a: 'r', b: true }, { n: 'PALLETS', a: 'r' }, { n: 'BASES', a: 'r' }, { n: 'CAJAS\nSUELTAS', a: 'r' }],
-      grupos, notas: ['TOTAL DEL PEDIDO: ' + fmt(tc) + ' cajas', resumenPedidoTxt(resumenPedido(P)).join(' · ') + '.', 'Pallets y bases según el armado cargado en Artículos (bases por pallet y cajas por base).'] });
+      grupos, notas: ['TOTAL DEL PEDIDO: ' + fmt(tc) + ' cajas', ...(t => [t.slice(0, -1).join(' · ') + '.', t[t.length - 1]])(resumenPedidoTxt(resumenPedido(P))), 'Pallets y bases según el armado cargado en Artículos (bases por pallet y cajas por base).'] });
     descargar(pedNombre('pdf'), r.blob); toast('PDF del pedido descargado (' + P.length + ' artículos).');
   } catch (e) { console.error(e); toast('No se pudo armar el PDF: ' + e.message); }
 }
