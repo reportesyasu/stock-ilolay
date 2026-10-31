@@ -324,7 +324,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb124';
+window.__VERSION = 'sb125';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -347,7 +347,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb124</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb125</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3436,7 +3436,7 @@ function vPedido() {
       <button class="btn" data-act="pedConf" data-v="borrarP" ${tot.ped.length ? '' : 'disabled'}>Borrar pedido</button>
       <span class="grow"></span>
       <button class="btn" data-act="pedXlsPant" title="Lo que se ve en pantalla: mismas columnas, filtros y orden">Excel de la pantalla</button>
-      <button class="btn" data-act="pedXls" title="Hoja PEDIDO con pallets, bases y cajas, y hoja LISTADO con todas las columnas">Excel del pedido</button>
+      <button class="btn" data-act="pedXls" title="Hoja PEDIDO con pallets, bases y cajas, y hoja LISTADO con código, descripción, stocks, venta total y pedido">Excel del pedido</button>
       <button class="btn" data-act="pedPdf" ${tot.ped.length ? '' : 'disabled'} title="Pedido a realizar con el resumen por pallet">PDF del pedido</button>
       <button class="btn" data-act="pedPdfTodo" title="Listado completo con stock, ventas, días de stock y sugerido">PDF del listado</button>
     </div>
@@ -3559,8 +3559,9 @@ function xlsPedido() {
     const ped = P.map(r => { const p = palletsDe(r.c, r.pedir); return [r.c, r.d, r.pedir, p.pal, p.bas, p.cj, p.txt, p.armado]; });
     const tp = P.reduce((s, r) => s + r.pedir, 0), tpal = P.reduce((s, r) => s + palletsDe(r.c, r.pedir).pal, 0);
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'CAJAS', 'PALLETS', 'BASES', 'CAJAS SUELTAS', 'RESUMEN', 'ARMADO'], ...ped, ['', 'TOTAL', tp, tpal, '', '', '', '']]), 'PEDIDO');
-    const lis = F.map(r => [r.c, r.d, r.stCj ?? '', r.yaCj ?? '', r.iloCj ?? '', r1(r.vI), r1(r.vY), r1(r.vT), Math.round(r.prom * 100) / 100, r.dias === null ? '' : r1(r.dias), r.camino, r.sug, r.pedir]);
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK TOTAL (CAJAS)', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'VENTA ' + pedDiasVenta() + ' DIAS ILOLAY (CAJAS)', 'VENTA ' + pedDiasVenta() + ' DIAS YASUKAWA (CAJAS)', 'VENTA ' + pedDiasVenta() + ' DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
+    // Hoja LISTADO: solo código, descripción, stocks, venta total y pedido (en cajas)
+    const lis = F.map(r => [r.c, r.d, r.stCj ?? '', r.yaCj ?? '', r.iloCj ?? '', r1(r.vT), r.pedir]);
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK TOTAL (CAJAS)', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'VENTA ' + pedDiasVenta() + ' DIAS TOTAL (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
     descargar(pedNombre('xlsx'), new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel descargado (' + P.length + ' artículos pedidos).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
