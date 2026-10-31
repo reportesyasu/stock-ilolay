@@ -324,7 +324,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb122';
+window.__VERSION = 'sb123';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -347,7 +347,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb122</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb123</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -504,7 +504,7 @@ const Core = (() => {
       // Facturación Ilolay (SAP)
       if (hdr.includes('DOC.FACTURACION') && hdr.includes('MATERIAL')) return { kind: 'fil', h: i, col: {
         mat: ix('MATERIAL'), desc: ix('DENOMIN.POSICION'), doc: ix('DOC.FACTURACION'), ref: ix('REFERENCIA'), f: ix('FECHA FACTURA'),
-        cli: ix('NOMBRE DESTINATARIO'), cli2: ix('NOMBRE'), dest: ix('DESTINATARIO DE MERCADERIA'), q: ix('CTD.FACTURA UME'), qv: ix('CANTIDAD FACTURADA'), umb: ix('UNIDAD MEDIDA BASE'),
+        cli: ix('NOMBRE DESTINATARIO'), cli2: ix('NOMBRE'), dest: ix('DESTINATARIO DE MERCADERIA'), sol: ix('SOLICITANTE'), q: ix('CTD.FACTURA UME'), qv: ix('CANTIDAD FACTURADA'), umb: ix('UNIDAD MEDIDA BASE'),
         umv: ix('UN.MEDIDA VENTA'), kg: ix('PESO NETO') } };
       // Ventanas (remitos de mostrador)
       if (hdr.includes('REMITO') && hdr.includes('CODIGO') && hdr.includes('CANTIDAD')) return { kind: 'vent', h: i, col: {
@@ -625,6 +625,10 @@ const Core = (() => {
     for (let i = info.h + 1; i < rows.length; i++) {
       const r = rows[i]; if (!r) continue;
       const mat = code(cel(r, c.mat)); if (!mat) continue; n++;
+      // Lo que Ilolay le factura a YASUKAWA JORGE FERNANDO (solicitante / destinatario 100816) es la compra de Yasukawa:
+      // no es venta ni movimiento de un cliente, así que no se toma en ninguna parte (pedido, choferes, movimientos)
+      const nro = x => clean(cel(r, x)).replace(/^'+/, '').replace(/^0+(?=\d)/, '');
+      if ((c.sol >= 0 && nro(c.sol) === '100816') || (c.dest >= 0 && nro(c.dest) === '100816') || /YASUKAWA\s+JORGE/.test(U(cel(r, c.cli) + ' ' + cel(r, c.cli2)))) { info.yasu = (info.yasu || 0) + 1; continue; }
       filas.push({ o: 'I', c: mat, doc: clean(cel(r, c.doc)).replace(/\D/g, ''), ref: clean(cel(r, c.ref)), cli: clean(cel(r, c.cli)) || clean(cel(r, c.cli2)), cliN: clean(cel(r, c.cli2)), suc: clean(cel(r, c.cli)), nc: clean(cel(r, c.dest)),
         f: fISO(cel(r, c.f)), q: num(cel(r, c.q >= 0 ? c.q : c.qv)), um: U(cel(r, c.umb >= 0 ? c.umb : c.umv)), kg: num(cel(r, c.kg)) });
     }
@@ -3264,7 +3268,7 @@ function armarPdfControl(t, sector, conCero) {
    15 días corridos (Ilolay, Yasukawa + ventana), promedio diario, días de stock, sugerido para cubrir los días de Configuración,
    y lo que está en camino y lo que se va a pedir (en cajas; lo cargan administración y depósito y lo ven todos).
    Las ventas se guardan por día al cerrar el stock (60 días); los domingos no se trabaja: cuentan como venta 0. */
-const PED_DIAS_VENTA = 15;
+const pedDiasVenta = () => [7, 15, 30, 60].includes(Number(opt('pedidoDiasVenta'))) ? Number(opt('pedidoDiasVenta')) : 15; // Configuración
 const isoMas = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const esDomingo = iso => new Date(iso + 'T12:00:00').getDay() === 0;
 const pedDiasCubrir = () => [7, 10, 15].includes(Number(opt('pedidoDias'))) ? Number(opt('pedidoDias')) : 10;
@@ -3273,7 +3277,7 @@ const cmpCodigo = (a, b) => (a.s === b.s ? 0 : a.s === 'FRIO' ? -1 : b.s === 'FR
 async function cargarPedido(silencioso) {
   if (S.pedCargando) return;
   S.pedCargando = true;
-  try { S.ped = await API.call('getPedido', isoMas(S.dia, -(PED_DIAS_VENTA + 7))); S.pedErr = null; }
+  try { S.ped = await API.call('getPedido', isoMas(S.dia, -(pedDiasVenta() + 7))); S.pedErr = null; }
   catch (e) { S.pedErr = e.message; if (!silencioso) toast('No se pudo leer el pedido: ' + e.message); }
   S.pedCargando = false;
   if (S.ui.tab === 'pedido') { renderSuave = true; try { render(); } finally { renderSuave = false; } }
@@ -3298,10 +3302,10 @@ function stockPedido() {
   }
   return { by, fuente: '', fecha: '' };
 }
-// Ventas de los 15 días corridos hasta el último día cerrado (si hoy está cerrado, hasta hoy; si no, hasta ayer)
+// Ventas de los días corridos de Configuración (15 si no se eligió) hasta el último día cerrado (si hoy está cerrado, hasta hoy; si no, hasta ayer)
 function ventasPedido() {
   const P = S.ped; if (!P) return null;
-  const fin = S.cierre ? S.dia : isoMas(S.dia, -1), ini = isoMas(fin, -(PED_DIAS_VENTA - 1));
+  const fin = S.cierre ? S.dia : isoMas(S.dia, -1), ini = isoMas(fin, -(pedDiasVenta() - 1));
   const dias = []; for (let f = ini; f <= fin; f = isoMas(f, 1)) dias.push(f);
   const R = Object.fromEntries((P.dias || []).map(d => [d.f, d]));
   const okI = f => !!R[f]?.i || esDomingo(f), okY = f => !!R[f]?.y || esDomingo(f);
@@ -3350,7 +3354,7 @@ function filasPedido() {
 }
 // Columnas de la grilla del pedido: se ordena tocando la cabecera (una vez ascendente, otra vez descendente)
 const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas'], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP) en cajas (para abajo)'],
-  ['vI', 'Venta<br>Ilolay', 'Venta de 15 días: facturación Ilolay sin lo facturado a YASUKAWA JORGE FERNANDO, en cajas'], ['vY', 'Venta<br>Yasu.', 'Venta de 15 días: Facturación Yasukawa (neta de notas de crédito) + ventana, 15 días, en cajas'], ['vT', 'Venta<br>total', 'Venta de 15 días: Ilolay + Yasukawa, en cajas'],
+  ['vI', 'Venta<br>Ilolay', `Venta de ${pedDiasVenta()} días: facturación Ilolay sin lo facturado a YASUKAWA JORGE FERNANDO, en cajas`], ['vY', 'Venta<br>Yasu.', `Venta de ${pedDiasVenta()} días: facturación Yasukawa (neta de notas de crédito) + ventana, en cajas`], ['vT', 'Venta<br>total', `Venta de ${pedDiasVenta()} días: Ilolay + Yasukawa, en cajas`],
   ['prom', 'Prom.<br>diario', 'Venta promedio por día, en cajas'], ['dias', 'Días de<br>stock', 'Stock total ÷ promedio diario'], ['camino', 'En<br>camino', 'Cajas en camino: se descuentan del sugerido'],
   ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', '']];
 const pedSortAct = () => S.ui.pedSort || { k: 'c', dir: 1 };
@@ -3390,7 +3394,7 @@ function vPedido() {
     : conf === 'borrarP' ? `<div class="confirm"><b>Borrar el pedido a realizar</b><span class="small">${tot.ped.length} artículos (${fmt(cj(tot.ped.map(r => r.pedir)))} cajas) quedan en 0.</span><div class="row"><button class="btn danger" data-act="pedBorrarOk" data-k="p">Borrar pedido</button><button class="btn" data-act="pedConfNo">Cancelar</button></div></div>` : '';
   const inp = (r, k) => `<input type="number" inputmode="numeric" min="0" step="1" class="cj ped-in" id="ped-${k}-${esc(r.c)}" data-act="pedIn" data-k="${k}" data-c="${esc(r.c)}" value="${esc(S.ui.pedDraft?.[r.c + k] ?? ((k === 'p' ? r.pedir : r.camino) || ''))}" placeholder="0" aria-label="${k === 'p' ? 'Pedido a realizar' : 'En camino'} ${esc(r.c)}">`;
   const sugBtn = r => r.sug > 0 ? `<button class="link mono" data-act="pedUsarSug" data-c="${esc(r.c)}" title="Usar el sugerido como pedido">${fmt(r.sug)}</button>` : '<span class="muted">0</span>';
-  const diasTd = r => r.dias === null ? '<span class="muted" title="Sin venta en los 15 días">—</span>' : `<span style="color:${r.dias < dc ? 'var(--bad)' : 'inherit'}">${fDias(r.dias)}</span>`;
+  const diasTd = r => r.dias === null ? '<span class="muted" title="Sin venta en el período">—</span>' : `<span style="color:${r.dias < dc ? 'var(--bad)' : 'inherit'}">${fDias(r.dias)}</span>`;
   const stk = x => x === null ? '<span class="muted">—</span>' : fmt(x);
   // Columnas: resumido (código, descripción, stock total, Yasukawa, Ilolay, venta total, días de stock) o expandido (todas)
   const vis = pedColsVis(dc);
@@ -3413,7 +3417,7 @@ function vPedido() {
   const filtros = [['todos', 'Ver todos', F.length], ['sug', 'Con sugerido', tot.sug.length], ['ped', 'Con pedido', tot.ped.length], ['cam', 'En camino', tot.cam.length]];
   return `<div class="stack">
     <div class="row" style="justify-content:space-between;align-items:end"><div style="min-width:0;flex:1 1 300px"><h2>Pedido a Ilolay</h2>
-      <div class="small muted">Stock ${stTxt}, en cajas para abajo${st.fuente === 'anterior' && !S.admin ? '' : ''}. Venta de los 15 días corridos ${V ? `del ${dm(V.ini)} al ${dm(V.fin)}` : ''} (domingos = 0), en cajas. Sugerido para cubrir <b>${dc} días</b>${S.admin ? ' (se cambia en Configuración)' : ''}. Pedido y en camino en cajas: lo ven todos.</div></div>
+      <div class="small muted">Stock ${stTxt}, en cajas para abajo${st.fuente === 'anterior' && !S.admin ? '' : ''}. Venta de los <b>${pedDiasVenta()} días</b> corridos ${V ? `del ${dm(V.ini)} al ${dm(V.fin)}` : ''} (domingos = 0), en cajas${S.admin ? ' (se cambia en Configuración)' : ''}. Sugerido para cubrir <b>${dc} días</b>${S.admin ? ' (se cambia en Configuración)' : ''}. Pedido y en camino en cajas: lo ven todos.</div></div>
       <button class="btn sm" data-act="pedRecargar" ${S.pedCargando ? 'disabled' : ''}>Actualizar</button></div>
     ${faltan.length ? `<div class="banner warn"><span class="grow"><b>Faltan datos de venta</b> de ${faltan.length} ${faltan.length === 1 ? 'día' : 'días'}: ${faltan.map(x => `${diaSem(x.f).slice(0, 3)} ${dm(x.f)}${!x.i && !x.y ? '' : !x.i ? ' (Ilolay)' : ' (Yasukawa)'}`).join(' · ')}. El promedio se calcula con los días que tienen datos.${S.admin ? ' Se completan al cerrar el stock con los archivos de facturación, o con "Cargar ventas anteriores".' : ''}</span></div>` : ''}
     ${camMeta && tot.cam.length ? `<div class="banner info"><span class="grow">Pedido en camino desde el ${diaSem(camMeta.f)} ${dm(camMeta.f)}${camMeta.por ? ' (marcado por ' + esc(nom(camMeta.por)) + ')' : ''}: ${tot.cam.length} artículos, ${fmt(cj(tot.cam.map(r => r.camino)))} cajas. Cuando llegue, borralo con "Borrar en camino".</span></div>` : ''}
@@ -3449,7 +3453,7 @@ function vPedidoVentas() {
       ${I.aviso.length ? `<span class="small" style="color:var(--warn)">${I.aviso.map(esc).join('<br>')}</span>` : ''}
       <span class="small muted">Entre paréntesis, la cantidad de artículos. Quesos de Ilolay en kilos: pasados a hormas por el peso nominal. Solo se guardan los artículos de la lista y los últimos 60 días.</span>
       <div class="row"><button class="btn pri" data-act="pedImpOk" ${S.ui.pedImpGuardando ? 'disabled' : ''}>${S.ui.pedImpGuardando ? 'Guardando…' : 'Guardar estas ventas'}</button><button class="btn" data-act="pedImpNo">Cancelar</button></div></div>` : '';
-  return `<details class="panel" data-recordar="pedVentasAb" ${I || (() => { try { return localStorage.getItem('pedVentasAb') === '1'; } catch { return false; } })() ? 'open' : ''}><summary><b>Historial de ventas</b> <span class="small muted">· ${D.length ? `${D.length} días guardados en los últimos ${PED_DIAS_VENTA + 7}` : 'todavía no hay ventas guardadas'}</span></summary>
+  return `<details class="panel" data-recordar="pedVentasAb" ${I || (() => { try { return localStorage.getItem('pedVentasAb') === '1'; } catch { return false; } })() ? 'open' : ''}><summary><b>Historial de ventas</b> <span class="small muted">· ${D.length ? `${D.length} días guardados en los últimos ${pedDiasVenta() + 7}` : 'todavía no hay ventas guardadas'}</span></summary>
     <div class="stack" style="margin-top:8px">
       <span class="small muted">Las ventas se guardan solas al cerrar el stock, con los archivos de facturación Yasukawa, facturación Ilolay y ventanas que haya en ese momento (los quesos de Ilolay, de lo cargado en la pestaña Quesos). Para cargar días anteriores, elegí los archivos de facturación (pueden traer varios días: se separan por la fecha de cada línea).</span>
       ${D.length ? `<div class="small">${D.slice().reverse().map(d => `<span class="mono" style="margin-right:10px">${dm(d.f)} ${d.i ? 'I✓' : '<span style="color:var(--bad)">I✗</span>'} ${d.y ? 'Y✓' : '<span style="color:var(--bad)">Y✗</span>'}${d.v ? ' V✓' : ''}</span>`).join('')}</div>` : ''}
@@ -3467,7 +3471,7 @@ async function leerVentasAnteriores(list) {
       const { rows, info } = await fileRows(file);
       if (info.kind === 'fya') { const d = Core.buildFya(rows, info, opt('prefijo')); archivos.push(file.name); let sf = 0; for (const x of d.filas) { if (x.ms === false) continue; if (!x.f) { sf++; continue; } sumar(x.f, 'Y', x.c, Number(x.q) || 0); } if (sf) aviso.push(file.name + ': ' + sf + ' líneas sin fecha (no se toman).'); }
       else if (info.kind === 'fil') {
-        const d = Core.buildFil(rows, info); archivos.push(file.name); let sf = 0, sp = new Set(), ny = 0;
+        const d = Core.buildFil(rows, info); archivos.push(file.name); let sf = 0, sp = new Set(), ny = info.yasu || 0;
         for (const x of d.filas) {
           if (esCliYasukawa(x)) { ny++; continue; }
           if (!x.f) { sf++; continue; }
@@ -3556,7 +3560,7 @@ function xlsPedido() {
     const tp = P.reduce((s, r) => s + r.pedir, 0), tpal = P.reduce((s, r) => s + palletsDe(r.c, r.pedir).pal, 0);
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'CAJAS', 'PALLETS', 'BASES', 'CAJAS SUELTAS', 'RESUMEN', 'ARMADO'], ...ped, ['', 'TOTAL', tp, tpal, '', '', '', '']]), 'PEDIDO');
     const lis = F.map(r => [r.c, r.d, r.stCj ?? '', r.yaCj ?? '', r.iloCj ?? '', r1(r.vI), r1(r.vY), r1(r.vT), Math.round(r.prom * 100) / 100, r.dias === null ? '' : r1(r.dias), r.camino, r.sug, r.pedir]);
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK TOTAL (CAJAS)', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'VENTA 15 DIAS ILOLAY (CAJAS)', 'VENTA 15 DIAS YASUKAWA (CAJAS)', 'VENTA 15 DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'STOCK TOTAL (CAJAS)', 'STOCK YASUKAWA (CAJAS)', 'STOCK ILOLAY (CAJAS)', 'VENTA ' + pedDiasVenta() + ' DIAS ILOLAY (CAJAS)', 'VENTA ' + pedDiasVenta() + ' DIAS YASUKAWA (CAJAS)', 'VENTA ' + pedDiasVenta() + ' DIAS TOTAL (CAJAS)', 'PROMEDIO DIARIO (CAJAS)', 'DIAS DE STOCK', 'EN CAMINO (CAJAS)', 'SUGERIDO ' + dc + ' DIAS (CAJAS)', 'PEDIDO A REALIZAR (CAJAS)'], ...lis]), 'LISTADO');
     descargar(pedNombre('xlsx'), new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel descargado (' + P.length + ' artículos pedidos).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
@@ -3635,7 +3639,7 @@ function pdfPedidoTodo() {
     const grupos = ['FRIO', 'SECO', ...new Set(F.map(r => r.s).filter(s => s !== 'FRIO' && s !== 'SECO'))].map(s => ({ t: s === 'FRIO' ? 'FRÍO' : s === 'SECO' ? 'SECO' : (s || 'SIN SECTOR'),
       filas: F.filter(r => r.s === s).map(r => [r.c, r.d, r.stCj === null ? '—' : fmt(r.stCj), r.yaCj === null ? '—' : fmt(r.yaCj), r.iloCj === null ? '—' : fmt(r.iloCj), f1(r.vI), f1(r.vY), f1(r.vT), f1(r.prom), fDias(r.dias), r.camino ? fmt(r.camino) : '', r.sug ? fmt(r.sug) : '', r.pedir ? fmt(r.pedir) : '']) }));
     const stTxt = st.fuente === 'hoy' ? 'de hoy' : st.fecha ? 'del cierre del ' + dm(st.fecha) : 'sin datos';
-    const r = pdfTabla(pedVisPdf(dc, { apaisado: true, titulo: 'STOCK ILOLAY · Pedido a Ilolay · listado' + (pedResumido() ? ' (resumido)' : ''), sub: `Stock ${stTxt} · venta del ${V ? dm(V.ini) + ' al ' + dm(V.fin) : '—'} (15 días corridos, domingos = 0) · sugerido para ${dc} días · cajas · generado el ${new Date().toLocaleString('es-AR')}`,
+    const r = pdfTabla(pedVisPdf(dc, { apaisado: true, titulo: 'STOCK ILOLAY · Pedido a Ilolay · listado' + (pedResumido() ? ' (resumido)' : ''), sub: `Stock ${stTxt} · venta del ${V ? dm(V.ini) + ' al ' + dm(V.fin) : '—'} (${pedDiasVenta()} días corridos, domingos = 0) · sugerido para ${dc} días · cajas · generado el ${new Date().toLocaleString('es-AR')}`,
       cols: [{ n: 'CÓDIGO', b: true }, { n: 'DESCRIPCIÓN', flex: true }, { n: 'STOCK\nTOTAL', a: 'r', b: true }, { n: 'STOCK\nYASU.', a: 'r' }, { n: 'STOCK\nILOLAY', a: 'r' }, { n: 'VENTA\nILOLAY', a: 'r' }, { n: 'VENTA\nYASU.', a: 'r' }, { n: 'VENTA\nTOTAL', a: 'r', b: true }, { n: 'PROM.\nDÍA', a: 'r' }, { n: 'DÍAS\nSTOCK', a: 'r' }, { n: 'EN\nCAMINO', a: 'r' }, { n: 'SUGER.\n' + dc + ' D', a: 'r' }, { n: 'PEDIDO', a: 'r', b: true }],
       grupos }));
     descargar(pedNombre('pdf', 'Pedido a Ilolay listado'), r.blob); toast('PDF del listado descargado (' + r.n + ' artículos).');
@@ -4191,7 +4195,8 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">En la automática y la manual se aplica la variación del stock de Yasukawa (en hormas). No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="stack" style="gap:2px"><span class="lbl">Orden de los artículos (Administración, Depósito, PDF y Excel)</span><select id="oOrden" style="max-width:360px">${[['codAsc', 'Código de fábrica ascendente (menor a mayor)'], ['codDesc', 'Código de fábrica descendente (mayor a menor)'], ['orden', 'Orden de Artículos (el que se arma con ▲ ▼)']].map(([v, n]) => `<option value="${v}" ${(opt('ordenArt') || 'codAsc') === v ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">Siempre primero Frío y después Seco.</span></label>
-      <label class="stack" style="gap:2px"><span class="lbl">Pedido a Ilolay: días a cubrir con el sugerido</span><select id="oPedDias" style="max-width:140px">${[7, 10, 15].map(d => `<option value="${d}" ${pedDiasCubrir() === d ? 'selected' : ''}>${d} días</option>`).join('')}</select><span class="small muted">Sugerido = venta promedio diaria (15 días corridos, domingos en 0) × estos días − stock (Yasukawa + Ilolay) − en camino, en cajas enteras.</span></label>
+      <label class="stack" style="gap:2px"><span class="lbl">Pedido a Ilolay: días de venta para el promedio</span><select id="oPedVenta" style="max-width:140px">${[7, 15, 30, 60].map(d => `<option value="${d}" ${pedDiasVenta() === d ? 'selected' : ''}>${d} días</option>`).join('')}</select><span class="small muted">Días corridos hasta el último cierre (domingos = venta 0). Se guardan 60 días de ventas; si faltan días, Pedido a Ilolay lo avisa.</span></label>
+      <label class="stack" style="gap:2px"><span class="lbl">Pedido a Ilolay: días a cubrir con el sugerido</span><select id="oPedDias" style="max-width:140px">${[7, 10, 15].map(d => `<option value="${d}" ${pedDiasCubrir() === d ? 'selected' : ''}>${d} días</option>`).join('')}</select><span class="small muted">Sugerido = venta promedio diaria (de los días de venta de arriba, domingos en 0) × estos días − stock (Yasukawa + Ilolay) − en camino, en cajas enteras.</span></label>
       <label class="stack" style="gap:2px"><span class="lbl">Aviso de artículos sin contar (% contado)</span><input type="number" id="oAvisoSin" min="0" max="100" step="1" value="${esc(opt('avisoSinContar') ?? 90)}" style="max-width:110px"><span class="small muted">Cuando ya se contó este porcentaje de los artículos, Administración avisa cuáles faltan. 0 = no avisar. Para cerrar el stock tienen que estar todos contados.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oCero" ${opt('ceroAuto') !== false ? 'checked' : ''}> <span>Artículos con <b>sistema en 0</b> que nadie contó: tomarlos como <b>contados en 0</b> (sin diferencia). Si depósito cuenta algo, aparece la diferencia.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
@@ -5367,8 +5372,8 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, pedidoDias: Number($('#oPedDias')?.value) || 10, avisoSinContar: Math.max(0, Math.min(100, Math.round(Number(String($('#oAvisoSin')?.value ?? 90).replace(',', '.')) || 0))), ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
-    try { await API.call('guardarOpciones', data); S.opciones = data; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, pedidoDias: Number($('#oPedDias')?.value) || 10, pedidoDiasVenta: Number($('#oPedVenta')?.value) || 15, avisoSinContar: Math.max(0, Math.min(100, Math.round(Number(String($('#oAvisoSin')?.value ?? 90).replace(',', '.')) || 0))), ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    try { await API.call('guardarOpciones', data); S.opciones = data; S.ped = null; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
 $('#pickFolder').addEventListener('change', e => { const fs = [...e.target.files]; if (fs.length) { S.carpeta = (fs[0].webkitRelativePath || '').split('/')[0] || 'carpeta'; leerArchivos(fs.filter(f => { const p = (f.webkitRelativePath || '').split('/'); return p.length <= 2 || (p.length === 3 && RE_CARPETA_EXCEL.test(p[1])); })); } e.target.value = ''; });
