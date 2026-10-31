@@ -335,7 +335,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb128';
+window.__VERSION = 'sb129';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -358,7 +358,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb128</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb129</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1634,6 +1634,14 @@ function ajustarPedGrid() {
   g.style.maxHeight = Math.max(280, Math.floor(window.innerHeight - top - 14)) + 'px';
 }
 window.addEventListener('resize', () => ajustarPedGrid());
+// Pedido a Ilolay: Tab en "Pedido a realizar" pasa al pedido del artículo siguiente (Shift+Tab, al anterior), sin pasar por los botones
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (e.key !== 'Tab' || !t?.matches?.('input.ped-in[data-k="p"]')) return;
+  const L = [...document.querySelectorAll('input.ped-in[data-k="p"]')], i = L.indexOf(t), sig = L[i + (e.shiftKey ? -1 : 1)];
+  if (!sig) return;
+  e.preventDefault(); sig.focus(); try { sig.select(); } catch { }
+});
 /* Reemplaza la pantalla sin perder dónde estaba cada barra de desplazamiento.
    En la actualización automática (cada 15 s), si no cambió nada no se toca la pantalla. */
 let ultimoMain = null, ultimoTab = null, renderSuave = false;
@@ -3386,7 +3394,7 @@ const pedResumido = () => { if (S.ui.pedVista) return S.ui.pedVista === 'res'; t
 const pedColsVis = dc => PED_COLS(dc).filter(([k]) => !pedResumido() || PED_RES.includes(k));
 // Botones para sumar o restar un pallet o una base al pedido (según el armado de Artículos; las cajas sueltas se cargan a mano)
 function pedBotones(c) {
-  const p = palletsDe(c, 0), b = (k, n, d, t) => `<button class="btn xs ped-pb" data-act="pedPal" data-c="${esc(c)}" data-d="${d}" ${d ? '' : 'disabled'} title="${esc(t)}">${n}</button>`;
+  const p = palletsDe(c, 0), b = (k, n, d, t) => `<button class="btn xs ped-pb" tabindex="-1" data-act="pedPal" data-c="${esc(c)}" data-d="${d}" ${d ? '' : 'disabled'} title="${esc(t)}">${n}</button>`;
   const sinP = 'Falta cargar bases por pallet y cajas por base en Artículos', sinB = 'Falta cargar cajas por base en Artículos';
   return `<span class="ped-pbs">${b('p+', 'P+', p.cxp, p.cxp ? `Sumar un pallet (${p.cxp} cajas)` : sinP)}${b('p-', 'P−', -p.cxp, p.cxp ? `Restar un pallet (${p.cxp} cajas)` : sinP)}${b('b+', 'B+', p.bpb, p.bpb ? `Sumar una base (${p.bpb} cajas)` : sinB)}${b('b-', 'B−', -p.bpb, p.bpb ? `Restar una base (${p.bpb} cajas)` : sinB)}</span>`;
 }
