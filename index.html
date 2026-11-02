@@ -337,7 +337,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb130';
+window.__VERSION = 'sb131';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -360,7 +360,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb130</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb131</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2635,6 +2635,12 @@ async function abrirEscaner() {
   } catch (e) { scanLog('no se pudo elegir cámara: ' + (e?.message || e)); }
   try { await scanStream.getVideoTracks()[0]?.applyConstraints?.({ advanced: [{ focusMode: 'continuous' }] }); } catch { }
   video.srcObject = scanStream; scanTrack = scanStream.getVideoTracks()[0];
+  // Tablets: la cámara abarca mucho; se acerca al doble (2x) si la cámara lo permite
+  try {
+    const tablet = esTabletScan(), cap = scanTrack?.getCapabilities?.();
+    if (tablet && cap?.zoom) { const z = Math.min(cap.zoom.max, Math.max(cap.zoom.min, 2)); await scanTrack.applyConstraints({ advanced: [{ zoom: z }] }); scanLog('zoom ' + z + 'x'); }
+    else if (tablet) scanLog('zoom: la cámara no lo permite');
+  } catch (e) { scanLog('zoom falló: ' + (e?.message || e)); }
   try { await video.play(); } catch { }
   let detector = null;
   scanLog('video en marcha ' + video.videoWidth + 'x' + video.videoHeight);
@@ -2674,8 +2680,8 @@ async function abrirEscaner() {
     scanLoop = setInterval(async () => {
       if (ocupado || !video.videoWidth) return; ocupado = true;
       try {
-        const w = video.videoWidth, h = video.videoHeight; cv.width = Math.round(w * 0.8); cv.height = Math.round(h * 0.22);
-        cv.getContext('2d').drawImage(video, w * 0.1, h * 0.35, w * 0.8, h * 0.22, 0, 0, cv.width, cv.height);
+        const [x, y, rw, rh] = recorteMarco(video); cv.width = Math.round(rw); cv.height = Math.round(rh);
+        cv.getContext('2d').drawImage(video, x, y, rw, rh, 0, 0, cv.width, cv.height);
         const r = await detector.detect(cv);
         if (r[0]?.rawValue) aceptar(r[0].rawValue);
       } catch { } finally { ocupado = false; }
@@ -2686,9 +2692,9 @@ async function abrirEscaner() {
     scanLoop = setInterval(() => {
       if (ocupado || !video.videoWidth) return; ocupado = true;
       try {
-        const w = video.videoWidth, h = video.videoHeight, k = w < 1000 ? 2 : 1;
-        cv.width = Math.round(w * 0.8 * k); cv.height = Math.round(h * 0.26 * k);
-        cv.getContext('2d').drawImage(video, w * 0.1, h * 0.33, w * 0.8, h * 0.26, 0, 0, cv.width, cv.height);
+        const [x, y, rw, rh] = recorteMarco(video), k = rw < 800 ? 2 : 1;
+        cv.width = Math.round(rw * k); cv.height = Math.round(rh * k);
+        cv.getContext('2d').drawImage(video, x, y, rw, rh, 0, 0, cv.width, cv.height);
         const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(cv)));
         const r = zxReader.decodeBitmap(bmp); if (r?.getText()) aceptar(r.getText());
       } catch (e) { if (++tick % 40 === 0) scanLog('buscando… (' + (e?.name || 'sin código') + ')'); } finally { ocupado = false; }
@@ -2696,6 +2702,20 @@ async function abrirEscaner() {
   } else {
     zxReader.decodeFromVideoElement(video, (res) => { if (res) aceptar(res.getText()); });
   }
+}
+// Parte de la imagen de la cámara que se lee (el video se muestra recortado para llenar la pantalla, así que la imagen es más
+// grande que lo que se ve). Tablet: solo lo que cae dentro del marco blanco. Celular: la franja del marco a todo el ancho de la
+// pantalla (nunca lo que queda afuera de la pantalla).
+const esTabletScan = () => Math.min(screen.width, screen.height) >= 600;
+function recorteMarco(video) {
+  const vw = video.videoWidth, vh = video.videoHeight, m = document.querySelector('#scanner .marco');
+  const vr = video.getBoundingClientRect(), mb = m?.getBoundingClientRect();
+  const mr = mb && (esTabletScan() ? mb : { left: vr.left, right: vr.right, top: mb.top, bottom: mb.bottom, width: vr.width, height: mb.height });
+  if (!mr || !vr.width || !vr.height || !vw || !vh) return [vw * 0.1, vh * 0.35, vw * 0.8, vh * 0.22];
+  const s = Math.max(vr.width / vw, vr.height / vh), ox = (vr.width - vw * s) / 2, oy = (vr.height - vh * s) / 2; // object-fit: cover
+  let x = (mr.left - vr.left - ox) / s, y = (mr.top - vr.top - oy) / s, x2 = (mr.right - vr.left - ox) / s, y2 = (mr.bottom - vr.top - oy) / s;
+  x = Math.max(0, x); y = Math.max(0, y); x2 = Math.min(vw, x2); y2 = Math.min(vh, y2);
+  return x2 - x > 20 && y2 - y > 10 ? [x, y, x2 - x, y2 - y] : [vw * 0.1, vh * 0.35, vw * 0.8, vh * 0.22];
 }
 function cerrarEscaner(motivo) {
   if ($('#scanner')) scanLog('cerrar visor (' + (motivo || 'sin motivo') + ')' + (motivo ? '' : ' ' + String(new Error().stack || '').split('\n').slice(2, 4).join(' <- ').replace(/\s+/g, ' ').slice(0, 160)));
