@@ -337,7 +337,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb132';
+window.__VERSION = 'sb133';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -360,7 +360,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb132</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb133</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2638,8 +2638,8 @@ async function abrirEscaner() {
   // Tablets: la cámara abarca mucho; se acerca al doble (2x) si la cámara lo permite
   try {
     const tablet = esTabletScan(), cap = scanTrack?.getCapabilities?.(), quiero = zoomScan(tablet);
-    if (quiero > 1 && cap?.zoom) { const z = Math.min(cap.zoom.max, Math.max(cap.zoom.min, quiero)); await scanTrack.applyConstraints({ advanced: [{ zoom: z }] }); scanLog('zoom ' + z + 'x (' + (tablet ? 'tablet' : 'celular') + ')'); }
-    else if (quiero > 1) scanLog('zoom: la cámara no lo permite');
+    if (quiero !== 1 && cap?.zoom) { const z = Math.min(cap.zoom.max, Math.max(cap.zoom.min, quiero)); await scanTrack.applyConstraints({ advanced: [{ zoom: z }] }); scanLog('zoom ' + z + 'x (' + (tablet ? 'tablet' : 'celular') + ')'); }
+    else if (quiero !== 1) scanLog('zoom: la cámara no lo permite');
   } catch (e) { scanLog('zoom falló: ' + (e?.message || e)); }
   try { await video.play(); } catch { }
   let detector = null;
@@ -2708,7 +2708,7 @@ async function abrirEscaner() {
 // pantalla (nunca lo que queda afuera de la pantalla).
 const esTabletScan = () => Math.min(screen.width, screen.height) >= 600;
 // Zoom de la cámara al escanear (Configuración): tablets 2x y celulares 1x si no se eligió otro
-const zoomScan = tablet => { const v = Number(opt(tablet ? 'zoomTablet' : 'zoomCel')); return [1, 1.5, 2, 2.5, 3].includes(v) ? v : (tablet ? 2 : 1); };
+const zoomScan = tablet => { const v = Number(opt(tablet ? 'zoomTablet' : 'zoomCel')); return [0.5, 1, 1.5, 2, 2.5, 3].includes(v) ? v : (tablet ? 2 : 1); };
 function recorteMarco(video) {
   const vw = video.videoWidth, vh = video.videoHeight, m = document.querySelector('#scanner .marco');
   const vr = video.getBoundingClientRect(), mb = m?.getBoundingClientRect();
@@ -4275,7 +4275,7 @@ function vOpciones() {
       <label class="stack" style="gap:2px"><span class="lbl">Aviso de artículos sin contar (% contado)</span><input type="number" id="oAvisoSin" min="0" max="100" step="1" value="${esc(opt('avisoSinContar') ?? 90)}" style="max-width:110px"><span class="small muted">Cuando ya se contó este porcentaje de los artículos, Administración avisa cuáles faltan. 0 = no avisar. Para cerrar el stock tienen que estar todos contados.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oCero" ${opt('ceroAuto') !== false ? 'checked' : ''}> <span>Artículos con <b>sistema en 0</b> que nadie contó: tomarlos como <b>contados en 0</b> (sin diferencia). Si depósito cuenta algo, aparece la diferencia.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oBtnRec" ${opt('btnRecontar') ? 'checked' : ''}> <span>Mostrar el botón <b>Recontar</b> en Administración</span></label>
-      <div class="stack" style="gap:4px"><span class="lbl">Zoom de la cámara al escanear</span><div class="row" style="gap:14px;flex-wrap:wrap"><label class="row small" style="gap:6px">Tablets <select id="oZoomTab">${[1, 1.5, 2, 2.5, 3].map(z => `<option value="${z}" ${zoomScan(true) === z ? 'selected' : ''}>${String(z).replace('.', ',')}x${z === 1 ? ' (sin zoom)' : ''}</option>`).join('')}</select></label><label class="row small" style="gap:6px">Celulares <select id="oZoomCel">${[1, 1.5, 2, 2.5, 3].map(z => `<option value="${z}" ${zoomScan(false) === z ? 'selected' : ''}>${String(z).replace('.', ',')}x${z === 1 ? ' (sin zoom)' : ''}</option>`).join('')}</select></label></div><span class="small muted">Acerca la imagen de la cámara en el escáner en vivo. Si la cámara del equipo no permite zoom desde el navegador, se ve igual que sin zoom. Se aplica la próxima vez que se abre el escáner.</span></div>
+      <div class="stack" style="gap:4px"><span class="lbl">Zoom de la cámara al escanear</span><div class="row" style="gap:14px;flex-wrap:wrap"><label class="row small" style="gap:6px">Tablets <select id="oZoomTab">${[0.5, 1, 1.5, 2, 2.5, 3].map(z => `<option value="${z}" ${zoomScan(true) === z ? 'selected' : ''}>${String(z).replace('.', ',')}x${z === 1 ? ' (sin zoom)' : z < 1 ? ' (más amplio)' : ''}</option>`).join('')}</select></label><label class="row small" style="gap:6px">Celulares <select id="oZoomCel">${[0.5, 1, 1.5, 2, 2.5, 3].map(z => `<option value="${z}" ${zoomScan(false) === z ? 'selected' : ''}>${String(z).replace('.', ',')}x${z === 1 ? ' (sin zoom)' : z < 1 ? ' (más amplio)' : ''}</option>`).join('')}</select></label></div><span class="small muted">Más de 1x acerca la imagen (abarca menos); 0,5x la abre (abarca más), y solo funciona si la cámara del equipo lo permite desde el navegador: si no, queda en 1x. Si la cámara no permite zoom, se ve igual que sin zoom. Se aplica la próxima vez que se abre el escáner.</span></div>
       <label class="stack" style="gap:2px"><span class="lbl">Pase automático al casillero siguiente (segundos)</span><input type="number" id="oPaso" min="0" max="10" step="0.1" value="${esc(opt('pasoSeg') ?? 1.5)}" style="max-width:110px"><span class="small muted">Al cargar Cajas (o pallets, bases y bultos en Contar detallado), si pasa este tiempo sin tocar otra tecla el cursor salta solo al casillero siguiente. 0 = no pasa solo.</span></label>
       <label class="row" style="gap:8px"><input type="checkbox" id="oLogCam" ${opt('verLogCam') ? 'checked' : ''}> <span>Mostrar el <b>registro de la cámara</b> en Depósito (solo para revisar un problema con el escáner)</span></label>
       <span class="small muted">Lo contado que no coincide con el sistema ya le aparece solo a depósito en <b>Con diferencia</b>. El botón sirve para pedir que vuelvan a contar un artículo puntual aunque no tenga diferencia (aparece en Con diferencia, en amarillo).</span>
