@@ -154,6 +154,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;
 #pedGrid input.ped-in{border:1.5px solid color-mix(in srgb,var(--ink) 40%,var(--surface));color:var(--ink)}
 #pedGrid tbody td{padding-top:3px;padding-bottom:3px;vertical-align:middle}/* el resumen del pedido siempre ocupa un renglón: así la grilla no se mueve al cargar */
 main.ancho .ped-res{min-height:42px;white-space:nowrap;overflow:hidden}main.ancho .ped-res .grow{overflow:hidden;text-overflow:ellipsis}
+.aj-tog{font-weight:700;color:inherit;text-decoration:none}.aj-tog:disabled{opacity:1;cursor:default}.aj-fl{display:inline-block;width:1em}
 .ped-pbs{display:inline-flex;gap:3px;white-space:nowrap}.ped-pbs .btn.xs{min-width:30px;padding:2px 4px;font-weight:700}#pedGrid td.ped-btns{white-space:nowrap}#pedGrid input.ped-in{padding:3px 6px;min-height:0;height:30px}
 .ped-card{padding:10px 12px;gap:8px;display:grid}.ped-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 8px}.ped-nums b{display:block;font-size:15px}.ped-card input.ped-in{width:70px}
 .q-movil{display:none}
@@ -337,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb134';
+window.__VERSION = 'sb135';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -360,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb134</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb135</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2878,6 +2879,8 @@ async function ajEditar(ids, cambios) {
 // Filtro de ajustes por uno o varios motivos (vacío = todos)
 // Buscador por artículo: código de fábrica (desde el principio) o, si no son números, parte de la descripción
 const ajPasaQ = a => { const q = String(S.ui.ajQ || '').trim().toUpperCase(); if (!q) return true; const c = String(a.c || '').toUpperCase(); return c.startsWith(q) || (!/^\d+$/.test(q) && String(S.maestro[a.c]?.d || '').toUpperCase().includes(q)); };
+const ajCerrados = () => { try { const v = JSON.parse(localStorage.getItem('ajGrpCerr') || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+const ajCerradosGuardar = v => { try { localStorage.setItem('ajGrpCerr', JSON.stringify(v)); } catch { } };
 const ajPasaFil = a => { const f = S.ui.ajFils || []; return (!f.length || f.includes(motivoKey(a.m))) && ajPasaQ(a); };
 function vAjustes() {
   // Filtro por motivo (independiente del agrupado): junta un mismo motivo de todas las fechas para el PDF, el Excel o marcarlos como pasados
@@ -2897,12 +2900,15 @@ function vAjustes() {
   for (const a of list) (grupos[grupoAj(a)] ||= []).push(a);
   const claves = Object.keys(grupos).sort(porDet ? ((x, y) => (x === '' ? 1 : y === '' ? -1 : 0) || grupos[y].length - grupos[x].length || x.localeCompare(y)) : ((x, y) => (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99)));
   const fila = a => `<tr class="${sel.has(a.id) ? 'sel' : ''}"><td><input type="checkbox" data-act="ajSel" data-id="${esc(a.id)}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Seleccionar ajuste ${esc(a.c)}"></td><td class="code">${esc(a.c)}</td><td>${esc(S.maestro[a.c]?.d || '—')}</td><td class="small muted">${esc(TIPOS_AJ[a.t]?.n || a.t)}</td><td>${esc(a.m || '')}${a.h?.length ? ` <span class="pill warn" style="cursor:pointer" data-act="ajEd" data-id="${esc(a.id)}" title="Corregido ${a.h.length} vez${a.h.length > 1 ? 'es' : ''}: tocá para ver el registro">editado</span>` : ''}</td><td class="small">${esc(a.o || '')}</td><td class="n">${fmtS(Core.num(a.u))}</td><td class="n muted">${fmtS(tot[a.c])}</td><td class="small muted">${a.f ? dm(a.f) : ''}</td><td style="white-space:nowrap"><button class="btn sm" data-act="ajEd" data-id="${esc(a.id)}" aria-pressed="${S.ui.ajEd === a.id}" title="Corregir tipo, motivo u observación (queda registro)">Editar</button> <button class="btn sm" data-act="ajDel" data-id="${esc(a.id)}" title="Borrar sin dejar registro (si se cargó por error)">Borrar</button></td></tr>${S.ui.ajEd === a.id ? ajEdFila(a) : ''}`;
+  // Grupos que se pueden contraer (se recuerda en cada dispositivo; con el buscador por artículo se ven todos abiertos)
+  const cerr = ajCerrados(), buscando = !!String(S.ui.ajQ || '').trim(), clave = k => (porDet ? 'm:' : 't:') + k;
   const bloques = claves.map(k => {
     const g = grupos[k].sort((a, b) => (a.c || '').localeCompare(b.c || ''));
+    const cerrado = !buscando && cerr.includes(clave(k));
     const todos = g.every(a => sel.has(a.id));
     const suma = g.reduce((s, a) => s + Core.num(a.u), 0);
     const nombre = porDet ? (k || 'Sin motivo') : (TIPOS_AJ[k]?.n || k);
-    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="9">${esc(nombre)} <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${g.map(fila).join('')}`;
+    return `<tr class="sec"><td><input type="checkbox" data-act="ajSelGrupo" data-v="${esc(k)}" ${todos ? 'checked' : ''} aria-label="Seleccionar todo el grupo"></td><td colspan="9"><button class="link aj-tog" data-act="ajGrpTog" data-v="${esc(clave(k))}" title="${cerrado ? 'Mostrar' : 'Ocultar'} los ajustes de este grupo" ${buscando ? 'disabled' : ''}><span class="aj-fl">${cerrado ? '▸' : '▾'}</span> ${esc(nombre)}</button> <span class="muted" style="font-weight:400">· ${g.length} ajuste${g.length > 1 ? 's' : ''} · ${fmtS(suma)} u${!porDet && TIPOS_AJ[k]?.diario ? ' · se borran solos al cerrar' : ''}</span></td></tr>${cerrado ? '' : g.map(fila).join('')}`;
   }).join('');
   const P = S.ui.ajPasados;
   const arribaAb = !!S.ui.ajPre || (() => { try { return localStorage.getItem('ajArribaAb') !== '0'; } catch { return true; } })();
@@ -2927,7 +2933,7 @@ function vAjustes() {
       ${Object.entries(motivos).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajFilM" data-v="${esc(k)}" ${fils.includes(k) ? 'checked' : ''}> ${esc(k || 'Sin motivo')} (${n})</label>`).join('')}
       <button class="btn sm" data-act="ajFilCerrar" style="margin-top:4px">Listo</button></div></details>
       <button class="btn" data-act="ajExcelFil" ${list.length ? '' : 'disabled'} title="Excel totalizado por artículo (código, descripción, unidades y observación) con todos los pendientes de los motivos elegidos, sin necesidad de tildarlos">Excel de lo filtrado (${list.length})</button>${fil || list.length ? `<label class="row small" style="gap:6px"><input type="checkbox" data-act="ajSelFil" ${todosFil ? 'checked' : ''}> Tildar ${fil ? 'todos los filtrados' : 'todos'} (${list.length})</label>` : ''}${fil ? `<span class="small muted">${list.length} ajuste${list.length === 1 ? '' : 's'} · ${fmtS(list.reduce((s, a) => s + Core.num(a.u), 0))} u${selFil ? ` · <b>${selFil} tildado${selFil > 1 ? 's' : ''}</b>` : ''}</span>` : ''}</div>
-    <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Motivo'], ['tipo', 'Tipo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span>${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
+    <div class="row" style="justify-content:space-between"><span class="small muted"><span class="chips" style="display:inline-flex;vertical-align:middle;margin-right:8px">Agrupar por ${[['det', 'Motivo'], ['tipo', 'Tipo']].map(([v, n]) => `<button class="chip" data-act="ajAgr" data-v="${v}" aria-pressed="${(S.ui.ajAgr || 'det') === v}">${n}</button>`).join('')}</span><button class="btn xs" data-act="ajGrpTodos" data-v="cerrar" title="Dejar solo los títulos de cada grupo">Contraer todos</button> <button class="btn xs" data-act="ajGrpTodos" data-v="abrir">Expandir todos</button> ${list.length} pendiente${list.length === 1 ? '' : 's'}${sel.size ? ` · <b>${sel.size} seleccionado${sel.size > 1 ? 's' : ''}</b>` : ''}</span>
       <div class="row">${S.ui.ajConfDel && sel.size ? `<span class="small" style="color:var(--bad)">¿Eliminar ${sel.size} ajuste${sel.size > 1 ? 's' : ''} sin dejar registro?</span><button class="btn danger" data-act="ajDelSelOk">Sí, eliminar</button><button class="btn" data-act="ajDelSelNo">Cancelar</button>` : `<button class="btn danger" data-act="ajDelSel" ${sel.size ? '' : 'disabled'} title="Para ajustes cargados por error: se borran sin quedar en el registro">Eliminar ${sel.size || ''}</button>`}<button class="btn" data-act="ajPdf" ${sel.size ? '' : 'disabled'} title="PDF con los ajustes tildados, totalizado por artículo (sirve para juntar un motivo de varias fechas)">PDF${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajExcel" ${sel.size ? '' : 'disabled'} title="Excel con los ajustes tildados, totalizado por artículo, para hacer el egreso en el sistema">Excel para egreso${sel.size ? ' (' + sel.size + ')' : ''}</button><button class="btn" data-act="ajEdLote" ${sel.size ? '' : 'disabled'} title="Cambiar tipo, motivo u observación de los tildados (queda registro)">Corregir${sel.size ? ' ' + sel.size : ''}</button><button class="btn pri" data-act="ajPasar" ${sel.size ? '' : 'disabled'}>Marcar ${sel.size || ''} como pasados al sistema</button></div></div>
     ${S.ui.ajEdLote && sel.size ? `<div class="confirm stack"><b>Corregir ${sel.size} ajuste${sel.size > 1 ? 's' : ''} tildado${sel.size > 1 ? 's' : ''}</b>
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:end">
@@ -2973,16 +2979,16 @@ function excelEgreso(lista, etiqueta) {
   const por = new Map();
   for (const a of sel) {
     const g = por.get(a.c) || { c: a.c, u: 0, n: 0, mot: new Set() };
-    g.u += Core.num(a.u); g.n++; const m = [a.m, a.o && a.o !== a.m ? a.o : ''].filter(Boolean).join(' · '); if (m) g.mot.add(m); por.set(a.c, g);
+    g.u += Core.num(a.u); g.n++; const m = String(a.m || '').trim(); if (m) g.mot.add(m); por.set(a.c, g); // solo el motivo, sin la observación
   }
   const filas = [...por.values()].sort(cmpArt).map(g => {
-    const l = LINES.find(x => x.c === g.c), ux = l?.uxc || S.maestro[g.c]?.u || 1, sp = Core.split(Math.abs(g.u), ux), sg = g.u < 0 ? -1 : 1;
-    return [g.c, l?.d || S.maestro[g.c]?.d || '', ux, g.u, sg * sp.cj, sg * sp.un, g.n, [...g.mot].join(' / ')];
+    const l = LINES.find(x => x.c === g.c);
+    return [g.c, l?.d || S.maestro[g.c]?.d || '', Math.round(g.u * 100) / 100, [...g.mot].join(' / ')];
   });
-  const total = filas.reduce((s, f) => s + f[3], 0);
+  const total = Math.round(filas.reduce((s, f) => s + f[2], 0) * 100) / 100;
   try {
     const wb = XL.utils.book_new();
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'UXC', 'UNIDADES', 'CAJAS', 'UNID. SUELTAS', 'AJUSTES', 'MOTIVOS'], ...filas, [], ['', 'TOTAL (' + filas.length + ' artículos)', '', total]]), 'EGRESO');
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'UNIDADES', 'MOTIVO'], ...filas, [], ['', 'TOTAL (' + filas.length + ' artículos)', total]]), 'EGRESO');
     descargar('Egreso ajustes ' + (etiqueta ? etiqueta.replace(/[\\/:*?"<>|]/g, '-').slice(0, 60) + ' ' : '') + dm(S.dia).replace('/', '-') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel descargado: ' + filas.length + ' artículo' + (filas.length === 1 ? '' : 's') + ' (' + sel.length + ' ajustes).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
@@ -5234,6 +5240,8 @@ document.addEventListener('click', async e => {
     }
     case 'ajExcel': excelEgreso(); break;
     case 'ajQLimpiar': S.ui.ajQ = ''; render(); break;
+    case 'ajGrpTog': { const L = ajCerrados(), i = L.indexOf(v); if (i >= 0) L.splice(i, 1); else L.push(v); ajCerradosGuardar(L); render(); break; }
+    case 'ajGrpTodos': { const porDet = (S.ui.ajAgr || 'det') === 'det', pre = porDet ? 'm:' : 't:', ks = [...new Set(S.ajustes.filter(ajPasaFil).map(a => pre + grupoAj(a)))]; let L = ajCerrados().filter(x => !ks.includes(x)); if (v === 'cerrar') L = L.concat(ks); ajCerradosGuardar(L); render(); break; }
     case 'ajExcelFil': { const f = S.ui.ajFils || []; excelFiltrado(S.ajustes.filter(ajPasaFil), f.length ? f.map(k => k || 'Sin motivo').join(' + ') : 'todos'); break; }
     case 'ajFilCerrar': S.ui.ajFilAb = false; render(); break;
     case 'ajPdf': pdfAjustesSel(); break;
