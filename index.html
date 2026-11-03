@@ -337,7 +337,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb133';
+window.__VERSION = 'sb134';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -360,7 +360,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb133</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb134</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3117,9 +3117,10 @@ function valGrupos(filas) {
 }
 /* Correos → Cierre de stock en Excel: código, descripción, cajas y unidades de la fecha elegida (hoja FRIO y hoja SECO) */
 function vCierreXls() {
-  const X = S.ui.cxls ||= { fecha: S.cierre?.fecha || S.anteriorFecha || hoyISO(), soloU: (() => { try { return localStorage.getItem('cxlsU') === '1'; } catch { return false; } })(), pre: (() => { try { return localStorage.getItem('cxlsP') === '1'; } catch { return false; } })() };
-  return `<div class="panel stack"><b>Cierre de stock en Excel</b><span class="small muted">Código, descripción, cajas y unidades del cierre de la fecha que elijas (o todo pasado a unidades): una hoja para Frío y otra para Seco. Lo no contado sale con el stock del sistema de ese día.</span>
+  const X = S.ui.cxls ||= { fecha: S.cierre?.fecha || S.anteriorFecha || hoyISO(), soloU: (() => { try { return localStorage.getItem('cxlsU') === '1'; } catch { return false; } })(), pre: (() => { try { return localStorage.getItem('cxlsP') === '1'; } catch { return false; } })(), junto: (() => { try { return localStorage.getItem('cxlsJ') !== '0'; } catch { return true; } })() };
+  return `<div class="panel stack"><b>Cierre de stock en Excel</b><span class="small muted">Código, descripción, cajas y unidades del cierre de la fecha que elijas (o todo pasado a unidades): Frío y Seco en una hoja (o una para cada uno), y otra hoja con los ajustes pendientes (los que todavía no se pasaron al sistema), total por artículo. Lo no contado sale con el stock del sistema de ese día.</span>
     <div class="row" style="gap:10px;align-items:end;flex-wrap:wrap"><label class="stack" style="gap:2px"><span class="lbl">Fecha del cierre</span><input type="date" data-act="cxlsF" value="${esc(X.fecha)}" max="${hoyISO()}"></label>
+      <label class="row small" style="gap:6px;align-self:center"><input type="checkbox" data-act="cxlsJ" ${X.junto !== false ? 'checked' : ''}> Frío y Seco en una sola hoja</label>
       <label class="row small" style="gap:6px;align-self:center"><input type="checkbox" data-act="cxlsU" ${X.soloU ? 'checked' : ''}> Todo en unidades (sin separar cajas)</label>
       <label class="row small" style="gap:6px;align-self:center"><input type="checkbox" data-act="cxlsP" ${X.pre ? 'checked' : ''}> Código con prefijo <span class="mono">'${esc(opt('prefijo') || '21/')}</span> (ej. <span class="mono">'${esc(opt('prefijo') || '21/')}1031</span>)</label>
       <button class="btn pri" data-act="cxlsBajar" ${X.cargando ? 'disabled' : ''}>${X.cargando ? 'Buscando el cierre…' : 'Descargar Excel'}</button></div></div>`;
@@ -3135,13 +3136,19 @@ async function cierreXls() {
   if (!c) { toast('No hay un cierre guardado del ' + dmy(f) + '.'); return; }
   const ord = l => S.maestro[l.c]?.o ?? 999;
   const soloU = !!X.soloU, cod = c2 => X.pre ? "'" + (opt('prefijo') || '21/') + c2 : c2;
-  const hoja = sec => [soloU ? ['CODIGO', 'DESCRIPCION', 'UNIDADES TOTALES'] : ['CODIGO', 'DESCRIPCION', 'CAJAS', 'UNIDADES'], ...(c.lineas || []).filter(l => (l.s || '') === sec)
+  const hoja = sec => [soloU ? ['CODIGO', 'DESCRIPCION', 'UNIDADES TOTALES'] : ['CODIGO', 'DESCRIPCION', 'CAJAS', 'UNIDADES'], ...(c.lineas || []).filter(l => sec === null || (l.s || '') === sec)
     .sort(cmpArt)
     .map(l => { const q = Core.num(l.cont !== null && l.cont !== undefined ? l.cont : l.sis), sp = Core.split(q, l.u || 1), d = l.d || S.maestro[l.c]?.d || ''; return soloU ? [cod(l.c), d, q] : [cod(l.c), d, sp.cj, sp.un]; })];
   try {
     const wb = XL.utils.book_new();
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('FRIO')), 'FRIO');
-    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('SECO')), 'SECO');
+    // Frío y Seco juntos en una hoja (por defecto) o separados
+    if (X.junto !== false) XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja(null)), 'STOCK');
+    else { XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('FRIO')), 'FRIO'); XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet(hoja('SECO')), 'SECO'); }
+    // Ajustes pendientes (los de la pestaña Ajustes, todavía no pasados al sistema): total por artículo, en unidades con signo
+    const tot = {}; for (const x of S.ajustes || []) tot[x.c] = (tot[x.c] || 0) + Core.num(x.u);
+    const aj = Object.entries(tot).filter(([, u]) => Math.round(u * 100)).map(([c2, u]) => ({ c: c2, s: S.maestro[c2]?.s, u })).sort(cmpArt)
+      .map(x => [cod(x.c), S.maestro[x.c]?.d || (c.lineas || []).find(l => l.c === x.c)?.d || '', Math.round(x.u * 100) / 100]);
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'UNIDADES A AJUSTAR'], ...aj]), 'AJUSTES PENDIENTES');
     descargar('STOCK ILOLAY ' + dm(f).replace('/', ' ') + (soloU ? ' (unidades)' : '') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel del cierre del ' + dmy(f) + ' descargado.');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
@@ -5365,6 +5372,7 @@ document.addEventListener('change', async e => {
   if (a === 'bdHoja') { const h = S.ui.bd?.prev?.hojas[+t.dataset.i]; if (h) h.sel = t.checked; render(); return; }
   if (a === 'cxlsF') { (S.ui.cxls ||= {}).fecha = t.value; render(); return; }
   if (a === 'cxlsP') { (S.ui.cxls ||= {}).pre = t.checked; try { localStorage.setItem('cxlsP', t.checked ? '1' : '0'); } catch { } render(); return; }
+  if (a === 'cxlsJ') { (S.ui.cxls ||= {}).junto = t.checked; try { localStorage.setItem('cxlsJ', t.checked ? '1' : '0'); } catch { } render(); return; }
   if (a === 'cxlsU') { (S.ui.cxls ||= {}).soloU = t.checked; try { localStorage.setItem('cxlsU', t.checked ? '1' : '0'); } catch { } render(); return; }
   if (a === 'valF') { const V = S.ui.val ||= valPeriodo('sem'); V[t.dataset.k] = t.value; V.per = ''; render(); return; }
   if (a === 'ajFilM') { const f = S.ui.ajFils ||= [], k = t.dataset.v; S.ui.ajFils = t.checked ? [...new Set([...f, k])] : f.filter(x => x !== k); S.ui.ajConfDel = false; S.ui.ajFilAb = true; render(); return; }
