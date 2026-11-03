@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb135';
+window.__VERSION = 'sb136';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb135</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb136</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -2989,6 +2989,9 @@ function excelEgreso(lista, etiqueta) {
   try {
     const wb = XL.utils.book_new();
     XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'DESCRIPCION', 'UNIDADES', 'MOTIVO'], ...filas, [], ['', 'TOTAL (' + filas.length + ' artículos)', total]]), 'EGRESO');
+    // Para cargar en el sistema: "21/código - descripción de Yasukawa" (la completa, no la corta) y el total de unidades con signo
+    const pre = opt('prefijo') || '21/', descYa = c => String(S.files.yasu?.data.by[c]?.desc || S.maestro[c]?.d || LINES.find(x => x.c === c)?.d || '').trim();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['CODIGO', 'UNIDADES'], ...filas.map(f => [pre + f[0] + ' - ' + descYa(f[0]), f[2]])]), 'PARA SISTEMA');
     descargar('Egreso ajustes ' + (etiqueta ? etiqueta.replace(/[\\/:*?"<>|]/g, '-').slice(0, 60) + ' ' : '') + dm(S.dia).replace('/', '-') + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     toast('Excel descargado: ' + filas.length + ' artículo' + (filas.length === 1 ? '' : 's') + ' (' + sel.length + ' ajustes).');
   } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
