@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb137';
+window.__VERSION = 'sb138';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb137</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb138</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1577,7 +1577,7 @@ function filtrar(lines) {
     if (S.ui.sector !== 'TODOS' && l.s !== S.ui.sector) return false;
     const f = S.ui.filtro;
     if ((f === 'dif' || f === 'sinmot') && !hayStock) return false;
-    if (f === 'dif' && !(l.contado && l.dif)) return false;
+    if (f === 'dif' && !((l.contado && l.dif) || sinContarConStock(l))) return false;
     if (f === 'sin' && l.contado) return false;
     if (f === 'cont' && !l.contado) return false;
     if (f === 'rec' && !l.rec) return false;
@@ -1586,10 +1586,13 @@ function filtrar(lines) {
     return true;
   });
 }
+// No contado y con stock en el sistema (distinto de 0): se olvidaron de contarlo. Va en "Con diferencia" y en el PDF de diferencias
+const sinContarConStock = l => !l.contado && Math.round((Number(l.sis) || 0) * 100) !== 0;
 function resumen(lines) {
-  const r = { total: lines.length, contados: 0, dif: 0, sobra: 0, falta: 0, imp: 0, sinMot: 0, rec: 0 };
+  const r = { total: lines.length, contados: 0, dif: 0, sobra: 0, falta: 0, imp: 0, sinMot: 0, rec: 0, sinSis: 0 };
   for (const l of lines) {
     if (l.contado) r.contados++;
+    if (sinContarConStock(l)) r.sinSis++;
     if (l.rec) r.rec++;
     if (l.contado && l.dif) { r.dif++; if (l.dif > 0) r.sobra += l.dif; else r.falta += l.dif; r.imp += l.importe || 0; if (!l.motivo) r.sinMot++; }
   }
@@ -1803,7 +1806,7 @@ function vHoy() {
   if (faltanArch.length) avisos.push(`<div class="banner bad"><span class="grow"><b>Cruce parcial:</b> falta el archivo de ${faltanArch.map(k => NOMBRE_ARCH[k]).join(' y ')}. El stock del sistema se calcula con lo que hay${faltanArch.includes('yasu') ? ' (sin el stock de Yasukawa, sin precios para valorizar y con unidades por caja de la lista de artículos)' : ' (sin el stock de SAP)'}, así que las diferencias pueden no ser reales hasta que lo cargues.</span></div>`);
   if (!cerrado && !sis) avisos.push(`<div class="banner warn"><span class="grow">Cargá el stock de SAP y el de Yasukawa para ver el stock del sistema y las diferencias. Los conteos de depósito ya se ven abajo.</span></div>`);
   if (hu.length) avisos.push(`<div class="banner warn"><span class="grow">${hu.length} artículo${hu.length > 1 ? 's' : ''} con stock en los archivos no ${hu.length > 1 ? 'están' : 'está'} en la lista de artículos: ${hu.slice(0, 4).map(h => esc(h.c)).join(', ')}${hu.length > 4 ? '…' : ''}</span><button class="btn sm" data-act="tab" data-v="maestro">Revisar</button></div>`);
-  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif : 0], ['sin', 'Sin contar', r.total - r.contados], ['cont', 'Contados', r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ...(opt('btnRecontar') || r.rec ? [['rec', 'Recontar', r.rec]] : [])];
+  const filtros = [['todos', 'Todos', all.length], ['dif', 'Con diferencia', sis ? r.dif + r.sinSis : 0], ['sin', 'Sin contar', r.total - r.contados], ['cont', 'Contados', r.contados], ['sinmot', 'Sin motivo', sis ? r.sinMot : 0], ...(opt('btnRecontar') || r.rec ? [['rec', 'Recontar', r.rec]] : [])];
   return `<div class="stack">
     ${bannerRed()}
     ${cerrado ? '' : vFiles()}
@@ -1840,7 +1843,7 @@ function vHoy() {
       <input type="search" id="qHoy" data-act="buscar" placeholder="Buscar código o descripción" value="${esc(S.ui.q)}" style="min-width:220px;flex:1;max-width:320px">
       ${!cerrado ? `<button class="btn sm ${opt('verSisDep') ? 'ok' : ''}" data-act="verSisDep" aria-pressed="${!!opt('verSisDep')}" title="Mostrar u ocultar la existencia del sistema a depósito en Recontar y Con diferencia">Depósito ve el sistema: <b>${opt('verSisDep') ? 'Sí' : 'No (a ciegas)'}</b></button>${opt('verSisDep') ? (S.remoto && S.remoto.fecha === S.dia && S.remoto.items ? `<span class="small muted">depósito ve el cruce de las ${hora(S.remoto.ts)}</span>` : `<span class="small" style="color:var(--bad)">depósito todavía no tiene cruce del ${dm(S.dia)}: cargá los archivos en esta PC</span>`) : ''}` : ''}
       ${!cerrado ? `<button class="btn sm" data-act="pdfPlanilla" title="Planilla en papel para que depósito cuente sin el escáner: código, descripción corta y cajas / unidades en blanco. Sale por sector (Frío y Seco); respeta el sector elegido arriba.">Planilla para contar (PDF)</button>` : ''}
-      ${!cerrado && sis && r.dif ? `<button class="btn sm" data-act="pdfDif" title="PDF con todos los artículos que hoy tienen diferencia (el día sigue abierto)">PDF de diferencias (${r.dif})</button><button class="btn sm" data-act="pdfDifMov" title="PDF de las diferencias con lo que salió de cada artículo: por chofer y cliente, y por proveedor (Yasukawa, Ilolay, Ventana)">PDF por chofer y proveedor</button>` : ''}
+      ${!cerrado && sis && (r.dif || r.sinSis) ? `<button class="btn sm" data-act="pdfDif" title="PDF con todos los artículos que hoy tienen diferencia, más los que tienen stock y no se contaron (el día sigue abierto)">PDF de diferencias (${r.dif + r.sinSis})</button><button class="btn sm" data-act="pdfDifMov" title="PDF de las diferencias con lo que salió de cada artículo: por chofer y cliente, y por proveedor (Yasukawa, Ilolay, Ventana)">PDF por chofer y proveedor</button>` : ''}
 
     </div>
     ${tablaHoy(lines, sis, cerrado)}
@@ -4381,7 +4384,8 @@ function armarPdfPlanilla(t, sector) {
 function pdfDiferencias() {
   if (!tieneSistema()) { toast('Todavía no hay stock del sistema: cargá los archivos del día para calcular las diferencias.'); return; }
   const c = conSector(docActual());
-  const n = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).length;
+  const cuenta = l => (l.cont !== null && l.cont !== undefined && l.dif) || ((l.cont === null || l.cont === undefined) && Math.round((Number(l.sis) || 0) * 100) !== 0);
+  const n = c.lineas.filter(cuenta).length;
   if (!n) { toast('No hay diferencias pendientes' + (c.sector ? ' en ' + sectorTxt(c.sector) : '') + '.'); return; }
   try {
     const t = new Date(), hh = String(t.getHours()).padStart(2, '0') + '.' + String(t.getMinutes()).padStart(2, '0');
@@ -4417,15 +4421,17 @@ function armarPdfDif(c, t) {
   const fs = Math.max(6, Math.min(18, Number(cfg.difLetra) || 9)), ft = Math.max(9, Math.min(28, Number(cfg.difTitulo) || 15));
   const rowH = Math.round(fs * Math.max(1.3, Math.min(4, Number(cfg.difAlto) || 2.3))), M = 28, ancho = P.W - 2 * M, pad = 24; // renglones altos y columnas con aire, para leer y escribir a mano
   const CU = (q, u) => { if (q === null || q === undefined || q === '') return ''; const sp = Core.split(Math.abs(q), u || 1); return (q < 0 ? '-' : '') + fmt(sp.cj) + ' CJ ' + fmt(sp.un) + ' U'; };
-  const L = c.lineas.filter(l => l.cont !== null && l.cont !== undefined && l.dif).sort(cmpArt);
+  // Con diferencia, más lo que tiene stock en el sistema y no se contó (sale como SIN CONTAR, para que lo cuenten)
+  const sinC = l => (l.cont === null || l.cont === undefined) && Math.round((Number(l.sis) || 0) * 100) !== 0;
+  const L = c.lineas.filter(l => (l.cont !== null && l.cont !== undefined && l.dif) || sinC(l)).sort(cmpArt), nSin = L.filter(sinC).length;
   const cols = [
     { k: 'c', n: 'CÓDIGO', v: l => l.c },
     { k: 'd', n: 'DESCRIPCIÓN', v: l => l.d || '' },
     { k: 'sc', g: 'SISTEMA', n: 'CAJAS', a: 'r', v: l => cjPartes(l.sis, l.u)[0] },
     { k: 'su', g: 'SISTEMA', n: 'UNIDADES', a: 'r', v: l => cjPartes(l.sis, l.u)[1] },
-    { k: 'cc', g: 'CONTADO', n: 'CAJAS', a: 'r', v: l => cjPartes(l.cont, l.u)[0] },
-    { k: 'cu', g: 'CONTADO', n: 'UNIDADES', a: 'r', v: l => cjPartes(l.cont, l.u)[1] },
-    { k: 'dif', g: 'DIFERENCIA', n: 'UNIDADES', a: 'r', v: l => fmtS(l.dif), b: true }
+    { k: 'cc', g: 'CONTADO', n: 'CAJAS', a: 'r', v: l => sinC(l) ? '' : cjPartes(l.cont, l.u)[0] },
+    { k: 'cu', g: 'CONTADO', n: 'UNIDADES', a: 'r', v: l => sinC(l) ? '' : cjPartes(l.cont, l.u)[1] },
+    { k: 'dif', g: 'DIFERENCIA', n: 'UNIDADES', a: 'r', v: l => sinC(l) ? '' : fmtS(l.dif), b: true }
   ];
   const GR = gruposDe(cols), bordes = () => GR.map(g => g.cols[0].x);
   // Anchos: las columnas de números toman lo que necesitan + aire; la descripción se queda con todo el resto (sin columna de motivo)
@@ -4440,7 +4446,7 @@ function armarPdfDif(c, t) {
   const pagina = () => {
     P.nueva(); y = 24 + ft;
     P.text(M + 4, y, cortar('STOCK ILOLAY · Diferencias del ' + diaSem(c.fecha) + ' ' + dmy(c.fecha) + (c.sector ? ' · ' + sectorTxt(c.sector).toUpperCase() : ''), ancho - 8, ft, true), ft, true, 'l', cfg.cTit); y += Math.round(ft * 0.9);
-    P.text(M + 4, y, cortar('Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · ' + L.length + ' artículo' + (L.length === 1 ? '' : 's') + ' con diferencia', ancho - 8, Math.max(6, fs - 1.5)), Math.max(6, fs - 1.5), false, 'l', '#666666'); y += 14;
+    P.text(M + 4, y, cortar('Stock sin cerrar · generado por ' + (c.por || '—') + ' el ' + t.toLocaleString('es-AR') + ' · ' + (L.length - nSin) + ' artículo' + (L.length - nSin === 1 ? '' : 's') + ' con diferencia' + (nSin ? ' · ' + nSin + ' sin contar' : ''), ancho - 8, Math.max(6, fs - 1.5)), Math.max(6, fs - 1.5), false, 'l', '#666666'); y += 14;
     const hh = Math.round(fs * 1.7);
     P.rect(M, y, ancho, hh * 2, cfg.cHead);
     for (const g of GR) { const x0 = g.cols[0].x, x1 = g.cols[g.cols.length - 1].x + g.cols[g.cols.length - 1].w; P.text((x0 + x1) / 2, y + hh / 2 + fs * 0.35, g.n, fs - 0.5, true, 'c', '#000000'); P.line(x0 + 4, y + hh, x1 - 4, y + hh, '#8a8a8a', 0.5); }
@@ -4456,8 +4462,9 @@ function armarPdfDif(c, t) {
     const dl = partirTxt(l.d || '', desc.w - pad, fs, false), h = Math.max(rowH, dl.length * lhD + (rowH - fs));
     if (y + h > P.H - 30) pagina();
     if (cfg.zebra && i++ % 2) P.rect(M, y, ancho, h, cfg.cZebra);
-    const base = y + rowH / 2 + fs * 0.35, col = l.dif < 0 ? cfg.cNeg : cfg.cPos;
+    const base = y + rowH / 2 + fs * 0.35, col = sinC(l) ? '#b45309' : l.dif < 0 ? cfg.cNeg : cfg.cPos;
     cols.forEach(cl => { if (cl !== desc) cel(cl, cl.v(l), base, !!cl.b, cl.k === 'dif' ? col : '#000000'); });
+    if (sinC(l)) { const cc = cols.find(x => x.k === 'cc'), cu = cols.find(x => x.k === 'cu'); P.text((cc.x + cu.x + cu.w) / 2, base, 'SIN CONTAR', fs, true, 'c', col); } // en lugar de lo contado
     dl.forEach((s, k) => P.text(desc.x + pad / 2, base + k * lhD, s, fs, false, 'l', '#000000'));
     y += h;
     if (cfg.sep !== false) P.line(M, y, M + ancho, y, cS, gS);
