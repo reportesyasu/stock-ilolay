@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb138';
+window.__VERSION = 'sb139';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb138</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb139</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1640,12 +1640,13 @@ function ajustarPedGrid() {
   g.style.maxHeight = Math.max(280, Math.floor(window.innerHeight - top - 14)) + 'px';
 }
 window.addEventListener('resize', () => ajustarPedGrid());
+function pedFoco(c) { const el = document.getElementById('ped-p-' + c); if (el) { el.focus({ preventScroll: true }); try { el.select(); } catch { } } }
 // Pedido a Ilolay: Tab en "Pedido a realizar" pasa al pedido del artículo siguiente (Shift+Tab, al anterior), sin pasar por los botones
 document.addEventListener('keydown', e => {
   const t = e.target;
   if (e.key !== 'Tab' || !t?.matches?.('input.ped-in[data-k="p"]')) return;
-  const L = [...document.querySelectorAll('input.ped-in[data-k="p"]')], i = L.indexOf(t), sig = L[i + (e.shiftKey ? -1 : 1)];
-  if (!sig) return;
+  const L = [...document.querySelectorAll('input.ped-in[data-k="p"]')], i = L.indexOf(t), sig = L[i + (e.shiftKey ? -1 : 1)] || (e.shiftKey ? L[L.length - 1] : L[0]);
+  if (!sig || sig === t) { e.preventDefault(); return; }
   e.preventDefault(); sig.focus(); try { sig.select(); } catch { }
 });
 /* Reemplaza la pantalla sin perder dónde estaba cada barra de desplazamiento.
@@ -1668,6 +1669,7 @@ function ponerMain(main, html) {
   if (renderSuave && mismaPantalla && html === ultimoMain && main.childElementCount) return;
   // Refresco de fondo mientras se tipea un número (pedido, quesos): se deja para cuando sale del casillero (si no, el cursor salta al principio)
   if (renderSuave && mismaPantalla && escribiendoNum()) return;
+  if (renderSuave && mismaPantalla && S.ui.tab === 'pedido' && document.activeElement?.closest?.('#pedGrid')) return;
   const pos = [];
   if (mismaPantalla) for (const el of main.querySelectorAll('*')) if (el.scrollTop > 0 || el.scrollLeft > 0) { const k = claveScroll(el, main); if (k) pos.push([k, el.scrollTop, el.scrollLeft]); }
   const wy = window.scrollY, wx = window.scrollX;
@@ -1684,8 +1686,11 @@ function restoreFocus(k) {
   if (!k) return;
   const el = document.getElementById(k.id); if (!el) return;
   try { if (k.dirty || el.tagName !== 'SELECT') { el.value = k.v; if (k.dirty) el.dataset.dirty = '1'; } } catch { }
+  const g = el.closest('#pedGrid'), gt = g?.scrollTop, gl = g?.scrollLeft, wy = window.scrollY, wx = window.scrollX;
   el.focus({ preventScroll: true });
   try { if (k.s !== null && k.s !== undefined) el.setSelectionRange(k.s, k.e); else if (el.type === 'number' && ['pedIn', 'qIlo', 'qIng'].includes(el.dataset.act)) { const n = String(el.value).length; el.type = 'text'; el.setSelectionRange(n, n); el.type = 'number'; } } catch { } // pedido / quesos: cursor al final
+  if (g) { g.scrollTop = gt; g.scrollLeft = gl; }
+  if (Math.abs(window.scrollY - wy) > 1 || Math.abs(window.scrollX - wx) > 1) window.scrollTo(wx, wy);
 }
 function renderTop() {
   const tabs = S.admin
@@ -5094,10 +5099,10 @@ document.addEventListener('click', async e => {
     case 'pedCopiarOk': t.disabled = true; pedidoAccion('copiar'); break;
     case 'pedEnviadoOk': t.disabled = true; pedidoAccion('enviado'); break;
     case 'pedBorrarOk': t.disabled = true; pedidoAccion('borrar', t.dataset.k); break;
-    case 'pedUsarSug': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', r.sug); render(); } break; }
+    case 'pedUsarSug': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', r.sug); render(); pedFoco(c); } break; }
     case 'pedXls': xlsPedido(); break;
     case 'pedXlsPant': xlsPedidoPantalla(); break;
-    case 'pedPal': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', Math.max(0, r.pedir + (Number(t.dataset.d) || 0))); render(); } break; }
+    case 'pedPal': { const r = filasPedido().find(x => x.c === c); if (r) { await guardarPedidoCampo(c, 'p', Math.max(0, r.pedir + (Number(t.dataset.d) || 0))); render(); pedFoco(c); } break; }
     case 'pedVista': S.ui.pedVista = v; try { localStorage.setItem('pedVista', v); } catch { } if (v === 'res' && !PED_RES.includes(pedSortAct().k)) S.ui.pedSort = null; render(); break;
     case 'pedPdf': pdfPedido(); break;
     case 'pedPdfTodo': pdfPedidoTodo(); break;
