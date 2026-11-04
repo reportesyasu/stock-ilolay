@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb136';
+window.__VERSION = 'sb137';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb136</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb137</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3767,14 +3767,14 @@ function vCorreos() {
   const c = S.cierre;
   return `<div class="stack">
     <div class="row" style="justify-content:space-between"><div><h2>Correos</h2><div class="small muted">Los mails que salen del stock, todos juntos. Para: <b>${esc(opt('destinatarios') || 'sin destinatarios (se cargan en Configuración)')}</b></div></div><button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
+    ${vCierreXls()}
+    ${vControlExist()}
     <div class="panel stack"><b>Cierre del día</b>
       ${c ? `<span class="small muted">Stock del ${diaSem(c.fecha)} ${dmy(c.fecha)}, cerrado por ${esc(c.por || '—')}.</span>
       <div class="row"><button class="btn pri" data-act="copiarMail">Copiar resumen para el mail</button><button class="btn" data-act="pdfCierre">Descargar PDF del cierre</button></div>` : `<span class="small muted">El stock del ${dm(S.dia)} todavía no está cerrado. Cuando lo cierres, desde acá copiás el resumen y bajás el PDF. Los cierres anteriores están en <button class="link" data-act="tab" data-v="historial">Historial</button>.</span>`}
     </div>
-    ${vPedidoIlolay()}
-    ${vControlExist()}
-    ${vCierreXls()}
     ${vValorizado()}
+    ${vPedidoIlolay()}
   </div>`;
 }
 /* PDF de los ajustes tildados (p. ej. todos los decomisos de varias fechas), totalizado por artículo, para el egreso */
