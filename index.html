@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb139';
+window.__VERSION = 'sb140';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb139</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb140</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1379,6 +1379,7 @@ async function leerArchivos(list) {
   }
   for (const k of ARCH_KEYS) if (found[k]) S.files[k] = found[k];
   S.fileErr = err;
+  if (Object.values(found).some(Boolean)) S.filesTs = Date.now(); // hora de la última actualización de archivos (esta PC)
   // Archivos guardados por Excel como página web cuya hoja no se pudo leer (por ejemplo, elegidos sueltos sin su carpeta)
   S.marcoErr = marcos.filter(m => !Object.values(found).some(x => x && x.name.startsWith(m.name.replace(/\.[^.]+$/, '') + '.'))).map(m => m);
   recalc(); render();
@@ -1752,7 +1753,7 @@ function vFiles() {
   abierto = abierto === null || abierto === undefined ? !(['ok', 'warn'].includes(est('sap')) && ['ok', 'warn'].includes(est('yasu'))) : abierto === '1';
   return `<details class="panel arch" id="drop" data-recordar="archAb" ${abierto ? 'open' : ''}><summary>
     <div class="row" style="justify-content:space-between;width:100%">
-      <div class="stack" style="gap:4px"><span class="row" style="gap:8px"><span class="arch-flecha" aria-hidden="true"></span><h3 style="margin:0">Archivos del día</h3></span><span class="row" style="gap:6px;flex-wrap:wrap">${chip('sap', 'SAP')}${chip('yasu', 'Yasukawa')}<span class="pill">Movimientos ${nMov}/4</span></span></div>
+      <div class="stack" style="gap:4px"><span class="row" style="gap:8px"><span class="arch-flecha" aria-hidden="true"></span><h3 style="margin:0">Archivos del día</h3></span><span class="row" style="gap:6px;flex-wrap:wrap">${chip('sap', 'SAP')}${chip('yasu', 'Yasukawa')}<span class="pill">Movimientos ${nMov}/4</span>${S.filesTs ? `<span class="small muted" title="${esc(new Date(S.filesTs).toLocaleString('es-AR'))}">Última actualización: <b>${hora(S.filesTs)}</b></span>` : ''}</span></div>
       <div class="row"><button class="btn pri" data-act="actualizar">${S.carpeta || f.sap || f.yasu ? 'Actualizar desde la carpeta' : 'Elegir carpeta'}</button>${S.carpeta ? '<button class="btn sm" data-act="carpeta">Cambiar carpeta</button>' : ''}<button class="btn sm" data-act="archivos">Elegir archivos sueltos</button>${ARCH_KEYS.some(k => f[k]) ? '<button class="btn sm danger" data-act="quitarTodo">Quitar todos</button>' : ''}</div>
     </div></summary><div class="stack arch-body">
     <div class="small muted">Se leen en esta PC y no se guardan en ningún lado. ${S.carpeta ? 'Carpeta: <b>' + esc(S.carpeta) + '</b>' : 'Elegí la carpeta donde dejan las descargas de SAP y Yasukawa.'}</div>
