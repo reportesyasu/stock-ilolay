@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb141';
+window.__VERSION = 'sb142';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb141</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb142</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3347,6 +3347,9 @@ function armarPdfControl(t, sector, conCero) {
 const pedDiasVenta = () => [7, 15, 30, 60].includes(Number(opt('pedidoDiasVenta'))) ? Number(opt('pedidoDiasVenta')) : 15; // Configuración
 const isoMas = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const esDomingo = iso => new Date(iso + 'T12:00:00').getDay() === 0;
+// Botones de Pedido a Ilolay que se muestran (Configuración); si no se eligió nada, todos
+const PED_BOTONES = [['copiar', 'Copiar el sugerido'], ['enviado', 'Pedido enviado'], ['borrarK', 'Borrar en camino'], ['borrarP', 'Borrar pedido'], ['xlsPant', 'Excel de la pantalla'], ['xls', 'Excel del pedido'], ['pdf', 'PDF del pedido'], ['pdfTodo', 'PDF del listado']];
+const pedBotonVisible = k => { const o = opt('pedidoBotones'); return !o || typeof o !== 'object' || o[k] !== false; };
 const pedDiasCubrir = () => [7, 10, 15].includes(Number(opt('pedidoDias'))) ? Number(opt('pedidoDias')) : 10;
 const r2 = x => Math.round((Number(x) || 0) * 100) / 100;
 const cmpCodigo = (a, b) => (a.s === b.s ? 0 : a.s === 'FRIO' ? -1 : b.s === 'FRIO' ? 1 : String(a.s || '').localeCompare(String(b.s || ''))) || String(a.c).localeCompare(String(b.c), 'es', { numeric: true });
@@ -3517,15 +3520,15 @@ function vPedido() {
       ${cel ? `<label class="row small" style="gap:6px">Orden <select data-act="pedSortSel" id="pedSortSel">${pedColsVis(dc).filter(([k]) => k !== 'btn').map(([k, n]) => `<option value="${k}" ${pedSortAct().k === k ? 'selected' : ''}>${n.replace('<br>', ' ')}</option>`).join('')}</select><button class="btn sm" data-act="pedSortDir" title="Cambiar entre ascendente y descendente">${pedSortAct().dir > 0 ? '▲ Asc.' : '▼ Desc.'}</button></label>` : '<span class="small muted">Tocá una cabecera para ordenar</span>'}
     </div>
     <div class="row" style="flex-wrap:wrap;gap:8px">
-      <button class="btn" data-act="pedConf" data-v="copiar" ${tot.sug.length ? '' : 'disabled'} title="Pone el sugerido como pedido en los artículos que tienen sugerido (del sector elegido)">Copiar el sugerido</button>
-      <button class="btn pri" data-act="pedConf" data-v="enviado" ${tot.ped.length ? '' : 'disabled'}>Pedido enviado</button>
-      <button class="btn" data-act="pedConf" data-v="borrarK" ${tot.cam.length ? '' : 'disabled'}>Borrar en camino</button>
-      <button class="btn" data-act="pedConf" data-v="borrarP" ${tot.ped.length ? '' : 'disabled'}>Borrar pedido</button>
+      ${pedBotonVisible('copiar') ? `<button class="btn" data-act="pedConf" data-v="copiar" ${tot.sug.length ? '' : 'disabled'} title="Pone el sugerido como pedido en los artículos que tienen sugerido (del sector elegido)">Copiar el sugerido</button>` : ''}
+      ${pedBotonVisible('enviado') ? `<button class="btn pri" data-act="pedConf" data-v="enviado" ${tot.ped.length ? '' : 'disabled'}>Pedido enviado</button>` : ''}
+      ${pedBotonVisible('borrarK') ? `<button class="btn" data-act="pedConf" data-v="borrarK" ${tot.cam.length ? '' : 'disabled'}>Borrar en camino</button>` : ''}
+      ${pedBotonVisible('borrarP') ? `<button class="btn" data-act="pedConf" data-v="borrarP" ${tot.ped.length ? '' : 'disabled'}>Borrar pedido</button>` : ''}
       <span class="grow"></span>
-      <button class="btn" data-act="pedXlsPant" title="Lo que se ve en pantalla: mismas columnas, filtros y orden">Excel de la pantalla</button>
-      <button class="btn" data-act="pedXls" title="Hoja PEDIDO con pallets, bases y cajas, y hoja LISTADO con código, descripción, stocks, venta total y pedido">Excel del pedido</button>
-      <button class="btn" data-act="pedPdf" ${tot.ped.length ? '' : 'disabled'} title="Pedido a realizar con el resumen por pallet">PDF del pedido</button>
-      <button class="btn" data-act="pedPdfTodo" title="Listado completo con stock, ventas, días de stock y sugerido">PDF del listado</button>
+      ${pedBotonVisible('xlsPant') ? `<button class="btn" data-act="pedXlsPant" title="Lo que se ve en pantalla: mismas columnas, filtros y orden">Excel de la pantalla</button>` : ''}
+      ${pedBotonVisible('xls') ? `<button class="btn" data-act="pedXls" title="Hoja PEDIDO con pallets, bases y cajas, y hoja LISTADO con código, descripción, stocks, venta total y pedido">Excel del pedido</button>` : ''}
+      ${pedBotonVisible('pdf') ? `<button class="btn" data-act="pedPdf" ${tot.ped.length ? '' : 'disabled'} title="Pedido a realizar con el resumen por pallet">PDF del pedido</button>` : ''}
+      ${pedBotonVisible('pdfTodo') ? `<button class="btn" data-act="pedPdfTodo" title="Listado completo con stock, ventas, días de stock y sugerido">PDF del listado</button>` : ''}
     </div>
     ${(() => { const o = resumenPedido(tot.ped); if (!tot.ped.length) return `<div class="banner info ped-res"><span class="grow"><b>Pedido a realizar:</b> <span class="muted">todavía no hay cajas cargadas</span></span></div>`; return `<div class="banner info ped-res" title="${esc(resumenPedidoTxt(o).join(' · '))}"><span class="grow"><b>Pedido a realizar:</b> ${o.arts} ${o.arts === 1 ? 'artículo' : 'artículos'} · <b>${fmt(o.cajas)} cajas</b> → <b>${fmt(o.pal)}</b> ${o.pal === 1 ? 'pallet completo' : 'pallets completos'} · <b>${fmt(o.bas)}</b> ${o.bas === 1 ? 'base suelta' : 'bases sueltas'} · <b>${fmt(o.cj)}</b> ${o.cj === 1 ? 'caja suelta' : 'cajas sueltas'}${o.sinArm ? ` · <span title="Sin bases por pallet / cajas por base en Artículos">${o.sinArm} sin armado: ${fmt(o.sinArmCj)} cajas</span>` : ''} · <b style="font-size:1.1em">Total: ${fmt(o.palEq)} ${o.palEq === 1 ? 'pallet' : 'pallets'}</b>${o.sinPal ? ` <span class="small" title="Artículos sin bases por pallet en Artículos: no se pueden pasar a pallets">(sin ${o.sinPal} sin armado de pallet)</span>` : ''}</span></div>`; })()}
     ${tabla}
@@ -4297,6 +4300,7 @@ function vOpciones() {
         <label class="row" style="gap:8px"><input type="radio" name="oQ" value="manual" ${opt('quesoSap') === 'manual' ? 'checked' : ''}> <span>Manual: cargo las hormas facturadas por Ilolay como ajuste "Venta del día" (igual que la hoja QUESOS de la planilla); SAP no se usa para quesos</span></label>
         <span class="small muted">En la automática y la manual se aplica la variación del stock de Yasukawa (en hormas). No mezclar: con la automática no cargues ventas del día de quesos.</span></div>
       <label class="stack" style="gap:2px"><span class="lbl">Orden de los artículos (Administración, Depósito, PDF y Excel)</span><select id="oOrden" style="max-width:360px">${[['codAsc', 'Código de fábrica ascendente (menor a mayor)'], ['codDesc', 'Código de fábrica descendente (mayor a menor)'], ['orden', 'Orden de Artículos (el que se arma con ▲ ▼)']].map(([v, n]) => `<option value="${v}" ${(opt('ordenArt') || 'codAsc') === v ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small muted">Siempre primero Frío y después Seco.</span></label>
+      <div class="stack" style="gap:4px"><span class="lbl">Pedido a Ilolay: botones que se muestran</span><div class="row" style="gap:6px 16px;flex-wrap:wrap">${PED_BOTONES.map(([k, n]) => `<label class="row small" style="gap:6px"><input type="checkbox" class="oPedBtn" data-k="${k}" ${pedBotonVisible(k) ? 'checked' : ''}> ${n}</label>`).join('')}</div><span class="small muted">Los destildados no aparecen en la pestaña Pedido a Ilolay (en ningún dispositivo).</span></div>
       <label class="stack" style="gap:2px"><span class="lbl">Pedido a Ilolay: días de venta para el promedio</span><select id="oPedVenta" style="max-width:140px">${[7, 15, 30, 60].map(d => `<option value="${d}" ${pedDiasVenta() === d ? 'selected' : ''}>${d} días</option>`).join('')}</select><span class="small muted">Días corridos hasta el último cierre (domingos = venta 0). Se guardan 60 días de ventas; si faltan días, Pedido a Ilolay lo avisa.</span></label>
       <label class="stack" style="gap:2px"><span class="lbl">Pedido a Ilolay: días a cubrir con el sugerido</span><select id="oPedDias" style="max-width:140px">${[7, 10, 15].map(d => `<option value="${d}" ${pedDiasCubrir() === d ? 'selected' : ''}>${d} días</option>`).join('')}</select><span class="small muted">Sugerido = venta promedio diaria (de los días de venta de arriba, domingos en 0) × estos días − stock (Yasukawa + Ilolay) − en camino, en cajas enteras.</span></label>
       <label class="stack" style="gap:2px"><span class="lbl">Aviso de artículos sin contar (% contado)</span><input type="number" id="oAvisoSin" min="0" max="100" step="1" value="${esc(opt('avisoSinContar') ?? 90)}" style="max-width:110px"><span class="small muted">Cuando ya se contó este porcentaje de los artículos, Administración avisa cuáles faltan. 0 = no avisar. Para cerrar el stock tienen que estar todos contados.</span></label>
@@ -5483,7 +5487,7 @@ document.addEventListener('submit', async e => {
     try { await API.call('agregarAjuste', { c, u, t, m: $('#ajM').value.trim(), o: ($('#ajO')?.value || '').trim(), f: S.dia }); e.target.reset(); S.ui.ajPreM = ''; S.ui.ajPreO = ''; toast('Ajuste agregado.'); programarRefresco(200); } catch (er) { toast('No se guardó: ' + er.message); }
   }
   if (e.target.id === 'fOpt') {
-    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, pedidoDias: Number($('#oPedDias')?.value) || 10, pedidoDiasVenta: Number($('#oPedVenta')?.value) || 15, avisoSinContar: Math.max(0, Math.min(100, Math.round(Number(String($('#oAvisoSin')?.value ?? 90).replace(',', '.')) || 0))), ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), zoomTablet: Number($('#oZoomTab')?.value) || 2, zoomCel: Number($('#oZoomCel')?.value) || 1, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
+    const data = { ...S.opciones, prefijo: $('#oPre').value.trim(), excluir: $('#oExc').value.split(',').map(s => s.trim()).filter(Boolean), motivos: $('#oMot').value.split('\n').map(s => s.trim()).filter(Boolean), destinatarios: $('#oDest').value.trim(), autoRec: false, btnRecontar: $('#oBtnRec').checked, ceroAuto: $('#oCero').checked, pedidoDias: Number($('#oPedDias')?.value) || 10, pedidoBotones: Object.fromEntries([...document.querySelectorAll('.oPedBtn')].map(i => [i.dataset.k, i.checked])), pedidoDiasVenta: Number($('#oPedVenta')?.value) || 15, avisoSinContar: Math.max(0, Math.min(100, Math.round(Number(String($('#oAvisoSin')?.value ?? 90).replace(',', '.')) || 0))), ordenArt: $('#oOrden')?.value || 'codAsc', verLogCam: $('#oLogCam').checked, pasoSeg: Math.max(0, Math.min(10, Number(String($('#oPaso').value).replace(',', '.')) || 0)), zoomTablet: Number($('#oZoomTab')?.value) || 2, zoomCel: Number($('#oZoomCel')?.value) || 1, tolMov: Math.max(0, Math.min(100, Number(String($('#oTol').value).replace(',', '.')) || 0)), quesoSap: document.querySelector('input[name=oQ]:checked')?.value || 'auto', ts: Date.now() };
     try { await API.call('guardarOpciones', data); S.opciones = data; S.ped = null; toast('Opciones guardadas. Volvé a leer los archivos para aplicarlas.'); recalc(); render(); } catch (er) { toast('No se pudieron guardar las opciones: ' + er.message); }
   }
 });
