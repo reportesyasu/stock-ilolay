@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb140';
+window.__VERSION = 'sb141';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb140</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb141</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3363,20 +3363,22 @@ async function cargarPedido(silencioso) {
 function stockPedido() {
   const by = {}, pesoDe = (c, pe) => Number(S.maestro[c]?.p) || Number(pe) || 0;
   // Stock Ilolay = SAP menos los ajustes pendientes (roto, decomiso, etc.: lo que todavía no se pasó al sistema), como el sistema de Administración.
-  // Quesos: kilos de SAP ÷ peso nominal (hormas), sin ajustes (igual que en el cálculo de quesos)
+  // Quesos: el stock de Yasukawa suele quedar en negativo (se vende de Yasukawa lo que está en Ilolay), así que no sirve sumarlo con el de SAP.
+  // Se toma el sistema de la app para el queso (último cierre − facturación − ventana − Ilolay + ingreso), en hormas, como stock total.
+  const esQ = c => !!S.maestro[c]?.q;
   const ajHoy = Object.fromEntries(LINES.map(l => [l.c, Number(l.aj) || 0]));
   const ilo = (c, sap, sk, pe, aj) => S.maestro[c]?.q ? (pesoDe(c, pe) > 0 ? (Number(sk) || 0) / pesoDe(c, pe) : null) : (Number(sap) || 0) + (Number(aj) || 0); // queso sin peso nominal: no se puede pasar a hormas
   if (S.cierre) {
-    for (const l of S.cierre.lineas || []) by[l.c] = { ya: Number(l.ya) || 0, ilo: ilo(l.c, l.sap, l.sk, l.pe, l.aj) };
+    for (const l of S.cierre.lineas || []) by[l.c] = esQ(l.c) ? { ya: null, ilo: null, tot: Number(l.sis) || 0 } : { ya: Number(l.ya) || 0, ilo: ilo(l.c, l.sap, l.sk, l.pe, l.aj) };
     return { by, fuente: 'cierre', fecha: S.dia };
   }
   const f = fuentes();
   if ((S.admin || opt('verSisDep')) && f.origen && !f.faltan.length) {
-    for (const l of LINES) by[l.c] = { ya: Number(l.yasu) || 0, ilo: ilo(l.c, l.sap, l.sapRaw, l.peso, l.aj) };
+    for (const l of LINES) by[l.c] = esQ(l.c) ? { ya: null, ilo: null, tot: Number(l.sis) || 0 } : { ya: Number(l.yasu) || 0, ilo: ilo(l.c, l.sap, l.sapRaw, l.peso, l.aj) };
     return { by, fuente: 'hoy', fecha: S.dia };
   }
   if (S.anteriorFecha && S.anterior && Object.keys(S.anterior).length) {
-    for (const [c, a] of Object.entries(S.anterior)) by[c] = { ya: Number(a.ya) || 0, ilo: ilo(c, a.sap, a.sk, a.pe, ajHoy[c]) };
+    for (const [c, a] of Object.entries(S.anterior)) by[c] = esQ(c) ? { ya: null, ilo: null, tot: Number(a.cont ?? a.sis) || 0 } : { ya: Number(a.ya) || 0, ilo: ilo(c, a.sap, a.sk, a.pe, ajHoy[c]) };
     return { by, fuente: 'anterior', fecha: S.anteriorFecha };
   }
   return { by, fuente: '', fecha: '' };
@@ -3416,14 +3418,14 @@ function filasPedido() {
     const m = S.maestro[l.c], uxc = l.uxc || 1, s = st.by[l.c], v = V?.by[l.c] || { I: 0, Y: 0 };
     const ya = s ? s.ya : null, ilo = s && s.ilo !== null ? s.ilo : null;
     const prom = V ? (V.nI ? v.I / V.nI : 0) + (V.nY ? v.Y / V.nY : 0) : 0; // unidades por día
-    const stockU = (ya || 0) + (ilo || 0);
+    const stockU = s && s.tot !== undefined ? s.tot : (ya || 0) + (ilo || 0); // quesos: el sistema de la app, en hormas
     const camino = D[l.c + 'k'] !== undefined ? pedNum(D[l.c + 'k']) : Number(PD[l.c]?.k) || 0;
     const pedir = D[l.c + 'p'] !== undefined ? pedNum(D[l.c + 'p']) : Number(PD[l.c]?.p) || 0;
     const falta = prom * dc - stockU - camino * uxc;
     return {
       c: l.c, d: dDep(l.c) || l.d, s: l.s || m.s, uxc,
       yaCj: ya === null ? null : Math.floor(ya / uxc + 1e-9), iloCj: ilo === null ? null : Math.floor(ilo / uxc + 1e-9),
-      stCj: ya === null && ilo === null ? null : (ya === null ? 0 : Math.floor(ya / uxc + 1e-9)) + (ilo === null ? 0 : Math.floor(ilo / uxc + 1e-9)),
+      stCj: s && s.tot !== undefined ? Math.floor(s.tot / uxc + 1e-9) : ya === null && ilo === null ? null : (ya === null ? 0 : Math.floor(ya / uxc + 1e-9)) + (ilo === null ? 0 : Math.floor(ilo / uxc + 1e-9)),
       // ventas de 15 días y días de stock redondeados; el total es la suma de los dos redondeados (para que cierre a la vista)
       vI: Math.round(v.I / uxc), vY: Math.round(v.Y / uxc), vT: Math.round(v.I / uxc) + Math.round(v.Y / uxc), prom: prom / uxc,
       dias: prom > 0 ? Math.round(Math.max(0, stockU) / prom) : null, camino, pedir,
@@ -3432,7 +3434,7 @@ function filasPedido() {
   }).sort(cmpCodigo);
 }
 // Columnas de la grilla del pedido: se ordena tocando la cabecera (una vez ascendente, otra vez descendente)
-const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas'], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP menos ajustes pendientes: roto, decomiso, etc.) en cajas (para abajo)'],
+const PED_COLS = dc => [['c', 'Código', ''], ['d', 'Descripción', ''], ['stCj', 'Stock<br>total', 'Stock Yasukawa + stock Ilolay, en cajas. Quesos: el sistema de la app (hormas), sin separar'], ['yaCj', 'Stock<br>Yasu.', 'Stock de Yasukawa en cajas (para abajo)'], ['iloCj', 'Stock<br>Ilolay', 'Stock de Ilolay (SAP menos ajustes pendientes: roto, decomiso, etc.) en cajas (para abajo)'],
   ['vI', 'Venta<br>Ilolay', `Venta de ${pedDiasVenta()} días: facturación Ilolay sin lo facturado a YASUKAWA JORGE FERNANDO, en cajas`], ['vY', 'Venta<br>Yasu.', `Venta de ${pedDiasVenta()} días: facturación Yasukawa (neta de notas de crédito) + ventana, en cajas`], ['vT', 'Venta<br>total', `Venta de ${pedDiasVenta()} días: Ilolay + Yasukawa, en cajas`],
   ['prom', 'Prom.<br>diario', 'Venta promedio por día, en cajas'], ['dias', 'Días de<br>stock', 'Stock total ÷ promedio diario'], ['camino', 'En<br>camino', 'Cajas en camino: se descuentan del sugerido'],
   ['sug', `Sugerido<br>(${dc} días)`, `Para cubrir ${dc} días: promedio × ${dc} − stock − en camino, en cajas enteras. Tocá el número para usarlo como pedido.`], ['pedir', 'Pedido a<br>realizar', ''], ['btn', 'Pallet /<br>base', 'P+ / P−: sumar o restar un pallet al pedido · B+ / B−: sumar o restar una base']];
