@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb143';
+window.__VERSION = 'sb144';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb143</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb144</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -3419,8 +3419,8 @@ function filasPedido() {
   const st = stockPedido(), V = ventasPedido(), PD = S.ped?.pedido || {}, D = S.ui.pedDraft || {}, dc = pedDiasCubrir();
   return LINES.filter(l => S.maestro[l.c] && !S.maestro[l.c].baja).map(l => {
     const m = S.maestro[l.c], uxc = l.uxc || 1, s = st.by[l.c], v = V?.by[l.c] || { I: 0, Y: 0 };
-    // Quesos: stock total = sistema de la app; Yasukawa = su stock (suele ser negativo); Ilolay = total − Yasukawa (lo que de verdad está en Ilolay)
-    const ya = s ? s.ya : null, ilo = s && s.tot !== undefined ? s.tot - (s.ya || 0) : (s && s.ilo !== null ? s.ilo : null);
+    // Quesos: stock total = sistema de la app; Yasukawa = su stock (suele ser negativo); Ilolay = total + Yasukawa (50 total y −20 en Yasukawa → 30 en Ilolay)
+    const ya = s ? s.ya : null, ilo = s && s.tot !== undefined ? s.tot + (s.ya || 0) : (s && s.ilo !== null ? s.ilo : null);
     const prom = V ? (V.nI ? v.I / V.nI : 0) + (V.nY ? v.Y / V.nY : 0) : 0; // unidades por día
     const stockU = s && s.tot !== undefined ? s.tot : (ya || 0) + (ilo || 0); // quesos: el sistema de la app, en hormas
     const camino = D[l.c + 'k'] !== undefined ? pedNum(D[l.c + 'k']) : Number(PD[l.c]?.k) || 0;
