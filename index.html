@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb147';
+window.__VERSION = 'sb148';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb147</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb148</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -1032,11 +1032,11 @@ function sbHeaders(key) {
   if (/^eyJ/.test(key)) h.Authorization = 'Bearer ' + key;
   return h;
 }
-async function sbRpc(url, key, fn, args, pin) {
+async function sbRpc(url, key, fn, args, pin, ep) {
   let r, j;
   // Sin respuesta en 90 s se corta (para que la pantalla no quede esperando para siempre)
   const ctl = typeof AbortController === 'function' ? new AbortController() : null, tmo = ctl && setTimeout(() => ctl.abort(), 90000);
-  try { r = await fetch(url + '/rest/v1/rpc/api', { method: 'POST', headers: sbHeaders(key), body: JSON.stringify({ p_fn: fn, p_args: args || [], p_pin: pin || '' }), signal: ctl?.signal }); }
+  try { r = await fetch(url + '/rest/v1/rpc/' + (ep || 'api'), { method: 'POST', headers: sbHeaders(key), body: JSON.stringify({ p_fn: fn, p_args: args || [], p_pin: pin || '' }), signal: ctl?.signal }); }
   catch (e) { clearTimeout(tmo); if (e?.name === 'AbortError') throw new Error('el servidor tardó más de 90 segundos en responder. Probá de nuevo en un rato'); throw new Error('No se pudo conectar con el servidor (' + (e.message || e) + '). Revisá la conexión a internet.'); }
   clearTimeout(tmo);
   try { j = await r.json(); } catch { throw new Error('El servidor respondió algo inesperado (HTTP ' + r.status + ').'); }
@@ -1057,6 +1057,14 @@ const API = {
     catch (e) { if (/No se pudo conectar con el servidor|tardó más de 90 segundos|HTTP 5\d\d/.test(e.message || '')) { e.red = true; marcarRed(false); } throw e; }
     marcarRed(true);
     if (j && j.error) { const err = new Error(j.error); err.codigo = j.codigo; err.app = true; if (j.codigo === 'pin') { CFG.olvidar(); S.pinInvalido = true; pedirAcceso(); } throw err; }
+    return j ? j.result : null;
+  },
+  // Consultas agregadas aparte (función api_extra de la base, se crea con su propio SQL)
+  async extra(fn, ...args) {
+    let j;
+    try { j = await sbRpc(CFG.url, CFG.key, fn, args, CFG.pin, 'api_extra'); }
+    catch (e) { if (/No está creada la función|could not find the function/i.test(e.message || '')) throw new Error('Falta crear la consulta en la base: hay que correr quesos_historial.sql en Supabase (SQL Editor).'); throw e; }
+    if (j && j.error) { const err = new Error(j.error); err.codigo = j.codigo; throw err; }
     return j ? j.result : null;
   }
 };
@@ -1643,6 +1651,7 @@ function ajustarPedGrid() {
 window.addEventListener('resize', () => ajustarPedGrid());
 function pedFoco(c) { const el = document.getElementById('ped-p-' + c); if (el) { el.focus({ preventScroll: true }); try { el.select(); } catch { } } }
 // Pedido a Ilolay: Tab en "Pedido a realizar" pasa al pedido del artículo siguiente (Shift+Tab, al anterior), sin pasar por los botones
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target?.id === 'qhC') { e.preventDefault(); (S.ui.qh ||= { c: '', dias: 30, solo: true }).c = e.target.value; buscarQuesosHist(); } });
 document.addEventListener('keydown', e => {
   const t = e.target;
   if (e.key !== 'Tab' || !t?.matches?.('input.ped-in[data-k="p"]')) return;
@@ -3035,6 +3044,50 @@ async function publicarQuesosYasu() {
   recalc(); render();
   try { await API.call('guardarQuesos', S.dia, v, 'y'); } catch (e) { toast('No se pudo compartir la facturación Yasukawa de los quesos: ' + e.message); }
 }
+// Quesos: movimientos de un queso por código en los últimos días (lo cargado cada día y el cierre)
+function vQuesosHist() {
+  const H = S.ui.qh ||= { c: '', dias: 30, solo: true }, L = quesosLista();
+  const F = (H.filas || []).filter(x => !H.solo || x.y || x.v || x.i || x.g), mov = x => x.y || x.v || x.i || x.g;
+  const tot = k => F.reduce((s, x) => s + (Number(x[k]) || 0), 0), sal = x => x ? (x > 0 ? '-' + fmt(x) : '+' + fmt(-x)) : '<span class="muted">0</span>';
+  const desc = S.maestro[H.cBuscado]?.d || '';
+  return `<details class="panel" id="qhPanel" ${H.ab !== false ? 'open' : ''}><summary><b>Movimientos de un queso</b> <span class="small muted">· buscá por código para ver lo cargado día por día</span></summary>
+    <div class="stack" style="margin-top:8px">
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="search" id="qhC" data-act="qhC" list="qhList" class="mono" placeholder="Código del queso" value="${esc(H.c)}" style="width:170px" autocomplete="off">
+        <datalist id="qhList">${L.map(c => `<option value="${esc(c)}">${esc(S.maestro[c]?.d || '')}</option>`).join('')}</datalist>
+        <label class="row small" style="gap:6px">Últimos <select id="qhDias" data-act="qhDias">${[15, 30, 60, 90].map(d => `<option value="${d}" ${H.dias === d ? 'selected' : ''}>${d} días</option>`).join('')}</select></label>
+        <button class="btn pri" data-act="qhBuscar" ${H.cargando ? 'disabled' : ''}>${H.cargando ? 'Buscando…' : 'Buscar'}</button>
+        <label class="row small" style="gap:6px"><input type="checkbox" data-act="qhSolo" ${H.solo ? 'checked' : ''}> Solo días con movimientos</label>
+        ${H.filas?.length ? '<button class="btn" data-act="qhXls">Excel</button>' : ''}
+      </div>
+      ${H.err ? `<div class="banner bad"><span class="grow">${esc(H.err)}</span></div>` : ''}
+      ${H.filas ? `<div class="small"><b class="mono">${esc(H.cBuscado)}</b> ${esc(desc)} · desde el ${dmy(H.desde)}${F.length ? '' : ' · <span class="muted">no hay movimientos en ese período</span>'}</div>` : ''}
+      ${F.length ? `<div class="tablebox"><table><thead><tr><th>Fecha</th><th class="n" title="Facturación Yasukawa (neta de notas de crédito)">Fact. Yasu.</th><th class="n">Ventana</th><th class="n" title="Salida por Ilolay (cargada a mano)">Ilolay</th><th class="n" title="Ingreso de Ilolay, camión (cargado a mano)">Ingreso</th><th class="n" title="Sistema al cerrar ese día">Sistema al cierre</th><th class="n">Contado</th></tr></thead>
+        <tbody>${F.map(x => `<tr${mov(x) ? '' : ' class="muted"'}><td>${diaSem(x.f).slice(0, 3)} ${dmy(x.f)}</td><td class="n">${sal(Number(x.y))}</td><td class="n">${sal(Number(x.v))}</td><td class="n">${sal(Number(x.i))}</td><td class="n">${Number(x.g) ? '+' + fmt(Number(x.g)) : '<span class="muted">0</span>'}</td><td class="n">${x.cer && x.sis !== null && x.sis !== undefined ? fmt(Number(x.sis)) : x.cer ? '—' : '<span class="muted" title="Día sin cerrar">abierto</span>'}</td><td class="n">${x.cont !== null && x.cont !== undefined ? '<b>' + fmt(Number(x.cont)) + '</b>' : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td>TOTAL (${F.length} días)</td><td class="n">${sal(tot('y'))}</td><td class="n">${sal(tot('v'))}</td><td class="n">${sal(tot('i'))}</td><td class="n">${tot('g') ? '+' + fmt(tot('g')) : '0'}</td><td></td><td></td></tr></tfoot></table></div>` : ''}
+    </div></details>`;
+}
+async function buscarQuesosHist() {
+  const H = S.ui.qh ||= { c: '', dias: 30, solo: true };
+  const c = String(H.c || '').trim().toUpperCase().replace(/^\D*\//, '').split(/\s/)[0];
+  if (!c) { H.err = 'Escribí el código del queso.'; render(); return; }
+  H.cargando = true; H.err = null; H.ab = true; render();
+  const desde = isoMasDias(hoyISO(), -(H.dias || 30));
+  try { H.filas = await API.extra('quesosHist', c, desde) || []; H.cBuscado = c; H.desde = desde; }
+  catch (e) { H.err = 'No se pudo buscar: ' + e.message; H.filas = null; }
+  H.cargando = false; render();
+}
+function xlsQuesosHist() {
+  const H = S.ui.qh; if (!H?.filas?.length) return;
+  const F = H.filas.filter(x => !H.solo || x.y || x.v || x.i || x.g).slice().reverse();
+  try {
+    const wb = XL.utils.book_new();
+    XL.utils.book_append_sheet(wb, XL.utils.aoa_to_sheet([['FECHA', 'FACT. YASUKAWA', 'VENTANA', 'SALIDA ILOLAY', 'INGRESO ILOLAY', 'SISTEMA AL CIERRE', 'CONTADO'],
+      ...F.map(x => [dmy(x.f), Number(x.y) || 0, Number(x.v) || 0, Number(x.i) || 0, Number(x.g) || 0, x.cer && x.sis !== null && x.sis !== undefined ? Number(x.sis) : '', x.cont !== null && x.cont !== undefined ? Number(x.cont) : ''])]), String(H.cBuscado).slice(0, 30));
+    descargar('Movimientos queso ' + H.cBuscado + ' desde ' + H.desde + '.xlsx', new Blob([XL.write(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  } catch (e) { toast('No se pudo armar el Excel: ' + e.message); }
+}
+const isoMasDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 function vQuesos() {
   if (!S.admin) return '';
   const hib = opt('quesoSap') === 'hibrido', cerrado = !!S.cierre, L = quesosLista(), D = S.ui.qDraft ||= {}, G = S.ui.gDraft ||= {}, QD = S.quesosDia || {};
@@ -3077,6 +3130,7 @@ function vQuesos() {
     <div class="tablebox" id="qGrid"><table><thead><tr>${cel ? '<th>Artículo</th>' : '<th>Código</th><th>Artículo</th>'}<th class="n" title="Hormas del último cierre: lo contado o, si no se contó, el sistema de ese cierre">Últ.${br}cierre</th><th class="n" title="Facturación Yasukawa del día, neta de notas de crédito (archivo)">Fact.${br}Yasu.</th><th class="n" title="Salieron por ventana (archivo de ventanas)">Vent.</th><th class="n" title="Hormas que salieron por Ilolay hoy: cargalas acá">Ilolay</th><th class="n" title="Hormas que ingresaron de Ilolay hoy (camión): cargalas acá">Ingreso</th><th class="n" title="Existencia del sistema hoy">Sist.</th><th class="n hide-sm">Contado</th></tr></thead><tbody>${filas}</tbody>
       <tfoot><tr>${cel ? '' : '<td></td>'}<td class="q-d">TOTAL</td><td class="n">${fmt(sumB)}</td><td class="n">${sal(sumY)}</td><td class="n">${sal(sumV)}</td><td class="n">${sal(sumI)}</td><td class="n">${sumG ? '+' + fmt(sumG) : '0'}</td><td class="n">${fmt(sumS)}</td><td class="n hide-sm"></td></tr></tfoot></table></div>
     ${hayBaseSis ? `<div class="small muted">${cel ? '<b style="color:var(--warn)">*</b>' : '<span class="pill seco">sist.</span>'} En el último cierre ese queso no se contó: se parte del sistema de ese cierre, que ya venía del último conteo con los movimientos de cada día descontados.</div>` : ''}
+    ${vQuesosHist()}
     <div class="q-fin"></div>
     <div class="q-movil" aria-label="Totales"><span>Fact. Yasu.<b>${sal(sumY)}</b></span><span>Ventana<b>${sal(sumV)}</b></span><span>Ilolay<b>${sal(sumI)}</b></span><span>Ingreso<b>${sumG ? '+' + fmt(sumG) : '0'}</b></span><span>Sistema<b>${fmt(sumS)}</b></span>${cerrado ? '' : `<div class="row" style="grid-column:1/-1;justify-content:flex-end;gap:8px"><button class="btn sm" data-act="qBorrar" ${hayCarga ? '' : 'disabled'}>Borrar lo cargado</button><button class="btn pri sm" data-act="qGuardar" ${hayDraft ? '' : 'disabled'}>Guardar${hayDraft ? ' ●' : ''}</button></div>`}</div>`}
   </div>`;
@@ -5103,6 +5157,8 @@ document.addEventListener('click', async e => {
     case 'recargarNo': S.ui.confRecarga = false; render(); break;
     case 'sector': S.ui.sector = v; render(); break;
     case 'filtro': S.ui.filtro = v; render(); break;
+    case 'qhBuscar': buscarQuesosHist(); break;
+    case 'qhXls': xlsQuesosHist(); break;
     case 'pedRecargar': S.pedErr = null; cargarPedido(false); render(); break;
     case 'pedFil': S.ui.pedFil = v; render(); break;
     case 'pedSort': { const o = pedSortAct(); S.ui.pedSort = o.k === v ? { k: v, dir: -o.dir } : { k: v, dir: 1 }; render(); break; }
@@ -5373,6 +5429,7 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'dcnt') DD[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'qIlo') (S.ui.qDraft ||= {})[t.dataset.c] = t.value;
   if (t.dataset.act === 'qIng') (S.ui.gDraft ||= {})[t.dataset.c] = t.value;
+  if (t.dataset.act === 'qhC') (S.ui.qh ||= { c: '', dias: 30, solo: true }).c = t.value;
   if (t.dataset.act === 'pedIn') (S.ui.pedDraft ||= {})[t.dataset.c + t.dataset.k] = t.value;
   if (t.dataset.act === 'pedQ') { S.ui.pedQ = t.value; render(); }
   if (t.dataset.act === 'cliF') (S.ui.cliF ||= {})[t.dataset.k] = t.value;
@@ -5395,6 +5452,9 @@ document.addEventListener('change', async e => {
   // Pedido a Ilolay: se guarda al salir del casillero; se redibuja cuando el foco ya pasó al siguiente
   if (a === 'pedIn') { (S.ui.pedDraft ||= {})[c + t.dataset.k] = t.value; guardarPedidoCampo(c, t.dataset.k, t.value); setTimeout(render, 0); return; }
   if (a === 'pedSortSel') { S.ui.pedSort = { k: t.value, dir: 1 }; render(); return; }
+  if (a === 'qhDias') { (S.ui.qh ||= { c: '', dias: 30, solo: true }).dias = Number(t.value) || 30; if (S.ui.qh.c) buscarQuesosHist(); else render(); return; }
+  if (a === 'qhSolo') { (S.ui.qh ||= { c: '', dias: 30, solo: true }).solo = t.checked; render(); return; }
+  if (a === 'qhC' && /^\d/.test(t.value) && quesosLista().includes(t.value.trim())) { S.ui.qh.c = t.value; buscarQuesosHist(); return; }
   if (a === 'qIlo' || a === 'qIng') { (a === 'qIlo' ? (S.ui.qDraft ||= {}) : (S.ui.gDraft ||= {}))[t.dataset.c] = t.value; setTimeout(render, 0); return; }
   if (a === 'cbTipo') { const x = (S.codigosDet || []).find(y => y.ean === t.dataset.ean); if (x) x.t = t.value; try { await API.call('tipoCodigo', t.dataset.ean, t.value); } catch (er) { toast('No se pudo guardar: ' + er.message); } render(); return; }
   if (a === 'ctlSec') { S.ui.ctlSec = t.value; render(); return; }
