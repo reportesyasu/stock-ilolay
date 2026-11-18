@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb150';
+window.__VERSION = 'sb151';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb150</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb151</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -5518,6 +5518,18 @@ function cntSiguiente(t, dir) {
 }
 document.addEventListener('keydown', e => {
   const t = e.target;
+  // Grilla de Administración: una "S" en Cajas o Unidades carga el contado igual al sistema (como el botón "= sist.") y pasa al artículo siguiente
+  if ((e.key === 's' || e.key === 'S') && t.dataset?.act === 'cnt' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
+    const c = t.dataset.c, l = LINES.find(x => x.c === c);
+    if (!l || !tieneSistema()) { toast('Para tomar el sistema tienen que estar cargados los archivos del día.'); return; }
+    delete CNT_PEND[c]; delete CNT_BORR[c];
+    const fa = $('#a-cj-' + CSS.escape(c)), fb = $('#a-un-' + CSS.escape(c));
+    if (fa) fa.value = l.sisCj ?? ''; if (fb) fb.value = l.sisUn ?? '';
+    guardarConteo(c, { cj: l.sisCj, un: l.sisUn, by: S.me.id, rec: false, carga: { k: 'sis', cj: l.sisCj, un: l.sisUn } });
+    cntSiguiente(t, 1);
+    return;
+  }
   if (e.key === 'Tab' && t.dataset?.act === 'cnt') {
     if (!e.shiftKey && t.dataset.k === 'un') { e.preventDefault(); cntSiguiente(t, 1); return; }
     if (e.shiftKey && t.dataset.k === 'cj') { e.preventDefault(); cntSiguiente(t, -1); return; }
