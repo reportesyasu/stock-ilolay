@@ -338,7 +338,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;font-family:var(--f-mono)}
 </style>
 <script>
 /* Atrapa cualquier error de arranque y lo muestra en pantalla, para no quedar en "Cargando…" sin explicación */
-window.__VERSION = 'sb151';
+window.__VERSION = 'sb152';
 window.__errs = [];
 function __mostrarErrores() {
   var m = document.getElementById('main'); if (!m) return;
@@ -361,7 +361,7 @@ window.addEventListener('unhandledrejection', function (e) {
 
 <header class="top" id="top">
   <div class="wrap">
-    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb151</small></div>
+    <div class="brand">Stock Ilolay <small id="who"></small> <small style="opacity:.5">sb152</small></div>
     <div class="dia" id="dia"></div>
     <div class="vista" role="group" aria-label="Vista" id="vista"></div>
     <nav class="tabs" id="tabs" aria-label="Secciones"></nav>
@@ -408,11 +408,12 @@ const SB_KEY = 'sb_publishable_n2MEG_upNoZC_qpkd5MHmw_KP9gt_6s';
 const APP_URL_FIJA = SB_URL && SB_KEY ? SB_URL : '';
 /* ===== Núcleo: lectura de archivos y cálculo de stock (sin dependencias) ===== */
 const Core = (() => {
-  const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ordm: 'º', ordf: 'ª', deg: '°', iexcl: '¡', iquest: '¿' };
+  for (const [k, v] of Object.entries({ aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú', ntilde: 'ñ', uuml: 'ü' })) { ENT[k] = v; ENT[k[0].toUpperCase() + k.slice(1)] = v.toUpperCase(); }
   function decodeEnt(s) {
     return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
       if (e[0] === '#') return String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
-      return ENT[e.toLowerCase()] ?? m;
+      return ENT[e] ?? ENT[e.toLowerCase()] ?? m;
     });
   }
   function clean(v) {
@@ -507,6 +508,8 @@ const Core = (() => {
       // Base de clientes (sucu_x_emisor de Yasukawa): número de cliente por emisor, con sucursal y domicilio
       if (hdr.includes('NRO_CLIENTE') && hdr.includes('DOMICILIO') && hdr.includes('EMISOR')) return { kind: 'cli', h: i, col: {
         em: ix('EMISOR'), nro: ix('NRO_CLIENTE'), cli: ix('CLIENTE'), suc: ix('SUCURSAL'), dom: ix('DOMICILIO'), est: ix('ESTADO') } };
+      // Notas de pedido (pedidos del día de cada vendedor, todavía sin facturar)
+      if (hdr.some(h => /^N.{0,8}NOTA$/.test(h)) && hdr.includes('F.ENTREGA')) return { kind: 'np', h: i, col: {} };
       // Facturación Yasukawa (ventas por vendedor / cliente / artículo, con chofer)
       if (hdr.includes('CHOFER') && hdr.includes('COD.FAB.') && ixp('UN.F') >= 0) return { kind: 'fya', h: i, col: {
         cod: ix('COD.FAB.'), desc: ix('DESCRIPCION'), q: ixp('UN.F'), cred: ixp('UN.CRED'), ch: ix('CHOFER'), comp: ix('COMPROBANTE'), cli: ix('CLIENTE'), nc: ix('NRO.CLIE'), dom: hdr.findIndex(h => /DOMICILIO|DIRECCION/.test(h)),
@@ -591,6 +594,38 @@ const Core = (() => {
     let m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/.exec(s);
     if (m) return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + p2(m[2]) + '-' + p2(m[1]);
     m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m ? m[0] : '';
+  }
+  /* Notas de pedido de un vendedor: fila de cada nota (número, fecha, cliente, nombre, entrega…) y debajo sus artículos
+     (código con prefijo de proveedor, descripción, pedido, cambios). Solo se toman los artículos con el prefijo de Ilolay. */
+  function buildNotas(rows, info, pre) {
+    let vend = '', fTit = '', otros = 0, cur = null;
+    for (let i = 0; i <= Math.max(0, info.h); i++) {
+      const m = /Notas\s+de\s+Pedido\s*-\s*(.*?)\s*-\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i.exec(clean(rows[i]?.[0]));
+      if (m) { vend = m[1]; fTit = fISO(m[2]); }
+    }
+    // Columnas por los encabezados (el código viene en dos celdas combinadas)
+    const H = (rows[info.h] || []).map(U), hx = (re, d) => { const i = H.findIndex(h => re.test(h)); return i >= 0 ? i : d; };
+    const cn = { n: hx(/NOTA$/, 0), f: hx(/^FECHA$/, 1), cli: hx(/^CLIENTE$/, 2), nom: hx(/^NOMBRE$/, 3), ent: hx(/ENTREGA/, 4), tot: hx(/^TOTAL$/, 7) };
+    let ca = { cod: 1, desc: 3, q: 4, cb: 5 };
+    const notas = [];
+    for (let i = info.h + 1; i < rows.length; i++) {
+      const r = (rows[i] || []).map(x => clean(x)), R = r.map(U);
+      if (/^\d{3,}$/.test(r[cn.n] || '') && fISO(r[cn.f] || '')) {
+        cur = { n: r[cn.n], f: fISO(r[cn.f]), cli: r[cn.cli] || '', nom: r[cn.nom] || '', ent: fISO(r[cn.ent] || ''), tot: num(r[cn.tot]), vend, items: [] };
+        notas.push(cur); continue;
+      }
+      if (R.some(h => /^ARTICULO$/.test(h)) && R.some(h => /^PED/.test(h))) {
+        const ix = (re, d) => { const k = R.findIndex(h => re.test(h)); return k >= 0 ? k : d; };
+        ca = { cod: ix(/^ARTICULO$/, 1), desc: ix(/^DESCRIP/, 3), q: ix(/^PED/, 4), cb: ix(/^CAMB/, -1) };
+        continue;
+      }
+      const cod = String(r[ca.cod] || '').replace(/^'+/, '');
+      if (!cur || r[0] || !/^\d+\/\S+$/.test(cod)) continue;
+      if (!pre || !cod.startsWith(pre)) { otros++; continue; }
+      const q = num(r[ca.q]), cb = ca.cb >= 0 ? num(r[ca.cb]) : 0;
+      if (q || cb) cur.items.push({ c: code(cod.slice(pre.length)), d: r[ca.desc] || '', q, cb });
+    }
+    return { vend, f: fTit, notas, otros };
   }
   function codPre(v, prefijo) {
     const s = clean(v).replace(/^'+/, '').trim(); const pre = (prefijo ?? '21/').toUpperCase();
@@ -677,7 +712,7 @@ const Core = (() => {
   const tr = x => (x < 0 ? Math.ceil(x) : Math.floor(x));
   function split(units, uxc) { const cj = tr(units / uxc); return { cj, un: Math.round((units - cj * uxc) * 100) / 100 }; }
 
-  function compute({ maestro, sap, yasu, ajustes, conteos, anterior, quesoSap, quesos, ceroAuto }) {
+  function compute({ maestro, sap, yasu, ajustes, conteos, anterior, quesoSap, quesos, ceroAuto, notas }) {
     const aj = {};
     for (const a of ajustes || []) aj[a.c] = (aj[a.c] || 0) + num(a.u);
     const lines = [];
@@ -723,7 +758,9 @@ const Core = (() => {
           base = prevCont + varSap + varYa - qVent - qIlo; metodo = hib ? 'hibrido' : quesoSap === 'manual' ? 'manual' : 'variacion';
         } else { base = prevCont - qVent - qIlo; metodo = 'arrastre'; }
       }
-      const sisVivo = Math.round((base + (hibQ ? 0 : qA)) * 100) / 100;
+      // Notas de pedido del día sin facturar: lo pedido sale del depósito, así que se resta del sistema (en quesos no)
+      const qN = m.q || !(sap || yasu) ? 0 : Math.round(num(notas?.[c]) * 100) / 100;
+      const sisVivo = Math.round((base + (hibQ ? 0 : qA) - qN) * 100) / 100;
       const k = conteos?.[c];
       const contadoReal = !!(k && (k.cj !== null && k.cj !== undefined || k.un !== null && k.un !== undefined));
       // Sistema en cero y nadie lo contó: se toma como contado en 0 (sin diferencia). Si depósito cuenta algo, manda lo contado.
@@ -738,7 +775,7 @@ const Core = (() => {
       const precio = y ? y.precio : 0;
       lines.push({
         c, d: m.d || y?.desc || '', s: m.s, o: m.o, uxc, q: !!m.q, base, metodo, varSap, varYa, qVent, qIlo, qYaF, qIng, baseDe, prevBase, sapRaw, peso, prevCont: prev?.cont ?? null, prevSk: prev?.sk ?? null, prevYa: prev?.ya ?? null,
-        sap: qSap, sapIlo, yasu: qY, fy, aj: qA, sis, sisCj: s.cj, sisUn: s.un, ok, okTs: ok ? k.okTs : null, sisVivo, cambio: ok ? sisVivo - sis : 0,
+        sap: qSap, sapIlo, yasu: qY, fy, aj: qA, np: qN, sis, sisCj: s.cj, sisUn: s.un, ok, okTs: ok ? k.okTs : null, sisVivo, cambio: ok ? sisVivo - sis : 0,
         contado, auto, cont, contCj: contadoReal ? num(k.cj) : auto ? 0 : null, contUn: contadoReal ? num(k.un) : auto ? 0 : null,
         dif, precio, importe: dif ? Math.round(dif * precio * 100) / 100 : 0,
         motivo: k?.m || '', obs: k?.obs || '', nota: k?.nota || '', por: k?.by || null, rec: !!k?.rec,
@@ -770,7 +807,7 @@ const Core = (() => {
     return b + ((10 - (s % 10)) % 10);
   }
 
-  return { num, code, clean, rowsFromText, rowsFromHtml, rowsFromDelimited, detect, buildSap, buildYasu, buildMov, movFor, buildFya, buildComp, buildFil, buildVent, buildCli, claveComp, fISO, compute, huerfanos, split, ean13FromDun };
+  return { num, code, clean, rowsFromText, rowsFromHtml, rowsFromDelimited, detect, buildNotas, buildSap, buildYasu, buildMov, movFor, buildFya, buildComp, buildFil, buildVent, buildCli, claveComp, fISO, compute, huerfanos, split, ean13FromDun };
 })();
 
 
@@ -1063,7 +1100,7 @@ const API = {
   async extra(fn, ...args) {
     let j;
     try { j = await sbRpc(CFG.url, CFG.key, fn, args, CFG.pin, 'api_extra'); }
-    catch (e) { if (/No está creada la función|could not find the function/i.test(e.message || '')) throw new Error('Falta crear la consulta en la base: hay que correr quesos_historial.sql en Supabase (SQL Editor).'); throw e; }
+    catch (e) { if (/No está creada la función|could not find the function/i.test(e.message || '')) throw new Error('Falta crear la consulta en la base: hay que correr notas_pedido.sql en Supabase (SQL Editor).'); throw e; }
     if (j && j.error) { const err = new Error(j.error); err.codigo = j.codigo; throw err; }
     return j ? j.result : null;
   }
@@ -1171,6 +1208,7 @@ function aplicarEstado(e, silencioso) {
     if (!e.movs) { S.movsMeta = null; if (!movimientosLocal()) S.movsRemoto = null; }
     if (!S.ui.tab) S.ui.tab = S.admin ? 'hoy' : 'contar';
     if (S.ui.tab === 'pedido') cargarPedido(true);
+    cargarNotas();
     nombres();
     renderSuave = !!silencioso;
     try { recalc(); render(); } finally { renderSuave = false; }
@@ -1382,7 +1420,7 @@ async function leerArchivos(list) {
       if (info.kind === 'fil') found.fil = { ...meta, data: Core.buildFil(rows, info) };
       if (info.kind === 'comp') found.comp = { ...meta, data: Core.buildComp(rows, info) };
       if (info.kind === 'vent') found.vent = { ...meta, data: Core.buildVent(rows, info, opt('prefijo')) };
-      if (info.kind === 'cli') continue;
+      if (info.kind === 'cli' || info.kind === 'np') continue; // notas de pedido: se cargan en su pestaña
     } catch (e) { err.push(f.name + ' (' + (e.message || 'no se pudo leer') + ')'); }
   }
   for (const k of ARCH_KEYS) if (found[k]) S.files[k] = found[k];
@@ -1399,6 +1437,118 @@ async function leerArchivos(list) {
   toast(n ? 'Archivos actualizados (' + n + ' reconocidos).' : 'Ningún archivo coincide con stock, facturación, comprobantes o ventanas.');
 }
 const ARCH_KEYS = ['sap', 'yasu', 'vent', 'fya', 'fil', 'comp'], MOV_KEYS = ['vent', 'fya', 'fil', 'comp'];
+/* ---------- Notas de pedido del día ----------
+   Pedidos de los vendedores que todavía no están facturados: se cargan los archivos (uno o varios), se guardan en la base
+   para el día del stock y lo pedido se resta del sistema en todos los dispositivos. Al cerrar el stock se borran solas. */
+S.notas = (() => { const c = lsLeer('notasCache', null); return c && Array.isArray(c.lista) ? c : null; })();
+let notasCargando = false, notasErrTs = 0, notasTotMemo = null;
+const notasDelDia = () => (S.notas && S.notas.fecha === S.dia && !S.cierre ? S.notas.lista : []);
+function notasTot() {
+  const L = notasDelDia();
+  if (notasTotMemo && notasTotMemo.L === L && notasTotMemo.m === S.maestro) return notasTotMemo.t;
+  const t = {};
+  for (const n of L) for (const it of n.items || []) if (S.maestro[it.c] && !S.maestro[it.c].q) t[it.c] = Math.round(((t[it.c] || 0) + (Number(it.q) || 0) + (Number(it.cb) || 0)) * 100) / 100;
+  notasTotMemo = { L, m: S.maestro, t };
+  return t;
+}
+async function cargarNotas(forzar) {
+  if (notasCargando || S.offline || !S.dia) return;
+  if (!forzar && Date.now() - notasErrTs < 5 * 60000) return; // si falta el SQL, no se insiste en cada actualización
+  notasCargando = true;
+  try {
+    const misma = S.notas && S.notas.fecha === S.dia;
+    const r = await API.extra('notasGet', S.dia, misma ? S.notas.v : '');
+    S.notasErr = null; notasErrTs = 0;
+    if (r && Array.isArray(r.notas)) {
+      S.notas = { fecha: S.dia, v: r.v, lista: r.notas }; lsGuardar('notasCache', S.notas);
+      recalc(); renderSuave = true; try { render(); } finally { renderSuave = false; }
+    }
+  } catch (e) {
+    S.notasErr = /Función desconocida/.test(e.message || '') ? 'Falta crear las notas de pedido en la base: hay que correr notas_pedido.sql en Supabase (SQL Editor).' : e.message;
+    notasErrTs = Date.now();
+    if (forzar || S.ui.tab === 'notas') render();
+  } finally { notasCargando = false; }
+}
+async function subirNotas(list) {
+  if (!S.admin) return;
+  if (S.cierre) { toast('El stock del ' + dm(S.dia) + ' ya está cerrado.'); return; }
+  const files = [...list].filter(f => !/^~\$|^\./.test(f.name));
+  const pre = opt('prefijo') || '21/', nuevas = [], err = [], fechas = new Set(); let otros = 0, sinIlo = 0;
+  for (const f of files) {
+    try {
+      const { rows, info } = await fileRows(f);
+      if (info.kind !== 'np') { err.push(f.name); continue; }
+      const b = Core.buildNotas(rows, info, pre);
+      otros += b.otros;
+      for (const n of b.notas) {
+        if (!n.items.length) { sinIlo++; continue; }
+        if (n.f) fechas.add(n.f);
+        nuevas.push({ ...n, arch: f.name, ts: Date.now(), por: S.me.name || S.me.id });
+      }
+    } catch (e) { err.push(f.name + ' (' + (e.message || 'no se pudo leer') + ')'); }
+  }
+  S.ui.npErr = err;
+  if (!nuevas.length) { render(); toast(err.length ? 'No reconocí notas de pedido en ' + (err.length === 1 ? 'ese archivo.' : 'esos archivos.') : 'Los archivos no tienen artículos de Ilolay.'); return; }
+  const ya = new Set(notasDelDia().map(n => String(n.n)));
+  try { await API.extra('notasGuardar', S.dia, nuevas); }
+  catch (e) { toast('No se pudieron guardar las notas: ' + e.message); return; }
+  const rep = nuevas.filter(n => ya.has(String(n.n))).length, otroDia = [...fechas].filter(f => f !== S.dia);
+  await cargarNotas(true);
+  toast(`${nuevas.length} nota${nuevas.length === 1 ? '' : 's'} cargada${nuevas.length === 1 ? '' : 's'}${rep ? ` (${rep} ya estaba${rep === 1 ? '' : 'n'}: se reemplazaron)` : ''}${sinIlo ? ` · ${sinIlo} sin artículos de Ilolay` : ''}${otroDia.length ? ` · ojo: tienen fecha ${otroDia.map(dm).join(', ')} y se tomaron para el stock del ${dm(S.dia)}` : ''}.`);
+}
+async function quitarNotas(nums) {
+  try { await API.extra('notasQuitar', S.dia, nums); }
+  catch (e) { toast('No se pudo quitar: ' + e.message); return; }
+  S.ui.npBorrar = false;
+  await cargarNotas(true);
+  toast(nums.length ? 'Nota ' + nums[0] + ' quitada.' : 'Se borraron todas las notas del día.');
+}
+function vNotas() {
+  if (!S.admin) return '';
+  const cerrado = !!S.cierre, L = notasDelDia(), T = notasTot(), pre = opt('prefijo') || '21/';
+  const ab = S.ui.npAb ||= {};
+  const arts = {};
+  for (const n of L) for (const it of n.items || []) {
+    const a = arts[it.c] ||= { c: it.c, d: S.maestro[it.c]?.d || it.d, q: 0, cb: 0, notas: new Set(), m: !!S.maestro[it.c], queso: !!S.maestro[it.c]?.q };
+    a.q += Number(it.q) || 0; a.cb += Number(it.cb) || 0; a.notas.add(n.n);
+  }
+  const lista = Object.values(arts).sort((a, b) => cmpArt({ c: a.c }, { c: b.c }));
+  const resta = lista.filter(a => a.m && !a.queso), fuera = lista.filter(a => !a.m), quesos = lista.filter(a => a.queso);
+  const uxc = c => LINES.find(l => l.c === c)?.uxc || S.maestro[c]?.u || 1;
+  const cjun = (u, c) => { const sp = Core.split(u, uxc(c)); return sp.cj ? fmt(sp.cj) + ' cj' + (sp.un ? ' + ' + fmt(sp.un) + ' u' : '') : fmt(sp.un) + ' u'; };
+  const totU = resta.reduce((s, a) => s + a.q + a.cb, 0);
+  const vends = [...new Set(L.map(n => n.vend).filter(Boolean))];
+  const hayCb = lista.some(a => a.cb);
+  const filaArt = a => `<tr${a.m && !a.queso ? '' : ' class="muted"'}><td class="mono">${esc(a.c)}</td><td>${esc(a.d)}</td><td class="n"><b>${fmt(a.q + a.cb)}</b></td>${hayCb ? `<td class="n">${a.cb ? fmt(a.cb) : ''}</td>` : ''}<td class="n">${a.m ? cjun(a.q + a.cb, a.c) : ''}</td><td class="n">${a.notas.size}</td><td class="small">${!a.m ? 'no está en Artículos' : a.queso ? 'queso: no se resta' : ''}</td></tr>`;
+  return `<div class="stack">
+    ${bannerRed()}
+    <div class="panel stack">
+      <div class="row" style="justify-content:space-between"><div style="min-width:0;flex:1 1 280px"><h2>Notas de pedido · ${diaSem(S.dia)} ${dm(S.dia)}</h2>
+        <div class="small muted">Pedidos de los vendedores que todavía no están facturados en el sistema. Lo pedido (más los cambios, si hay) <b>se resta del stock del sistema</b> del día, en la PC y en los celulares. Se pueden cargar varios archivos (uno por vendedor); si cargás de nuevo una nota que ya estaba, se reemplaza. Se toman solo los artículos ${esc(pre)} que están en Artículos (los quesos no). <b>Al cerrar el stock se borran solas.</b> Si una nota se factura antes del cierre y volvés a cargar los archivos de stock, quitala de acá para que no se reste dos veces.</div></div>
+        <button class="btn" data-act="tab" data-v="hoy">Volver a Administración</button></div>
+      ${S.notasErr ? `<div class="banner bad"><span class="grow">${esc(S.notasErr)}</span><button class="btn sm" data-act="npReintentar">Reintentar</button></div>` : ''}
+      ${cerrado ? `<div class="banner info"><span class="grow">El stock del ${dm(S.dia)} está cerrado: las notas de pedido de ese día ya se borraron.</span></div>` : `
+      <div class="row"><label class="btn pri" for="pickNotas">Cargar notas de pedido</label><input type="file" id="pickNotas" multiple accept=".xls,.xlsx,.xlsm,.csv,.txt,.htm,.html,.tsv" hidden>
+        <span class="small muted">o arrastrá los archivos a esta pantalla</span>
+        ${L.length ? (S.ui.npBorrar ? `<span class="row" style="gap:6px"><b class="small">¿Borrar las ${L.length} notas?</b><button class="btn sm danger" data-act="npBorrarSi">Sí, borrar todas</button><button class="btn sm" data-act="npBorrarNo">No</button></span>` : '<button class="btn" data-act="npBorrar">Borrar todas</button>') : ''}</div>`}
+      ${(S.ui.npErr || []).length ? `<div class="banner warn"><span class="grow">No ${S.ui.npErr.length === 1 ? 'es un archivo' : 'son archivos'} de notas de pedido: ${S.ui.npErr.map(esc).join(', ')}</span></div>` : ''}
+      ${!cerrado && L.length ? `<div class="row" style="gap:18px"><span><span class="lbl">Notas</span> <b>${L.length}</b></span><span><span class="lbl">Clientes</span> <b>${new Set(L.map(n => n.cli || n.nom)).size}</b></span><span><span class="lbl">Artículos que restan</span> <b>${resta.length}</b></span><span><span class="lbl">Unidades que se restan</span> <b>${fmt(totU)}</b></span>${vends.length ? `<span class="small muted">${vends.map(esc).join(' · ')}</span>` : ''}</div>` : ''}
+    </div>
+    ${!cerrado && !L.length && !S.notasErr ? '<div class="panel empty">Todavía no hay notas de pedido cargadas para hoy.</div>' : ''}
+    ${!cerrado && L.length ? `
+    <div class="panel stack"><h3>Por artículo</h3>
+      <div class="tablebox"><table><thead><tr><th>Código</th><th>Descripción</th><th class="n">Pedido (u)</th>${hayCb ? '<th class="n">De eso, cambios</th>' : ''}<th class="n">En cajas</th><th class="n">Notas</th><th></th></tr></thead>
+      <tbody>${resta.map(filaArt).join('')}${quesos.map(filaArt).join('')}${fuera.map(filaArt).join('')}</tbody>
+      <tfoot><tr><td></td><td><b>Total que se resta del sistema</b></td><td class="n"><b>${fmt(totU)}</b></td>${hayCb ? '<td></td>' : ''}<td></td><td></td><td></td></tr></tfoot></table></div></div>
+    <div class="panel stack"><h3>Notas cargadas</h3>
+      <div class="tablebox"><table><thead><tr><th>Nota</th><th>Vendedor</th><th>Fecha</th><th>Cliente</th><th>Entrega</th><th class="n">Artículos</th><th class="n">Unidades</th><th>Archivo</th><th></th></tr></thead>
+      <tbody>${L.map(n => {
+        const it = n.items || [], u = it.reduce((s, x) => s + (Number(x.q) || 0) + (Number(x.cb) || 0), 0), abierto = !!ab[n.n];
+        return `<tr><td class="mono"><button class="link" data-act="npVer" data-n="${esc(n.n)}">${abierto ? '▾' : '▸'} ${esc(n.n)}</button></td><td>${esc(n.vend || '')}</td><td>${n.f ? dm(n.f) : ''}${n.f && n.f !== S.dia ? ' <span class="pill warn">otro día</span>' : ''}</td><td>${esc(n.cli)} ${esc(n.nom)}</td><td>${n.ent ? dm(n.ent) : ''}</td><td class="n">${it.length}</td><td class="n">${fmt(u)}</td><td class="small muted">${esc(n.arch || '')}</td><td><button class="btn sm" data-act="npQuitar" data-n="${esc(n.n)}">Quitar</button></td></tr>`
+          + (abierto ? `<tr><td></td><td colspan="8"><table class="small"><tbody>${it.map(x => `<tr${S.maestro[x.c] && !S.maestro[x.c].q ? '' : ' class="muted"'}><td class="mono">${esc(pre + x.c)}</td><td>${esc(x.d)}</td><td class="n">${fmt(x.q)}${x.cb ? ' + ' + fmt(x.cb) + ' camb.' : ''}</td></tr>`).join('')}</tbody></table></td></tr>` : '');
+      }).join('')}</tbody></table></div></div>` : ''}
+  </div>`;
+}
 /* ---------- Movimientos del día: cruce de facturación Yasukawa + facturación Ilolay (con chofer por comprobantes) + ventanas ---------- */
 function movimientosLocal() {
   const F = S.files; if (!(F.fya || F.fil || F.vent)) return null;
@@ -1515,7 +1665,7 @@ let autoRecT = null, okT = null;
 function recalc() {
   const maestro = S.maestro;
   const f = fuentes();
-  LINES = Core.compute({ maestro, sap: f.sap, yasu: f.yasu, ajustes: S.ajustes, conteos: S.conteos, anterior: S.anterior || {}, quesoSap: opt('quesoSap'), quesos: S.quesosDia || {}, ceroAuto: opt('ceroAuto') !== false });
+  LINES = Core.compute({ maestro, sap: f.sap, yasu: f.yasu, ajustes: S.ajustes, conteos: S.conteos, anterior: S.anterior || {}, quesoSap: opt('quesoSap'), quesos: S.quesosDia || {}, ceroAuto: opt('ceroAuto') !== false, notas: S.cierre ? {} : notasTot() });
   LINES.sort(cmpArt);
   // Verificación automática: contado igual al sistema → se congela ese sistema (solo desde administración con cruce disponible)
   if (S.admin && !S.cierre && tieneSistema() && S.online) {
@@ -1630,6 +1780,7 @@ function renderAhora() {
   else if (t === 'maestro') html = vMaestro();
   else if (t === 'ajustes') html = vAjustes();
   else if (t === 'quesos') html = vQuesos();
+  else if (t === 'notas') html = vNotas();
   else if (t === 'pedido') html = vPedido();
   else if (t === 'correos') html = vCorreos();
   else if (t === 'historial') html = vHistorial();
@@ -1704,7 +1855,7 @@ function restoreFocus(k) {
 }
 function renderTop() {
   const tabs = S.admin
-    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['quesos', 'Quesos'], ['pedido', 'Pedido a Ilolay'], ['correos', 'Correos'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Configuración']]
+    ? [['hoy', 'Administración'], ['contar', 'Depósito'], ['ajustes', 'Ajustes'], ['notas', 'Notas de pedido'], ['quesos', 'Quesos'], ['pedido', 'Pedido a Ilolay'], ['correos', 'Correos'], ['maestro', 'Artículos'], ['historial', 'Historial'], ['opciones', 'Configuración']]
     : [['contar', 'Depósito'], ['pedido', 'Pedido a Ilolay']];
   $('#tabs').hidden = false;
   $('#tabs').innerHTML = (tabs.length < 2 ? [] : tabs).map(([k, n]) => `<button data-act="tab" data-v="${k}" ${S.ui.tab === k ? 'aria-current="page"' : ''}>${n}</button>`).join('') + '<button data-act="salir" title="Cambiar de PIN o de servidor">Salir</button>';
@@ -1817,6 +1968,7 @@ function vHoy() {
   { const pend = codigosPend(); if (pend.length) avisos.push(`<div class="banner warn"><span class="grow"><b>${pend.length} código${pend.length === 1 ? '' : 's'} de barra nuevo${pend.length === 1 ? '' : 's'}</b> aprendido${pend.length === 1 ? '' : 's'} desde depósito, para revisar.</span><button class="btn sm" data-act="tab" data-v="maestro">Revisar</button><button class="btn sm" data-act="cbConfirmar">Confirmar todos</button></div>`); }
   if (cerrado && S.dia < hoy) avisos.push(`<div class="banner info"><span class="grow">El stock del ${diaSem(S.dia)} ${dm(S.dia)} ya está cerrado.</span><button class="btn pri sm" data-act="nuevodia">Empezar el conteo de hoy (${dm(hoy)})</button></div>`);
   if (!cerrado && S.dia < hoy && S.diaDoc) avisos.push(`<div class="banner warn"><span class="grow">Estás trabajando sobre el ${dm(S.dia)}, que todavía no se cerró. Cerralo con los archivos de ese día o pasá a hoy.</span><button class="btn sm" data-act="nuevodia">Pasar a hoy (${dm(hoy)})</button></div>`);
+  { const L = notasDelDia(), T = notasTot(), u = Object.values(T).reduce((s, x) => s + x, 0); if (!cerrado && L.length) avisos.push(`<div class="banner info"><span class="grow"><b>Notas de pedido sin facturar:</b> se ${u === 1 ? 'resta' : 'restan'} <b>${fmt(u)} u</b> del sistema (${Object.keys(T).length} ${pl(Object.keys(T).length, 'artículo')}, ${L.length} ${pl(L.length, 'nota')}). Se borran solas al cerrar.</span><button class="btn sm" data-act="tab" data-v="notas">Ver</button></div>`); }
   const faltanArch = !cerrado && sis ? fuentes().faltan : [];
   if (faltanArch.length) avisos.push(`<div class="banner bad"><span class="grow"><b>Cruce parcial:</b> falta el archivo de ${faltanArch.map(k => NOMBRE_ARCH[k]).join(' y ')}. El stock del sistema se calcula con lo que hay${faltanArch.includes('yasu') ? ' (sin el stock de Yasukawa, sin precios para valorizar y con unidades por caja de la lista de artículos)' : ' (sin el stock de SAP)'}, así que las diferencias pueden no ser reales hasta que lo cargues.</span></div>`);
   if (!cerrado && !sis) avisos.push(`<div class="banner warn"><span class="grow">Cargá el stock de SAP y el de Yasukawa para ver el stock del sistema y las diferencias. Los conteos de depósito ya se ven abajo.</span></div>`);
@@ -2083,7 +2235,7 @@ function renderSheetInner() {
   const calc = S.cierre ? `Guardado en el cierre: sistema ${fmt(l.sis)} u · contado ${l.contado ? fmt(l.cont) + ' u' : 'no contado'}`
     : !tieneSistema() && !l.q ? 'Faltan los archivos del día para calcular el sistema.'
     : l.ok ? `Verificado a las ${hora(l.okTs)}: contado ${fmt(l.cont)} u = sistema ${fmt(l.sis)} u en ese momento.${l.cambio ? `<br>Con los archivos actuales el sistema sería ${fmt(l.sisVivo)} u (${fmtS(l.cambio)}); no se reabre salvo que se recuente.` : ''}`
-    : fuentes().origen === 'remoto' && !l.q ? `SAP ${fmt(l.sap)} + Yasukawa ${fmt(l.yasu)} + ajustes ${fmt(l.aj)} = <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>` : ''}<br><span class="muted">Cruce cargado en otra PC a las ${hora(S.remoto.ts)}.</span>`
+    : fuentes().origen === 'remoto' && !l.q ? `SAP ${fmt(l.sap)} + Yasukawa ${fmt(l.yasu)} + ajustes ${fmt(l.aj)}${l.np ? ` − notas de pedido ${fmt(l.np)}` : ''} = <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>` : ''}<br><span class="muted">Cruce cargado en otra PC a las ${hora(S.remoto.ts)}.</span>`
     : (l.q ? (l.metodo === 'manual'
         ? `Contado al cierre del ${dm(S.anteriorFecha)}: ${fmt(l.prevCont)} hormas<br>+ variación Yasukawa: ${fmt(l.yasu)} − ${fmt(l.prevYa)} = ${fmtS(l.varYa)}<br>+ facturación Ilolay cargada a mano (ajustes del día): ver abajo<br>= ${fmt(l.base)}`
         : l.metodo === 'hibrido'
@@ -2091,7 +2243,7 @@ function renderSheetInner() {
         : l.metodo === 'variacion'
         ? `Contado al cierre del ${dm(S.anteriorFecha)}: ${fmt(l.prevCont)} hormas<br>+ variación SAP: (${fmt(l.sapRaw)} kg − ${fmt(l.prevSk)} kg) ÷ ${fmt(l.peso)} kg = ${fmtS(l.varSap)}<br>+ variación Yasukawa: ${fmt(l.yasu)} − ${fmt(l.prevYa)} = ${fmtS(l.varYa)}<br>= ${fmt(l.base)}`
         : `Cierre anterior (${dm(S.anteriorFecha)}) ${fmt(l.base)} <span class="muted">(arrastre: el cierre anterior no tiene los kilos de SAP; desde el próximo cierre se usa la variación)</span>`)
-      : `SAP ${l.fy > 1 ? `${fmt(l.sapIlo)} ÷ ${fmt(l.fy)} = ${fmt(l.sap)}` : fmt(l.sap)} + Yasukawa ${fmt(l.yasu)}`) + (l.q && l.metodo === 'hibrido' ? '<br><span class="muted">(en los quesos no se tienen en cuenta los ajustes)</span>' : ` + ajustes ${fmt(l.aj)}`) + `<br>= <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>${l.precio ? ' × ' + money2(l.precio) + ' = ' + money(l.importe) : ''}` : ''}`;
+      : `SAP ${l.fy > 1 ? `${fmt(l.sapIlo)} ÷ ${fmt(l.fy)} = ${fmt(l.sap)}` : fmt(l.sap)} + Yasukawa ${fmt(l.yasu)}`) + (l.q && l.metodo === 'hibrido' ? '<br><span class="muted">(en los quesos no se tienen en cuenta los ajustes)</span>' : ` + ajustes ${fmt(l.aj)}${l.np ? ` − notas de pedido sin facturar ${fmt(l.np)}` : ''}`) + `<br>= <b>${fmt(l.sis)} u</b> = ${fmt(l.sisCj)} cj + ${fmt(l.sisUn)} u (x${l.uxc})${l.contado ? `<br>Contado ${fmt(l.contCj)} cj + ${fmt(l.contUn)} u = ${fmt(l.cont)} u → diferencia <b>${fmtS(l.dif)} u</b>${l.precio ? ' × ' + money2(l.precio) + ' = ' + money(l.importe) : ''}` : ''}`;
   SHEET_T.innerHTML = `<div class="sheet" data-act="cerrarDet"><div class="box" role="dialog" aria-label="Detalle del artículo" data-stop="1">
     <div class="row" style="justify-content:space-between;align-items:start"><div><span class="lbl">${esc(l.s)} · ${esc(c)}</span><h3>${esc(l.d)}</h3></div><button class="btn sm" data-act="cerrarDet">Cerrar</button></div>
     <div class="calc">${calc}</div>
@@ -4801,6 +4953,7 @@ async function cerrarDia() {
   try { await API.call('cerrarDia', doc); }
   catch (e) { toast('No se pudo guardar el cierre: ' + e.message); return; }
   S.ui.confirm = false; toast('Stock del ' + dm(S.dia) + ' cerrado y guardado.');
+  API.extra('notasCerrar', doc.fecha).catch(() => { }); S.notas = null; lsGuardar('notasCache', null); // las notas de pedido eran solo para este día
   S.ui.postCierre = { doc: { ...doc, por: S.me.id } };
   S.files = { sap: null, yasu: null, vent: null, fya: null, fil: null, comp: null }; S.remoto = null; S.movsRemoto = null;
   await refrescar();
@@ -5181,6 +5334,12 @@ document.addEventListener('click', async e => {
     case 'pedPdfTodo': pdfPedidoTodo(); break;
     case 'pedImpOk': guardarVentasAnteriores(); break;
     case 'pedImpNo': S.ui.pedImp = null; render(); break;
+    case 'npReintentar': cargarNotas(true); break;
+    case 'npBorrar': S.ui.npBorrar = true; render(); break;
+    case 'npBorrarNo': S.ui.npBorrar = false; render(); break;
+    case 'npBorrarSi': quitarNotas([]); break;
+    case 'npQuitar': quitarNotas([t.dataset.n]); break;
+    case 'npVer': { const ab = S.ui.npAb ||= {}; ab[t.dataset.n] = !ab[t.dataset.n]; render(); break; }
     case 'verSinContar': S.ui.filtro = 'sin'; S.ui.sector = 'TODOS'; S.ui.q = ''; S.ui.confirm = false; S.ui.tab = 'hoy'; render(); setTimeout(() => document.querySelector('.chips[aria-label=Filtro]')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50); break;
     case 'solo': S.ui.solo = v; S.ui.foco = null; render(); break;
     case 'verTodos': S.ui.foco = null; S.ui.yaContado = null; render(); focoBusqueda(); break;
@@ -5607,11 +5766,12 @@ document.addEventListener('submit', async e => {
 });
 $('#pickFolder').addEventListener('change', e => { const fs = [...e.target.files]; if (fs.length) { S.carpeta = (fs[0].webkitRelativePath || '').split('/')[0] || 'carpeta'; leerArchivos(fs.filter(f => { const p = (f.webkitRelativePath || '').split('/'); return p.length <= 2 || (p.length === 3 && RE_CARPETA_EXCEL.test(p[1])); })); } e.target.value = ''; });
 $('#pickFiles').addEventListener('change', e => { if (e.target.files.length) leerArchivos(e.target.files); e.target.value = ''; });
+document.addEventListener('change', e => { if (e.target.id === 'pickNotas') { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) subirNotas(fs); } });
 document.addEventListener('change', e => { if (e.target.id === 'pickVentas') { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) leerVentasAnteriores(fs); } });
 document.addEventListener('change', e => { if (e.target.id === 'pickPhoto' || e.target.id === 'pickPhoto2') { const f = e.target.files[0]; if (e.target.dataset.dest === 'cb') scanDestino = cbLeido; else if (e.target.id === 'pickPhoto') scanDestino = null; if (e.target.id === 'pickPhoto2') cerrarEscaner('usar foto'); if (f) leerFoto(f); e.target.value = ''; } });
-document.addEventListener('dragover', e => { if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.add('over'); });
+document.addEventListener('dragover', e => { if (S.ui.tab === 'notas' && S.admin) { e.preventDefault(); return; } if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.add('over'); });
 document.addEventListener('dragleave', e => { if (e.target.id === 'dropzone') e.target.classList.remove('over'); });
-document.addEventListener('drop', e => { if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.remove('over'); if (e.dataTransfer.files.length) leerArchivos(e.dataTransfer.files); });
+document.addEventListener('drop', e => { if (S.ui.tab === 'notas' && S.admin) { e.preventDefault(); if (e.dataTransfer.files.length) subirNotas(e.dataTransfer.files); return; } if (S.ui.tab !== 'hoy') return; e.preventDefault(); $('#dropzone')?.classList.remove('over'); if (e.dataTransfer.files.length) leerArchivos(e.dataTransfer.files); });
 
 /* bloque 7 */
 /* ================= Arranque ================= */
